@@ -1,0 +1,6 @@
+{
+  "name": "TasksEarn",
+  "description": "A high-performance microtask platform for earners, advertisers, and administrators to earn, promote, and manage online microtasks in Nigerian Naira (₦).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
