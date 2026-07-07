@@ -1,6 +1,6 @@
 # TasksEarn - Premium Microtask Platform
 
-TasksEarn is a highly polished, production-ready full-stack microtask application inspired by the workflow Tasks. Built using a modern, reactive stack, it is optimized for high performance, ease of deployment, and mobile-first responsive interactions.
+TasksEarn is a highly polished, production-ready full-stack microtask application inspired by the workflow of FamsUp Tasks. Built using a modern, reactive stack, it is optimized for high performance, ease of deployment, and mobile-first responsive interactions.
 
 ---
 

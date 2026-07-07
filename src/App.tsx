@@ -14,6 +14,7 @@ import PublicPages from "./components/PublicPages";
 import EarnerDashboard from "./components/EarnerDashboard";
 import AdvertiserDashboard from "./components/AdvertiserDashboard";
 import AdminDashboard from "./components/AdminDashboard";
+import { simulateApiFetch } from "./mockDb";
 import { 
   Landmark, 
   ShieldCheck, 
@@ -122,6 +123,16 @@ export default function App() {
   // Dynamic API Fetch proxy
   const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
     const token = getAuthToken();
+    
+    // Automatically detect static GitHub Pages or client-only environments
+    const isStaticEnv = window.location.hostname.includes("github.io") || 
+                        window.location.hash.includes("static") ||
+                        window.location.search.includes("static");
+                        
+    if (isStaticEnv) {
+      return simulateApiFetch(endpoint, options, token);
+    }
+
     const headers = {
       ...(options.headers || {}),
       "Authorization": `Bearer ${token}`
@@ -135,8 +146,8 @@ export default function App() {
       }
       return { error: `Server responded with status ${res.status}` };
     } catch (e) {
-      console.error("API error for endpoint: " + endpoint, e);
-      return { error: "Network connection failure" };
+      console.warn("Express backend connection failed, falling back to client-side Simulation Database: " + endpoint, e);
+      return simulateApiFetch(endpoint, options, token);
     }
   };
 
