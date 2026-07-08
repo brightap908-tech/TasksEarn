@@ -124,9 +124,13 @@ export default function App() {
   const [depositOpen, setDepositOpen] = React.useState(false);
   const [depositAmount, setDepositAmount] = React.useState("5000");
   const [depositGateway, setDepositGateway] = React.useState("Paystack");
-  const [depositChannel, setDepositChannel] = React.useState("card"); // card, opay, moniepoint, palmpay, bank_transfer
   const [depositProcessing, setDepositProcessing] = React.useState(false);
   const [depositSuccess, setDepositSuccess] = React.useState(false);
+
+  // Paystack Redirect Verification State
+  const [verifyingPayment, setVerifyingPayment] = React.useState(false);
+  const [verificationStatus, setVerificationStatus] = React.useState<"idle" | "loading" | "success" | "error">("idle");
+  const [verificationMessage, setVerificationMessage] = React.useState("");
 
   // Token helper
   const getAuthToken = () => localStorage.getItem("tasksearn_uid") || "";
@@ -215,17 +219,73 @@ export default function App() {
     } catch (e) {}
   };
 
-  React.useEffect(() => {
-    // Check if there is a referral code in URL query (?ref=XYZ)
-    const params = new URLSearchParams(window.location.search);
-    const refCode = params.get("ref");
-    if (refCode) {
-      setRegReferral(refCode);
-      setCurrentView("register");
-    }
+  const checkPaymentCallback = async () => {
+    const urlObj = new URL(window.location.href);
+    const hashParams = new URLSearchParams(urlObj.hash.replace("#", "?"));
+    const queryParams = new URLSearchParams(urlObj.search);
+    
+    const paystackRef = queryParams.get("reference") || 
+                        queryParams.get("trxref") || 
+                        hashParams.get("paystack_ref") || 
+                        hashParams.get("reference");
 
-    checkSession();
-    loadPublicData();
+    if (paystackRef) {
+      setVerifyingPayment(true);
+      setVerificationStatus("loading");
+      setVerificationMessage("Verifying secure transaction with Paystack... Please keep this page open.");
+      
+      try {
+        const verifyRes = await apiFetch("/api/advertiser/deposit/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reference: paystackRef })
+        });
+
+        if (verifyRes && verifyRes.success) {
+          setVerificationStatus("success");
+          setVerificationMessage(`Deposit of ₦${(verifyRes.transaction?.amount || 0).toLocaleString()} successfully processed and credited!`);
+          
+          // Clear query params to prevent re-submitting
+          const cleanUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+          
+          await refreshUserSession();
+          setCurrentView("advertiser-dashboard");
+          
+          setTimeout(() => {
+            setVerifyingPayment(false);
+            setVerificationStatus("idle");
+          }, 4000);
+        } else {
+          setVerificationStatus("error");
+          setVerificationMessage(verifyRes?.error || "Transaction verification failed. Balance not updated.");
+          
+          const cleanUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+      } catch (err) {
+        setVerificationStatus("error");
+        setVerificationMessage("Unable to contact verification server. Please reload to try again.");
+      }
+    }
+  };
+
+  React.useEffect(() => {
+    const runStartup = async () => {
+      // Check if there is a referral code in URL query (?ref=XYZ)
+      const params = new URLSearchParams(window.location.search);
+      const refCode = params.get("ref");
+      if (refCode) {
+        setRegReferral(refCode);
+        setCurrentView("register");
+      }
+
+      await checkSession();
+      await loadPublicData();
+      await checkPaymentCallback();
+    };
+
+    runStartup();
   }, []);
 
   // Login handler
@@ -252,6 +312,21 @@ export default function App() {
           setAuthError(data.error);
         }
       } else if (data && data.user) {
+        const isAdvertiserView = currentView === "advertiser-login";
+        const userRole = data.user.role;
+
+        if (isAdvertiserView && userRole !== UserRole.ADVERTISER) {
+          setAuthError("This account is not registered as an Advertiser. Please use the Earner login page.");
+          setAuthLoading(false);
+          return;
+        }
+
+        if (!isAdvertiserView && userRole === UserRole.ADVERTISER) {
+          setAuthError("This account is registered as an Advertiser. Please use the Advertiser login page.");
+          setAuthLoading(false);
+          return;
+        }
+
         localStorage.setItem("tasksearn_uid", data.user.id);
         setUser(data.user);
         
@@ -390,6 +465,21 @@ export default function App() {
           setAuthError(data.error);
         }
       } else if (data && data.user) {
+        const isAdvertiserView = currentView === "advertiser-login";
+        const userRole = data.user.role;
+
+        if (isAdvertiserView && userRole !== UserRole.ADVERTISER) {
+          setAuthError("This account is not registered as an Advertiser. Please use the Earner login page.");
+          setAuthLoading(false);
+          return;
+        }
+
+        if (!isAdvertiserView && userRole === UserRole.ADVERTISER) {
+          setAuthError("This account is registered as an Advertiser. Please use the Advertiser login page.");
+          setAuthLoading(false);
+          return;
+        }
+
         localStorage.setItem("tasksearn_uid", data.user.id);
         setUser(data.user);
         
@@ -468,7 +558,7 @@ export default function App() {
     setCurrentView("home");
   };
 
-  // Real & Simulated Paystack payment gateway billing process
+  // Real Paystack payment gateway billing process
   const triggerDepositPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(depositAmount);
@@ -492,38 +582,14 @@ export default function App() {
         return;
       }
 
-      const { authorization_url, reference } = initRes;
+      const { authorization_url } = initRes;
 
-      if (authorization_url === "SIMULATED") {
-        // Simulated mock environment
-        setTimeout(async () => {
-          try {
-            const verifyRes = await apiFetch("/api/advertiser/deposit/verify", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ reference })
-            });
-
-            if (verifyRes && verifyRes.success) {
-              setDepositSuccess(true);
-              refreshUserSession();
-              setTimeout(() => {
-                setDepositSuccess(false);
-                setDepositOpen(false);
-                setDepositProcessing(false);
-              }, 2000);
-            } else {
-              alert(verifyRes?.error || "Simulated payment verification failed.");
-              setDepositProcessing(false);
-            }
-          } catch (err) {
-            alert("Payment simulation gateway failed to verify callback.");
-            setDepositProcessing(false);
-          }
-        }, 2500);
-      } else {
+      if (authorization_url) {
         // Real environment: redirect to Paystack Checkout URL
         window.location.href = authorization_url;
+      } else {
+        alert("Payment gateway did not return a valid checkout URL.");
+        setDepositProcessing(false);
       }
     } catch (err) {
       alert("Payment gateway connection failed.");
@@ -843,14 +909,28 @@ export default function App() {
                 </button>
               </form>
 
-              <div className="border-t border-slate-100 pt-4 text-center text-xs text-slate-400">
-                Don't have an account?{" "}
-                <button 
-                  onClick={() => setCurrentView("register")}
-                  className="font-bold text-emerald-500 hover:text-emerald-600 hover:underline"
-                >
-                  Create one now
-                </button>
+              <div className="flex flex-col gap-3 text-center text-xs border-t border-slate-100 pt-4">
+                <div className="text-slate-400">
+                  Don't have an account?{" "}
+                  <button 
+                    onClick={() => setCurrentView("register")}
+                    className="font-bold text-emerald-500 hover:text-emerald-600 hover:underline"
+                  >
+                    Create one now
+                  </button>
+                </div>
+                <div className="text-slate-400">
+                  Are you an Advertiser?{" "}
+                  <button 
+                    onClick={() => {
+                      setAuthError("");
+                      setCurrentView("advertiser-login");
+                    }}
+                    className="font-bold text-emerald-500 hover:text-emerald-600 hover:underline"
+                  >
+                    Go to Advertiser Portal
+                  </button>
+                </div>
               </div>
 
               {/* Demo accounts quick helper */}
@@ -897,54 +977,6 @@ export default function App() {
                           onClick={() => {
                             if (!earnerPasswordPromptValue) return;
                             handleDemoLogin("earner@tasksearn.com", earnerPasswordPromptValue);
-                          }}
-                          className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-[10px] transition-all cursor-pointer shrink-0"
-                        >
-                          Verify & Login
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Demo Advertiser Password Gate */}
-                  {!showAdvertiserPasswordPrompt ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowAdvertiserPasswordPrompt(true)}
-                      className="flex justify-between items-center bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 rounded-xl px-3 py-1.5 transition-all text-left cursor-pointer"
-                    >
-                      <span>📢 Demo Advertiser</span>
-                      <span className="font-semibold text-emerald-600 font-mono text-[9px] bg-emerald-50 px-2 py-0.5 rounded-full">Enter Password</span>
-                    </button>
-                  ) : (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-3 space-y-2.5">
-                      <div className="flex justify-between items-center">
-                        <span className="font-semibold text-[10px] text-emerald-950 flex items-center gap-1">📢 Demo Advertiser Password Check</span>
-                        <button 
-                          type="button" 
-                          onClick={() => {
-                            setShowAdvertiserPasswordPrompt(false);
-                            setAdvertiserPasswordPromptValue("");
-                          }}
-                          className="text-[9px] text-gray-400 hover:text-emerald-600 font-semibold cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                      <div className="flex gap-1.5">
-                        <input 
-                          type="password"
-                          required
-                          value={advertiserPasswordPromptValue}
-                          onChange={(e) => setAdvertiserPasswordPromptValue(e.target.value)}
-                          placeholder="Enter advertiser password..."
-                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs bg-white focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!advertiserPasswordPromptValue) return;
-                            handleDemoLogin("advertiser@tasksearn.com", advertiserPasswordPromptValue);
                           }}
                           className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-[10px] transition-all cursor-pointer shrink-0"
                         >
@@ -1001,6 +1033,154 @@ export default function App() {
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* AUTHENTICATION SECURE VIEW (ADVERTISER LOGIN) */}
+        {currentView === "advertiser-login" && (
+          <div className="mx-auto max-w-md px-4 py-16 sm:py-24 animate-fadeIn">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6">
+              
+              <div className="text-center">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 uppercase">
+                  Advertiser Portal
+                </span>
+                <h2 className="font-display text-xl font-bold text-slate-900 mt-2">Welcome Back, Advertiser!</h2>
+                <p className="text-xs text-slate-400 mt-1">Sign in to manage your campaigns, track submissions, and check your ad budget.</p>
+              </div>
+
+              {authError && <p className="rounded-2xl bg-rose-50 p-3 text-xs font-bold text-rose-600 border border-rose-100 text-center">{authError}</p>}
+
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Advertiser Email Address</label>
+                  <input 
+                    type="email"
+                    required
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    placeholder="e.g. advertiser@company.com"
+                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase">Password</label>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setAuthError("");
+                        setCurrentView("forgot-password");
+                      }}
+                      className="text-xs text-emerald-500 hover:text-emerald-600 hover:underline font-semibold"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+                  <input 
+                    type="password"
+                    required
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                <button 
+                  type="submit"
+                  disabled={authLoading}
+                  className="w-full rounded-full bg-emerald-500 hover:bg-emerald-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
+                >
+                  {authLoading ? "Decrypting Session..." : "Secure Sign In to Portal"}
+                </button>
+              </form>
+
+              <div className="flex flex-col gap-2 text-center text-xs border-t border-slate-100 pt-4">
+                <div className="text-slate-400">
+                  Not registered as an Advertiser?{" "}
+                  <button 
+                    onClick={() => {
+                      setAuthRole(UserRole.ADVERTISER);
+                      setCurrentView("register");
+                    }}
+                    className="font-bold text-emerald-500 hover:text-emerald-600 hover:underline"
+                  >
+                    Register here
+                  </button>
+                </div>
+                <div className="text-slate-400">
+                  Are you an Earner?{" "}
+                  <button 
+                    onClick={() => {
+                      setAuthError("");
+                      setCurrentView("login");
+                    }}
+                    className="font-bold text-emerald-500 hover:text-emerald-600 hover:underline"
+                  >
+                    Go to Earner Sign In
+                  </button>
+                </div>
+              </div>
+
+              {/* Demo accounts quick helper */}
+              <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 text-[11px] text-slate-500 space-y-2">
+                <p className="font-bold text-slate-700">🔑 Secure Demo Advertiser Access:</p>
+                <div className="flex flex-col gap-1.5 mt-1">
+                  
+                  {/* Demo Advertiser Password Gate */}
+                  {!showAdvertiserPasswordPrompt ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvertiserPasswordPrompt(true)}
+                      className="flex justify-between items-center bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 rounded-xl px-3 py-1.5 transition-all text-left cursor-pointer"
+                    >
+                      <span>📢 Demo Advertiser</span>
+                      <span className="font-semibold text-emerald-600 font-mono text-[9px] bg-emerald-50 px-2 py-0.5 rounded-full">Enter Password</span>
+                    </button>
+                  ) : (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-3 space-y-2.5">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-[10px] text-emerald-950 flex items-center gap-1">📢 Demo Advertiser Password Check</span>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setShowAdvertiserPasswordPrompt(false);
+                            setAdvertiserPasswordPromptValue("");
+                          }}
+                          className="text-[9px] text-gray-400 hover:text-emerald-600 font-semibold cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <input 
+                          type="password"
+                          required
+                          value={advertiserPasswordPromptValue}
+                          onChange={(e) => setAdvertiserPasswordPromptValue(e.target.value)}
+                          placeholder="Enter advertiser password..."
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs bg-white focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!advertiserPasswordPromptValue) return;
+                            handleDemoLogin("advertiser@tasksearn.com", advertiserPasswordPromptValue);
+                          }}
+                          className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-[10px] transition-all cursor-pointer shrink-0"
+                        >
+                          Verify & Login
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                 </div>
               </div>
 
@@ -1308,7 +1488,7 @@ export default function App() {
 
       </main>
 
-      {/* Paystack Payment Simulated billing popup */}
+      {/* Real Paystack Payment Checkout Popup */}
       {depositOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 p-4 backdrop-blur-sm animate-fadeIn">
           <div className="w-full max-w-sm rounded-2xl border border-gray-100 bg-white p-6 shadow-2xl relative overflow-hidden space-y-5">
@@ -1316,55 +1496,37 @@ export default function App() {
             <div className="flex justify-between items-start">
               <div>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-800">
-                  Secure Checkout
+                  Official Gateway
                 </span>
                 <h3 className="font-display text-base font-bold text-gray-900 mt-1">Fund Advertiser Wallet</h3>
               </div>
               <button 
                 onClick={() => { if (!depositProcessing) setDepositOpen(false); }}
-                className="rounded-full bg-gray-100 p-1 hover:bg-gray-200 text-gray-500"
+                className="rounded-full bg-gray-100 p-1 hover:bg-gray-200 text-gray-500 cursor-pointer"
                 disabled={depositProcessing}
               >
                 ✕
               </button>
             </div>
 
-            {depositSuccess ? (
-              <div className="text-center py-6 space-y-3 animate-fadeIn">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                  <CheckCircle className="h-6 w-6" />
-                </div>
-                <h4 className="font-display text-sm font-bold text-emerald-950">Payment Complete!</h4>
-                <p className="text-[11px] text-emerald-600">₦{parseFloat(depositAmount).toLocaleString()} added to wallet.</p>
-              </div>
-            ) : depositProcessing ? (
+            {depositProcessing ? (
               <div className="text-center py-8 space-y-4">
-                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-indigo-100 border-t-indigo-600" />
+                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-emerald-100 border-t-emerald-600" />
                 <div>
-                  <p className="text-xs font-bold text-gray-800 uppercase tracking-wider">Contacting {depositGateway}...</p>
-                  <p className="text-[10px] text-gray-400 mt-1">Processing simulated card/bank transfer checkout securely.</p>
+                  <p className="text-xs font-bold text-gray-800 uppercase tracking-wider">Contacting Paystack...</p>
+                  <p className="text-[10px] text-gray-400 mt-1 font-semibold">Opening secure Paystack checkout portal...</p>
                 </div>
               </div>
             ) : (
               <form onSubmit={triggerDepositPayment} className="space-y-4">
-                
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Select deposit Gateway</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setDepositGateway("Paystack")}
-                      className={`py-2 rounded-lg border text-xs font-semibold ${depositGateway === "Paystack" ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-gray-200 bg-white"}`}
-                    >
-                      Paystack
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDepositGateway("Flutterwave")}
-                      className={`py-2 rounded-lg border text-xs font-semibold ${depositGateway === "Flutterwave" ? "border-teal-500 bg-teal-50 text-teal-800" : "border-gray-200 bg-white"}`}
-                    >
-                      Flutterwave
-                    </button>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Payment Method</label>
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/20 p-3 text-xs text-emerald-950 flex items-center gap-2">
+                    <span className="text-lg">🇳🇬</span>
+                    <div>
+                      <p className="font-bold">Paystack Secure Checkout</p>
+                      <p className="text-[10px] text-emerald-700/80">Supports Cards, Bank Transfer, USSD & more</p>
+                    </div>
                   </div>
                 </div>
 
@@ -1376,37 +1538,85 @@ export default function App() {
                     min={settings.minDeposit}
                     value={depositAmount}
                     onChange={(e) => setDepositAmount(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono focus:outline-none focus:border-emerald-500"
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono focus:outline-none focus:border-emerald-500 bg-slate-50"
                     placeholder="Min: 1000"
                   />
                   <span className="block text-[10px] text-gray-400 mt-1">Min deposit: ₦{settings.minDeposit.toLocaleString()}</span>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Simulate payment method</label>
-                  <select
-                    value={depositChannel}
-                    onChange={(e) => setDepositChannel(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs bg-white focus:outline-none"
-                  >
-                    <option value="card">💳 MasterCard / Visa Credit Card</option>
-                    <option value="opay">📱 OPay Mobile Checkout</option>
-                    <option value="moniepoint">🏦 Moniepoint Bank Account</option>
-                    <option value="palmpay">💎 PalmPay Mobile Wallet</option>
-                    <option value="bank">🏛 Direct Bank Transfer (Access, GTB, Zenith)</option>
-                  </select>
+                <div className="text-[10px] text-gray-400 leading-relaxed font-medium bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  ⚠️ <strong>Notice:</strong> You will be redirected to Paystack to complete your payment. Please do not close the payment window until redirection is complete.
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3 text-xs font-bold text-white shadow-md hover:shadow-lg transition-all"
+                  className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3 text-xs font-bold text-white shadow-md hover:shadow-lg transition-all cursor-pointer"
                 >
-                  Pay ₦{parseFloat(depositAmount || "0").toLocaleString()} via {depositGateway}
+                  Pay ₦{parseFloat(depositAmount || "0").toLocaleString()} via Paystack
                 </button>
 
               </form>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* Global Paystack Verification Overlay */}
+      {verifyingPayment && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md animate-fadeIn text-white">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center space-y-6 shadow-2xl">
+            {verificationStatus === "loading" ? (
+              <div className="space-y-4">
+                <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-emerald-500/20 border-t-emerald-500" />
+                <h3 className="font-display text-base font-bold text-slate-100">Verifying Deposit</h3>
+                <p className="text-xs text-slate-400">{verificationMessage}</p>
+              </div>
+            ) : verificationStatus === "success" ? (
+              <div className="space-y-4">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+                  <CheckCircle className="h-6 w-6 animate-pulse" />
+                </div>
+                <h3 className="font-display text-base font-bold text-emerald-400">Verification Successful</h3>
+                <p className="text-xs text-slate-300 leading-relaxed font-semibold">{verificationMessage}</p>
+                <button
+                  onClick={() => {
+                    setVerifyingPayment(false);
+                    setVerificationStatus("idle");
+                  }}
+                  className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-2.5 text-xs font-bold transition-all cursor-pointer"
+                >
+                  Go to Dashboard
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/20 text-rose-400">
+                  <AlertCircle className="h-6 w-6" />
+                </div>
+                <h3 className="font-display text-base font-bold text-rose-400">Verification Failed</h3>
+                <p className="text-xs text-slate-300 leading-relaxed font-semibold">{verificationMessage}</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setVerifyingPayment(false);
+                      setVerificationStatus("idle");
+                    }}
+                    className="flex-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 text-xs font-semibold transition-all cursor-pointer"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => {
+                      checkPaymentCallback();
+                    }}
+                    className="flex-1 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-2.5 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Retry Verification
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
