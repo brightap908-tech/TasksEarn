@@ -5,7 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: "/TasksEarn/",
+    base: process.env.VITE_BASE_PATH || "/",
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

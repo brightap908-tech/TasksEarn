@@ -79,35 +79,44 @@ The client applet binds automatically to `http://localhost:3000`.
 
 ---
 
-## 🌐 Deploying to Production Hosting
+## 🌐 Live Deployments
 
-To take TasksEarn live on a production cPanel, VPS, or cloud container:
+TasksEarn is engineered to deploy seamlessly on both **GitHub Pages** (client-side static mockup) and **Render** (production-ready full-stack application).
 
-### Step 1: Set Up MySQL Database
-1.  Log in to your hosting panel and create a new MySQL database called `tasksearn_db`.
-2.  Import the provided `database.sql` file via phpMyAdmin or raw command line.
-3.  Add a database user with full privileges.
+### 🚀 Option A: Deploying on Render (Full-Stack Live Database)
 
-### Step 2: Build the Frontend
-Run the production build script locally to compile the React code:
-```bash
-npm run build
-```
-This produces optimized static files in the `/dist` directory. Upload all files from `/dist` directly to your public HTML root folder.
+Render host is the recommended approach to run the live Node.js / Express backend alongside the React frontend with full database persistence (`db.json`).
 
-### Step 3: Run Node.js App or Proxy Backend
-*   **Option A: VPS/Docker Container**: Deploy the Express server using PM2 or Docker. Specify production environment variables (`NODE_ENV=production`) inside a `.env` file at root.
-*   **Option B: PHP API Bridge**: If using standard shared hosting without Node runtime, migrate `/server.ts` endpoints to a simple PHP API controller connecting directly to your MySQL database.
+1. **Push your code to GitHub**: Create a repository and push all files.
+2. **Create a Web Service on Render**:
+   - Connect your GitHub repository to Render.
+   - **Environment**: Select `Node`.
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
+3. **Environment Variables**:
+   - Add `NODE_ENV` = `production`
+   - Render automatically handles the `PORT` variable. The server will bind to it dynamically.
+4. **Deploy**: Render will build the frontend assets, bundle the Express server into `dist/server.cjs`, and launch your live application at `https://your-app.onrender.com`.
+
+---
+
+### 🎨 Option B: Deploying on GitHub Pages (Static Client-Side Simulation)
+
+The codebase contains a pre-configured automated GitHub Actions workflow (`.github/workflows/deploy.yml`) that deploys the application automatically to GitHub Pages every time you push to the `main` or `master` branch.
+
+1. **Push your code to GitHub**: When pushed, the action triggers automatically.
+2. **Vite Base Path handling**: The workflow automatically injects `VITE_BASE_PATH=/TasksEarn/` during compilation to ensure assets load correctly under your repository subfolder, preventing blank-page issues.
+3. **Client-Side Simulation DB**: On GitHub Pages, the application automatically detects the static environment and boots up `mockDb.ts` (using `localStorage` for database operations). Users can register, log in, create tasks, and manage dashboards as if a real server was connected.
 
 ---
 
 ## 👤 Test Credentials (Demo Mode)
 
-The system database is pre-seeded with the following accounts:
+The system database is pre-seeded with the following accounts for instant testing:
 
 *   **Super Admin Desk**:
     *   Email: `admin@tasksearn.com`
-    *   Password: `admin123`
+    *   Password: `password123`
 *   **Sample Earner**:
     *   Email: `earner@tasksearn.com`
     *   Password: `password123`

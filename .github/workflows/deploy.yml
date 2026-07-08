@@ -18,6 +18,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install and Build 🔧
+        env:
+          VITE_BASE_PATH: /TasksEarn/
         run: |
           npm install
           npm run build
