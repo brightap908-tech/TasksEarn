@@ -26,10 +26,13 @@ var import_express = __toESM(require("express"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_fs = __toESM(require("fs"), 1);
 var import_crypto = __toESM(require("crypto"), 1);
-var import_vite = require("vite");
+var import_dotenv = __toESM(require("dotenv"), 1);
 var import_resend = require("resend");
+var import_nodemailer = __toESM(require("nodemailer"), 1);
+var import_vite = require("vite");
 var import_http = require("http");
 var import_ws = require("ws");
+import_dotenv.default.config();
 var PORT = Number(process.env.PORT) || 3e3;
 var DB_FILE = import_path.default.join(process.cwd(), "db.json");
 function hashPassword(password) {
@@ -410,42 +413,131 @@ function getResendClient() {
   if (!resendClient) {
     const apiKey = process.env.RESEND_API_KEY;
     if (apiKey) {
+      console.log(`[Resend Mailer] Initializing Resend client`);
       resendClient = new import_resend.Resend(apiKey);
     }
   }
   return resendClient;
 }
+var smtpTransporter = null;
+function getSMTPTransporter() {
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT) || 587;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASSWORD;
+  if (host && user && pass) {
+    if (!smtpTransporter) {
+      console.log(`[SMTP Mailer] Initializing nodemailer transporter with ${host}:${port} as ${user}`);
+      smtpTransporter = import_nodemailer.default.createTransport({
+        host,
+        port,
+        secure: port === 465,
+        // true for 465, false for 587 or other ports
+        auth: {
+          user,
+          pass
+        }
+      });
+    }
+    return smtpTransporter;
+  }
+  return null;
+}
+async function sendEmail({ to, subject, html }) {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (resendKey) {
+    const resend = getResendClient();
+    if (resend) {
+      const fromAddress = process.env.RESEND_FROM || "TasksEarn <onboarding@resend.dev>";
+      try {
+        console.log(`[Resend Mailer] Initiating email delivery to ${to}`);
+        const response = await resend.emails.send({
+          from: fromAddress,
+          to: [to],
+          subject,
+          html
+        });
+        if (response.error) {
+          console.error(`[Resend Mailer Error]`, response.error);
+          throw new Error(`Resend Delivery Failed: ${response.error.message || JSON.stringify(response.error)}`);
+        }
+        console.log(`[Resend Mailer Success] Email delivered to ${to}. Message ID: ${response.data?.id}`);
+        return { success: true, provider: "resend", data: response.data };
+      } catch (error) {
+        console.error(`[Resend Mailer Error] Failed to send email to ${to}:`, error);
+        throw new Error(`Resend Delivery Failed: ${error.message || error}`);
+      }
+    }
+  }
+  const smtp = getSMTPTransporter();
+  if (smtp) {
+    const fromAddress = process.env.SMTP_FROM || db.settings.contactEmail || "TasksEarn <noreply@tasksearn.com>";
+    try {
+      console.log(`[SMTP Mailer] Initiating email delivery to ${to} via ${process.env.SMTP_HOST}`);
+      const info = await smtp.sendMail({
+        from: fromAddress,
+        to,
+        subject,
+        html
+      });
+      console.log(`[SMTP Mailer Success] Email delivered to ${to}. Message ID: ${info.messageId}`);
+      return { success: true, provider: "smtp", messageId: info.messageId };
+    } catch (error) {
+      console.error(`[SMTP Mailer Error] Failed to send email to ${to}:`, error);
+      throw new Error(`SMTP Delivery Failed: ${error.message || error}`);
+    }
+  }
+  const errMsg = "No email provider is configured. Please configure either Resend (set RESEND_API_KEY, RESEND_FROM) or SMTP variables (set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM) on your Google Cloud Run settings to enable real email verification and recovery.";
+  console.error(`[Email Configuration Missing] ${errMsg}`);
+  throw new Error(errMsg);
+}
 async function sendVerificationEmail(email, name, code) {
-  const client = getResendClient();
-  if (!client) {
-    console.warn(`[Resend Email Simulation] No RESEND_API_KEY. Verification code for ${email} is: ${code}`);
-    return { success: true, simulated: true, code };
-  }
-  try {
-    const data = await client.emails.send({
-      from: "TasksEarn <noreply@tasksearn.com>",
-      to: [email],
-      subject: "Verify your TasksEarn Email Address",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-          <h2 style="color: #4f46e5; text-align: center;">Welcome to TasksEarn</h2>
-          <p>Hello ${name},</p>
-          <p>Thank you for registering on TasksEarn. To complete your registration and activate your account, please verify your email address using the 6-digit verification code below:</p>
-          <div style="background-color: #f3f4f6; padding: 15px; border-radius: 6px; text-align: center; margin: 20px 0;">
-            <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #1f2937;">${code}</span>
-          </div>
-          <p style="color: #6b7280; font-size: 14px;">This code is valid for 10 minutes. If you did not request this registration, please ignore this email.</p>
-          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
-          <p style="text-align: center; color: #9ca3af; font-size: 12px;">\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} TasksEarn Nigeria. All rights reserved.</p>
-        </div>
-      `
-    });
-    console.log(`[Resend Email Success] Verification email sent to ${email}`, data);
-    return { success: true, data };
-  } catch (error) {
-    console.error(`[Resend Email Error] Failed to send email to ${email}`, error);
-    throw error;
-  }
+  const subject = "Verify your TasksEarn Email Address";
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 16px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h2 style="color: #10b981; font-size: 24px; font-weight: bold; margin: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">TasksEarn Nigeria</h2>
+        <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0 0;">Social Media Microtask Exchange</p>
+      </div>
+      <p style="color: #374151; font-size: 15px; line-height: 1.5;">Hello <strong>${name}</strong>,</p>
+      <p style="color: #374151; font-size: 15px; line-height: 1.5;">Thank you for registering on TasksEarn. To complete your registration and activate your secure earner or advertiser account, please verify your email address using the 6-digit verification code below:</p>
+      <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; border-radius: 12px; text-align: center; margin: 24px 0;">
+        <span style="font-size: 36px; font-weight: 800; letter-spacing: 6px; color: #047857; font-family: monospace;">${code}</span>
+      </div>
+      <p style="color: #ef4444; font-size: 13px; font-weight: 600; text-align: center; margin-bottom: 12px;">This verification code is valid for exactly 10 minutes.</p>
+      <p style="color: #6b7280; font-size: 13px; line-height: 1.5;">If you did not sign up or request this verification code, please ignore this email or reach out to our platform support team.</p>
+      <hr style="border: 0; border-top: 1px solid #f3f4f6; margin: 24px 0;" />
+      <p style="text-align: center; color: #9ca3af; font-size: 11px; margin: 0;">
+        \xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} TasksEarn Nigeria. All rights reserved.<br />
+        12, Herbert Macaulay Way, Yaba, Lagos State, Nigeria.
+      </p>
+    </div>
+  `;
+  return sendEmail({ to: email, subject, html: htmlContent });
+}
+async function sendPasswordResetEmail(email, name, tempPassword) {
+  const subject = "Your TasksEarn Password Recovery Credentials";
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 16px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h2 style="color: #10b981; font-size: 24px; font-weight: bold; margin: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">TasksEarn Nigeria</h2>
+        <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0 0;">Social Media Microtask Exchange</p>
+      </div>
+      <p style="color: #374151; font-size: 15px; line-height: 1.5;">Hello <strong>${name}</strong>,</p>
+      <p style="color: #374151; font-size: 15px; line-height: 1.5;">We received a request to recover your secure login password. We have generated a new secure temporary password for your account:</p>
+      <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; border-radius: 12px; text-align: center; margin: 24px 0;">
+        <span style="font-size: 28px; font-weight: 800; letter-spacing: 2px; color: #047857; font-family: monospace;">${tempPassword}</span>
+      </div>
+      <p style="color: #6b7280; font-size: 13px; line-height: 1.5;">Please use this temporary password to sign in immediately. Once logged in, you can update your security password under your Profile settings to keep your earnings and campaigns fully secure.</p>
+      <p style="color: #ef4444; font-size: 13px; font-weight: 600; text-align: center;">For security reasons, do not share this password with anyone.</p>
+      <hr style="border: 0; border-top: 1px solid #f3f4f6; margin: 24px 0;" />
+      <p style="text-align: center; color: #9ca3af; font-size: 11px; margin: 0;">
+        \xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} TasksEarn Nigeria. All rights reserved.<br />
+        12, Herbert Macaulay Way, Yaba, Lagos State, Nigeria.
+      </p>
+    </div>
+  `;
+  return sendEmail({ to: email, subject, html: htmlContent });
 }
 app.get("/api/public/pages", (req, res) => {
   res.json(db.pages);
@@ -497,6 +589,14 @@ app.post("/api/auth/register", async (req, res) => {
     referredBy: referredByUserId,
     createdAt: (/* @__PURE__ */ new Date()).toISOString()
   };
+  try {
+    await sendVerificationEmail(email, name, verificationCode);
+  } catch (err) {
+    console.error("Failed to send verification email on registration: ", err);
+    return res.status(500).json({
+      error: `Could not send verification email. Please check your SMTP or Resend settings. Details: ${err.message || err}`
+    });
+  }
   db.users.push(newUser);
   if (referredByUserId) {
     const referrer = db.users.find((u) => u.id === referredByUserId);
@@ -509,26 +609,23 @@ app.post("/api/auth/register", async (req, res) => {
       rewardEarned: db.settings.referralReward,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     });
-    referrer.walletBalance += db.settings.referralReward;
-    db.transactions.push({
-      id: "tx-" + Math.random().toString(36).substr(2, 9),
-      userId: referredByUserId,
-      userName: referrer.name,
-      userRole: referrer.role,
-      amount: db.settings.referralReward,
-      type: "Referral Bonus" /* REFERRAL */,
-      status: "Success" /* SUCCESS */,
-      description: `Referral bonus for inviting ${name}`,
-      reference: "R-REF-" + Math.floor(1e7 + Math.random() * 9e7),
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
+    if (referrer) {
+      referrer.walletBalance += db.settings.referralReward;
+      db.transactions.push({
+        id: "tx-" + Math.random().toString(36).substr(2, 9),
+        userId: referredByUserId,
+        userName: referrer.name,
+        userRole: referrer.role,
+        amount: db.settings.referralReward,
+        type: "Referral Bonus" /* REFERRAL */,
+        status: "Success" /* SUCCESS */,
+        description: `Referral bonus for inviting ${name}`,
+        reference: "R-REF-" + Math.floor(1e7 + Math.random() * 9e7),
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    }
   }
   saveDB();
-  try {
-    await sendVerificationEmail(email, name, verificationCode);
-  } catch (err) {
-    console.error("Failed to send verification email on registration: ", err);
-  }
   const { password: _, verificationCode: __, verificationCodeExpires: ___, ...userWithoutSecrets } = newUser;
   res.json({ user: userWithoutSecrets });
 });
@@ -559,7 +656,7 @@ app.post("/api/auth/login", (req, res) => {
   const { password: _, verificationCode: __, verificationCodeExpires: ___, ...userWithoutSecrets } = matchedUser;
   res.json({ user: userWithoutSecrets });
 });
-app.post("/api/auth/forgot-password", (req, res) => {
+app.post("/api/auth/forgot-password", async (req, res) => {
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ error: "Email address is required" });
@@ -568,10 +665,19 @@ app.post("/api/auth/forgot-password", (req, res) => {
   if (!user) {
     return res.status(404).json({ error: "No account found with this email address." });
   }
-  res.json({
-    success: true,
-    message: "Password recovery instructions have been successfully sent to " + email + "."
-  });
+  const tempPassword = "TE-" + Math.floor(1e5 + Math.random() * 9e5).toString();
+  try {
+    await sendPasswordResetEmail(user.email, user.name, tempPassword);
+    user.password = hashPassword(tempPassword);
+    saveDB();
+    res.json({
+      success: true,
+      message: "Password recovery credentials have been successfully sent to " + email + "."
+    });
+  } catch (err) {
+    console.error("Failed to send password recovery email: ", err);
+    res.status(500).json({ error: `Could not send password recovery email. Please check your SMTP settings. Details: ${err.message || err}` });
+  }
 });
 app.post("/api/auth/verify-email", (req, res) => {
   const { email, code } = req.body;
@@ -626,7 +732,7 @@ app.post("/api/auth/resend-code", async (req, res) => {
     res.json({ success: true, message: "A new 6-digit verification code has been successfully sent." });
   } catch (err) {
     console.error("Resend verification code failed: ", err);
-    res.status(500).json({ error: "Failed to deliver email. Please try again." });
+    res.status(500).json({ error: `Failed to deliver email. Details: ${err.message || err}` });
   }
 });
 app.get("/api/auth/me", (req, res) => {
@@ -977,46 +1083,41 @@ app.post("/api/advertiser/deposit/initialize", async (req, res) => {
   db.transactions.push(newTx);
   saveDB();
   const paystackKey = process.env.PAYSTACK_SECRET_KEY;
-  if (paystackKey) {
-    try {
-      const origin = req.headers.referer || req.headers.origin || `http://localhost:${PORT}`;
-      const baseOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
-      const callbackUrl = `${baseOrigin}/#paystack_ref=${ref}`;
-      const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${paystackKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          email: user.email,
-          amount: Math.round(depositAmount * 100),
-          // convert to kobo and ensure integer
-          reference: ref,
-          callback_url: callbackUrl
-        })
-      });
-      const paystackData = await paystackRes.json();
-      if (paystackData && paystackData.status && paystackData.data) {
-        return res.json({
-          success: true,
-          authorization_url: paystackData.data.authorization_url,
-          reference: ref
-        });
-      } else {
-        console.error("Paystack API error: ", paystackData);
-        return res.status(500).json({ error: paystackData.message || "Failed to initialize payment gateway" });
-      }
-    } catch (err) {
-      console.error("Paystack Initialize Fetch error: ", err);
-      return res.status(500).json({ error: "Failed to connect to Paystack payment gateway" });
-    }
-  } else {
-    return res.json({
-      success: true,
-      authorization_url: "SIMULATED",
-      reference: ref
+  if (!paystackKey) {
+    return res.status(400).json({ error: "PAYSTACK_SECRET_KEY environment variable is not configured on the server. Please set it in the Secrets/Settings menu." });
+  }
+  try {
+    const origin = req.headers.referer || req.headers.origin || `http://localhost:${PORT}`;
+    const baseOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
+    const callbackUrl = `${baseOrigin}/#paystack_ref=${ref}`;
+    const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${paystackKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        email: user.email,
+        amount: Math.round(depositAmount * 100),
+        // convert to kobo and ensure integer
+        reference: ref,
+        callback_url: callbackUrl
+      })
     });
+    const paystackData = await paystackRes.json();
+    if (paystackData && paystackData.status && paystackData.data) {
+      return res.json({
+        success: true,
+        authorization_url: paystackData.data.authorization_url,
+        reference: ref
+      });
+    } else {
+      console.error("Paystack API error: ", paystackData);
+      return res.status(500).json({ error: paystackData.message || "Failed to initialize payment gateway" });
+    }
+  } catch (err) {
+    console.error("Paystack Initialize Fetch error: ", err);
+    return res.status(500).json({ error: "Failed to connect to Paystack payment gateway" });
   }
 });
 app.post("/api/advertiser/deposit/verify", async (req, res) => {
@@ -1042,55 +1143,46 @@ app.post("/api/advertiser/deposit/verify", async (req, res) => {
     return res.status(400).json({ error: "This transaction has already been processed as failed" });
   }
   const paystackKey = process.env.PAYSTACK_SECRET_KEY;
-  if (paystackKey) {
-    try {
-      const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${paystackKey}`
-        }
-      });
-      const paystackData = await paystackRes.json();
-      if (paystackData && paystackData.status && paystackData.data) {
-        const paystackStatus = paystackData.data.status;
-        const paystackAmount = paystackData.data.amount / 100;
-        if (paystackStatus === "success") {
-          if (Math.abs(paystackAmount - transaction.amount) > 0.01) {
-            transaction.status = "Failed" /* FAILED */;
-            saveDB();
-            return res.status(400).json({ error: "Transaction amount mismatch. Audit flag raised." });
-          }
-          transaction.status = "Success" /* SUCCESS */;
-          user.walletBalance += transaction.amount;
-          saveDB();
-          return res.json({
-            success: true,
-            walletBalance: user.walletBalance,
-            transaction
-          });
-        } else {
+  if (!paystackKey) {
+    return res.status(400).json({ error: "PAYSTACK_SECRET_KEY environment variable is not configured on the server. Please set it in the Secrets/Settings menu." });
+  }
+  try {
+    const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${paystackKey}`
+      }
+    });
+    const paystackData = await paystackRes.json();
+    if (paystackData && paystackData.status && paystackData.data) {
+      const paystackStatus = paystackData.data.status;
+      const paystackAmount = paystackData.data.amount / 100;
+      if (paystackStatus === "success") {
+        if (Math.abs(paystackAmount - transaction.amount) > 0.01) {
           transaction.status = "Failed" /* FAILED */;
           saveDB();
-          return res.status(400).json({ error: `Payment failed. Paystack status: ${paystackStatus}` });
+          return res.status(400).json({ error: "Transaction amount mismatch. Audit flag raised." });
         }
+        transaction.status = "Success" /* SUCCESS */;
+        user.walletBalance += transaction.amount;
+        saveDB();
+        return res.json({
+          success: true,
+          walletBalance: user.walletBalance,
+          transaction
+        });
       } else {
-        console.error("Paystack Verification Error: ", paystackData);
-        return res.status(500).json({ error: "Could not verify payment status with gateway" });
+        transaction.status = "Failed" /* FAILED */;
+        saveDB();
+        return res.status(400).json({ error: `Payment failed. Paystack status: ${paystackStatus}` });
       }
-    } catch (err) {
-      console.error("Paystack Verify Fetch error: ", err);
-      return res.status(500).json({ error: "Failed to verify transaction with payment gateway" });
+    } else {
+      console.error("Paystack Verification Error: ", paystackData);
+      return res.status(500).json({ error: "Could not verify payment status with gateway" });
     }
-  } else {
-    transaction.status = "Success" /* SUCCESS */;
-    user.walletBalance += transaction.amount;
-    saveDB();
-    return res.json({
-      success: true,
-      simulated: true,
-      walletBalance: user.walletBalance,
-      transaction
-    });
+  } catch (err) {
+    console.error("Paystack Verify Fetch error: ", err);
+    return res.status(500).json({ error: "Failed to verify transaction with payment gateway" });
   }
 });
 app.get("/api/user/transactions", (req, res) => {
@@ -1453,6 +1545,29 @@ async function startServer() {
   }
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`[TasksEarn Server] running on http://0.0.0.0:${PORT}`);
+    console.log("====================================================================");
+    console.log("[SMTP Mailer Diagnostics] Checking Mail Configuration on Startup...");
+    const host = process.env.SMTP_HOST;
+    const port = process.env.SMTP_PORT;
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASSWORD;
+    const from = process.env.SMTP_FROM;
+    const resendKey = process.env.RESEND_API_KEY;
+    if (resendKey) {
+      console.log(`-> Resend Provider Detected (RESEND_API_KEY is configured)`);
+    }
+    console.log(`-> SMTP_HOST:      ${host ? host : "\u274C [MISSING]"}`);
+    console.log(`-> SMTP_PORT:      ${port ? port : "\u274C [MISSING] (Defaults to 587 if omitted)"}`);
+    console.log(`-> SMTP_USER:      ${user ? user : "\u274C [MISSING]"}`);
+    console.log(`-> SMTP_FROM:      ${from ? from : "\u274C [MISSING]"}`);
+    console.log(`-> SMTP_PASSWORD:  ${pass ? "\u2714 [CONFIGURED] (Masked for Security)" : "\u274C [MISSING]"}`);
+    if (host && user && pass) {
+      console.log(`[SMTP Mailer Startup] SUCCESS: Mail delivery system is READY using ${user}`);
+    } else if (!resendKey) {
+      console.error(`[SMTP Mailer Startup] ERROR: No valid email provider is configured.`);
+      console.error(`Please verify that SMTP_HOST, SMTP_USER, and SMTP_PASSWORD are set in your environment variables.`);
+    }
+    console.log("====================================================================");
   });
 }
 startServer();
