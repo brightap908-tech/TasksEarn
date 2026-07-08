@@ -77,9 +77,20 @@ export default function App() {
   const [forgotSuccess, setForgotSuccess] = React.useState(false);
   const [toast, setToast] = React.useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  // Admin password verification state
+  // Email Verification State
+  const [verificationEmail, setVerificationEmail] = React.useState("");
+  const [verificationCode, setVerificationCode] = React.useState("");
+  const [verificationResent, setVerificationResent] = React.useState(false);
+
+  // Admin and Demo password verification states
   const [showAdminPasswordPrompt, setShowAdminPasswordPrompt] = React.useState(false);
   const [adminPasswordPromptValue, setAdminPasswordPromptValue] = React.useState("");
+
+  const [showEarnerPasswordPrompt, setShowEarnerPasswordPrompt] = React.useState(false);
+  const [earnerPasswordPromptValue, setEarnerPasswordPromptValue] = React.useState("");
+
+  const [showAdvertiserPasswordPrompt, setShowAdvertiserPasswordPrompt] = React.useState(false);
+  const [advertiserPasswordPromptValue, setAdvertiserPasswordPromptValue] = React.useState("");
 
   // Dark Theme State
   const [isDarkMode, setIsDarkMode] = React.useState<boolean>(() => {
@@ -233,7 +244,13 @@ export default function App() {
       });
 
       if (data && data.error) {
-        setAuthError(data.error);
+        if (data.error === "EMAIL_NOT_VERIFIED") {
+          setVerificationEmail(data.email || loginEmail);
+          setAuthError("");
+          setCurrentView("verify-email");
+        } else {
+          setAuthError(data.error);
+        }
       } else if (data && data.user) {
         localStorage.setItem("tasksearn_uid", data.user.id);
         setUser(data.user);
@@ -288,6 +305,67 @@ export default function App() {
     }
   };
 
+  // Email Verification Handlers
+  const handleVerifyEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!verificationCode) return;
+
+    setAuthLoading(true);
+    setAuthError("");
+
+    try {
+      const data = await apiFetch("/api/auth/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verificationEmail, code: verificationCode })
+      });
+
+      if (data && data.error) {
+        setAuthError(data.error);
+      } else if (data && data.user) {
+        localStorage.setItem("tasksearn_uid", data.user.id);
+        setUser(data.user);
+        showToast("Email address successfully verified!", "success");
+
+        if (data.user.role === UserRole.EARNER) {
+          setCurrentView("earner-dashboard");
+        } else if (data.user.role === UserRole.ADVERTISER) {
+          setCurrentView("advertiser-dashboard");
+        } else {
+          setCurrentView("admin-dashboard");
+        }
+        
+        setVerificationEmail("");
+        setVerificationCode("");
+      }
+    } catch (err) {
+      setAuthError("Failed to complete email verification.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setAuthError("");
+    setVerificationResent(false);
+    try {
+      const data = await apiFetch("/api/auth/resend-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verificationEmail })
+      });
+
+      if (data && data.error) {
+        setAuthError(data.error);
+      } else {
+        setVerificationResent(true);
+        showToast("A new 6-digit verification code has been sent successfully.", "success");
+      }
+    } catch (err) {
+      setAuthError("Failed to resend verification code.");
+    }
+  };
+
   // One-click Demo Login handler
   const handleDemoLogin = async (email: string, customPassword?: string) => {
     setAuthLoading(true);
@@ -304,7 +382,13 @@ export default function App() {
       });
 
       if (data && data.error) {
-        setAuthError(data.error);
+        if (data.error === "EMAIL_NOT_VERIFIED") {
+          setVerificationEmail(data.email || email);
+          setAuthError("");
+          setCurrentView("verify-email");
+        } else {
+          setAuthError(data.error);
+        }
       } else if (data && data.user) {
         localStorage.setItem("tasksearn_uid", data.user.id);
         setUser(data.user);
@@ -323,6 +407,10 @@ export default function App() {
         setLoginPassword("");
         setShowAdminPasswordPrompt(false);
         setAdminPasswordPromptValue("");
+        setShowEarnerPasswordPrompt(false);
+        setEarnerPasswordPromptValue("");
+        setShowAdvertiserPasswordPrompt(false);
+        setAdvertiserPasswordPromptValue("");
       }
     } catch (err) {
       setAuthError("Failed to verify secure credentials.");
@@ -355,14 +443,10 @@ export default function App() {
       if (data && data.error) {
         setAuthError(data.error);
       } else if (data && data.user) {
-        localStorage.setItem("tasksearn_uid", data.user.id);
-        setUser(data.user);
-        
-        if (data.user.role === UserRole.EARNER) {
-          setCurrentView("earner-dashboard");
-        } else {
-          setCurrentView("advertiser-dashboard");
-        }
+        // Register starts unverified, so direct them to verify-email view
+        setVerificationEmail(regEmail);
+        setAuthError("");
+        setCurrentView("verify-email");
 
         // Reset forms
         setRegName("");
@@ -384,7 +468,7 @@ export default function App() {
     setCurrentView("home");
   };
 
-  // Simulated Paystack payment gateway billing process
+  // Real & Simulated Paystack payment gateway billing process
   const triggerDepositPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(depositAmount);
@@ -394,33 +478,57 @@ export default function App() {
     }
 
     setDepositProcessing(true);
+    try {
+      // 1. Initialize Paystack Transaction
+      const initRes = await apiFetch("/api/advertiser/deposit/initialize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount })
+      });
 
-    // Simulate Paystack Popup verification timing (2.5 seconds)
-    setTimeout(async () => {
-      try {
-        const res = await apiFetch("/api/advertiser/deposit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount,
-            gateway: depositGateway
-          })
-        });
-
-        if (res && res.success) {
-          setDepositSuccess(true);
-          refreshUserSession();
-          setTimeout(() => {
-            setDepositSuccess(false);
-            setDepositOpen(false);
-            setDepositProcessing(false);
-          }, 2000);
-        }
-      } catch (err) {
-        alert("Payment simulation gateway failed to verify callback.");
+      if (!initRes || initRes.error) {
+        alert(initRes?.error || "Failed to initialize payment transaction.");
         setDepositProcessing(false);
+        return;
       }
-    }, 2500);
+
+      const { authorization_url, reference } = initRes;
+
+      if (authorization_url === "SIMULATED") {
+        // Simulated mock environment
+        setTimeout(async () => {
+          try {
+            const verifyRes = await apiFetch("/api/advertiser/deposit/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ reference })
+            });
+
+            if (verifyRes && verifyRes.success) {
+              setDepositSuccess(true);
+              refreshUserSession();
+              setTimeout(() => {
+                setDepositSuccess(false);
+                setDepositOpen(false);
+                setDepositProcessing(false);
+              }, 2000);
+            } else {
+              alert(verifyRes?.error || "Simulated payment verification failed.");
+              setDepositProcessing(false);
+            }
+          } catch (err) {
+            alert("Payment simulation gateway failed to verify callback.");
+            setDepositProcessing(false);
+          }
+        }, 2500);
+      } else {
+        // Real environment: redirect to Paystack Checkout URL
+        window.location.href = authorization_url;
+      }
+    } catch (err) {
+      alert("Payment gateway connection failed.");
+      setDepositProcessing(false);
+    }
   };
 
   // Categorical details for Home Page
@@ -747,24 +855,105 @@ export default function App() {
 
               {/* Demo accounts quick helper */}
               <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 text-[11px] text-slate-500 space-y-2">
-                <p className="font-bold text-slate-700">🔑 One-Click Demo Login (Auto-fill & Sign In):</p>
+                <p className="font-bold text-slate-700">🔑 Secure Demo Accounts Password Gates:</p>
                 <div className="flex flex-col gap-1.5 mt-1">
-                  <button
-                    type="button"
-                    onClick={() => handleDemoLogin("earner@tasksearn.com")}
-                    className="flex justify-between items-center bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 rounded-xl px-3 py-1.5 transition-all text-left cursor-pointer"
-                  >
-                    <span>👥 Demo Earner</span>
-                    <span className="font-semibold text-emerald-600 font-mono text-[9px] bg-emerald-50 px-2 py-0.5 rounded-full">Instant Log In</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDemoLogin("advertiser@tasksearn.com")}
-                    className="flex justify-between items-center bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 rounded-xl px-3 py-1.5 transition-all text-left cursor-pointer"
-                  >
-                    <span>📢 Demo Advertiser</span>
-                    <span className="font-semibold text-emerald-600 font-mono text-[9px] bg-emerald-50 px-2 py-0.5 rounded-full">Instant Log In</span>
-                  </button>
+                  
+                  {/* Demo Earner Password Gate */}
+                  {!showEarnerPasswordPrompt ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowEarnerPasswordPrompt(true)}
+                      className="flex justify-between items-center bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 rounded-xl px-3 py-1.5 transition-all text-left cursor-pointer"
+                    >
+                      <span>👥 Demo Earner</span>
+                      <span className="font-semibold text-emerald-600 font-mono text-[9px] bg-emerald-50 px-2 py-0.5 rounded-full">Enter Password</span>
+                    </button>
+                  ) : (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-3 space-y-2.5">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-[10px] text-emerald-950 flex items-center gap-1">👥 Demo Earner Password Check</span>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setShowEarnerPasswordPrompt(false);
+                            setEarnerPasswordPromptValue("");
+                          }}
+                          className="text-[9px] text-gray-400 hover:text-emerald-600 font-semibold cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <input 
+                          type="password"
+                          required
+                          value={earnerPasswordPromptValue}
+                          onChange={(e) => setEarnerPasswordPromptValue(e.target.value)}
+                          placeholder="Enter earner password..."
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs bg-white focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!earnerPasswordPromptValue) return;
+                            handleDemoLogin("earner@tasksearn.com", earnerPasswordPromptValue);
+                          }}
+                          className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-[10px] transition-all cursor-pointer shrink-0"
+                        >
+                          Verify & Login
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Demo Advertiser Password Gate */}
+                  {!showAdvertiserPasswordPrompt ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvertiserPasswordPrompt(true)}
+                      className="flex justify-between items-center bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 rounded-xl px-3 py-1.5 transition-all text-left cursor-pointer"
+                    >
+                      <span>📢 Demo Advertiser</span>
+                      <span className="font-semibold text-emerald-600 font-mono text-[9px] bg-emerald-50 px-2 py-0.5 rounded-full">Enter Password</span>
+                    </button>
+                  ) : (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-3 space-y-2.5">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-[10px] text-emerald-950 flex items-center gap-1">📢 Demo Advertiser Password Check</span>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setShowAdvertiserPasswordPrompt(false);
+                            setAdvertiserPasswordPromptValue("");
+                          }}
+                          className="text-[9px] text-gray-400 hover:text-emerald-600 font-semibold cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <input 
+                          type="password"
+                          required
+                          value={advertiserPasswordPromptValue}
+                          onChange={(e) => setAdvertiserPasswordPromptValue(e.target.value)}
+                          placeholder="Enter advertiser password..."
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs bg-white focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!advertiserPasswordPromptValue) return;
+                            handleDemoLogin("advertiser@tasksearn.com", advertiserPasswordPromptValue);
+                          }}
+                          className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-[10px] transition-all cursor-pointer shrink-0"
+                        >
+                          Verify & Login
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {!showAdminPasswordPrompt ? (
                     <button
                       type="button"
@@ -990,6 +1179,80 @@ export default function App() {
                   className="font-bold text-emerald-500 hover:text-emerald-600 hover:underline"
                 >
                   Sign In
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* AUTHENTICATION SECURE VIEW (EMAIL VERIFICATION) */}
+        {currentView === "verify-email" && (
+          <div className="mx-auto max-w-md px-4 py-16 sm:py-24 animate-fadeIn">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6">
+              
+              <div className="text-center space-y-2">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+                  <ShieldCheck className="h-6 w-6" />
+                </div>
+                <h2 className="font-display text-xl font-bold text-slate-900">Email Verification Required</h2>
+                <p className="text-xs text-slate-400">
+                  A secure 6-digit verification code has been generated. Please enter the code sent to your email <span className="font-semibold text-slate-700">{verificationEmail}</span>.
+                </p>
+              </div>
+
+              {authError && (
+                <p className="rounded-2xl bg-rose-50 p-3 text-xs font-bold text-rose-600 border border-rose-100 text-center">
+                  {authError}
+                </p>
+              )}
+
+              <form onSubmit={handleVerifyEmail} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1 text-center">6-Digit Verification Code</label>
+                  <input 
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
+                    placeholder="e.g. 123456"
+                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-center text-lg font-bold tracking-widest focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                <button 
+                  type="submit"
+                  disabled={authLoading}
+                  className="w-full rounded-full bg-emerald-500 hover:bg-emerald-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
+                >
+                  {authLoading ? "Validating Credentials..." : "Verify Code & Log In"}
+                </button>
+              </form>
+
+              <div className="flex flex-col gap-3 pt-2 text-center text-xs border-t border-slate-100 pt-4">
+                <p className="text-slate-400">
+                  Didn't receive the email?{" "}
+                  <button 
+                    onClick={handleResendCode}
+                    disabled={verificationResent}
+                    className={`font-bold text-emerald-500 hover:text-emerald-600 hover:underline ${verificationResent ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    {verificationResent ? "Code Resent Successfully" : "Resend Verification Code"}
+                  </button>
+                </p>
+                
+                <button 
+                  onClick={() => {
+                    setAuthError("");
+                    setVerificationEmail("");
+                    setVerificationCode("");
+                    setVerificationResent(false);
+                    setCurrentView("login");
+                  }}
+                  className="font-semibold text-slate-400 hover:text-slate-600"
+                >
+                  Return to Secure Sign In
                 </button>
               </div>
 

@@ -3,13 +3,17 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
+import { Resend } from "resend";
+import { createServer as createHttpServer } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { 
   UserRole, 
   TaskStatus, 
   SubmissionStatus, 
   TransactionType, 
   TransactionStatus, 
-  TaskCategory 
+  TaskCategory,
+  AdminNotification
 } from "./src/types.js";
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -29,6 +33,7 @@ let db: {
   referrals: any[];
   announcements: any[];
   banners: any[];
+  notifications: AdminNotification[];
   pages: { [key: string]: { title: string; content: string } };
   settings: {
     platformName: string;
@@ -49,7 +54,9 @@ let db: {
   referrals: [],
   announcements: [],
   banners: [],
+  notifications: [],
   pages: {},
+
   settings: {
     platformName: "TasksEarn",
     referralReward: 200,
@@ -76,6 +83,7 @@ function loadDB() {
       if (!db.referrals) db.referrals = [];
       if (!db.announcements) db.announcements = [];
       if (!db.banners) db.banners = [];
+      if (!db.notifications) db.notifications = [];
       if (!db.pages) db.pages = {};
       if (!db.settings) {
         db.settings = {
@@ -427,6 +435,52 @@ function getAuthenticatedUser(req: express.Request): any | null {
   return db.users.find(u => u.id === userId) || null;
 }
 
+// Lazy initialization of Resend client to avoid startup crashes if key is missing
+let resendClient: Resend | null = null;
+function getResendClient(): Resend | null {
+  if (!resendClient) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (apiKey) {
+      resendClient = new Resend(apiKey);
+    }
+  }
+  return resendClient;
+}
+
+async function sendVerificationEmail(email: string, name: string, code: string) {
+  const client = getResendClient();
+  if (!client) {
+    console.warn(`[Resend Email Simulation] No RESEND_API_KEY. Verification code for ${email} is: ${code}`);
+    return { success: true, simulated: true, code };
+  }
+  
+  try {
+    const data = await client.emails.send({
+      from: "TasksEarn <noreply@tasksearn.com>",
+      to: [email],
+      subject: "Verify your TasksEarn Email Address",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+          <h2 style="color: #4f46e5; text-align: center;">Welcome to TasksEarn</h2>
+          <p>Hello ${name},</p>
+          <p>Thank you for registering on TasksEarn. To complete your registration and activate your account, please verify your email address using the 6-digit verification code below:</p>
+          <div style="background-color: #f3f4f6; padding: 15px; border-radius: 6px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #1f2937;">${code}</span>
+          </div>
+          <p style="color: #6b7280; font-size: 14px;">This code is valid for 10 minutes. If you did not request this registration, please ignore this email.</p>
+          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+          <p style="text-align: center; color: #9ca3af; font-size: 12px;">© ${new Date().getFullYear()} TasksEarn Nigeria. All rights reserved.</p>
+        </div>
+      `
+    });
+    console.log(`[Resend Email Success] Verification email sent to ${email}`, data);
+    return { success: true, data };
+  } catch (error) {
+    console.error(`[Resend Email Error] Failed to send email to ${email}`, error);
+    throw error;
+  }
+}
+
 // -----------------------------------------------------------------------------
 // PUBLIC API ENDPOINTS
 // -----------------------------------------------------------------------------
@@ -449,7 +503,7 @@ app.get("/api/public/settings", (req, res) => {
 // -----------------------------------------------------------------------------
 // AUTHENTICATION API ENDPOINTS
 // -----------------------------------------------------------------------------
-app.post("/api/auth/register", (req, res) => {
+app.post("/api/auth/register", async (req, res) => {
   const { name, email, password, role, referralCode } = req.body;
 
   if (!name || !email || !password || !role) {
@@ -473,14 +527,22 @@ app.post("/api/auth/register", (req, res) => {
     }
   }
 
+  // Generate 6-digit verification code with 10-minute expiry
+  const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const verificationCodeLastSent = new Date().toISOString();
+
   const newUser = {
     id: userId,
     name,
     email,
     password: hashPassword(password),
     role,
-    isVerified: false, // Starts unverified to trigger simulation
-    walletBalance: role === UserRole.ADVERTISER ? 0 : 0, // start with 0
+    isVerified: false, // Starts unverified to enforce email verification
+    verificationCode,
+    verificationCodeExpires,
+    verificationCodeLastSent,
+    walletBalance: 0, // Starts at 0
     referralCode: userReferralCode,
     referredBy: referredByUserId,
     createdAt: new Date().toISOString()
@@ -500,8 +562,7 @@ app.post("/api/auth/register", (req, res) => {
       rewardEarned: db.settings.referralReward,
       createdAt: new Date().toISOString()
     });
-    // Add referral bonus to referrer immediately or queue it. 
-    // Let's add it immediately to reward them!
+    // Add referral bonus to referrer immediately
     referrer.walletBalance += db.settings.referralReward;
 
     db.transactions.push({
@@ -520,9 +581,17 @@ app.post("/api/auth/register", (req, res) => {
 
   saveDB();
 
+  // Send the verification email using Resend
+  try {
+    await sendVerificationEmail(email, name, verificationCode);
+  } catch (err) {
+    console.error("Failed to send verification email on registration: ", err);
+    // Continue registration so the user is saved; they can retry resending from the verification UI
+  }
+
   // Return the user (omit password)
-  const { password: _, ...userWithoutPassword } = newUser;
-  res.json({ user: userWithoutPassword });
+  const { password: _, verificationCode: __, verificationCodeExpires: ___, ...userWithoutSecrets } = newUser;
+  res.json({ user: userWithoutSecrets });
 });
 
 app.post("/api/auth/login", (req, res) => {
@@ -531,15 +600,33 @@ app.post("/api/auth/login", (req, res) => {
     return res.status(400).json({ error: "Email and password are required" });
   }
 
-  const hashedPassword = hashPassword(password);
-  const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === hashedPassword);
-
-  if (!user) {
+  const matchedUser = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  
+  if (!matchedUser) {
     return res.status(401).json({ error: "Invalid email or password" });
   }
 
-  const { password: _, ...userWithoutPassword } = user;
-  res.json({ user: userWithoutPassword });
+  const hashedPassword = hashPassword(password);
+  if (matchedUser.password !== hashedPassword) {
+    // Return specific 'Invalid password' error for the demo accounts
+    const isDemo = ["admin@tasksearn.com", "earner@tasksearn.com", "advertiser@tasksearn.com"].includes(matchedUser.email.toLowerCase());
+    if (isDemo) {
+      return res.status(401).json({ error: "Invalid password" });
+    }
+    return res.status(401).json({ error: "Invalid email or password" });
+  }
+
+  // Check email verification gate
+  if (!matchedUser.isVerified) {
+    return res.status(400).json({ 
+      error: "EMAIL_NOT_VERIFIED", 
+      userId: matchedUser.id, 
+      email: matchedUser.email 
+    });
+  }
+
+  const { password: _, verificationCode: __, verificationCodeExpires: ___, ...userWithoutSecrets } = matchedUser;
+  res.json({ user: userWithoutSecrets });
 });
 
 app.post("/api/auth/forgot-password", (req, res) => {
@@ -561,22 +648,85 @@ app.post("/api/auth/forgot-password", (req, res) => {
 });
 
 app.post("/api/auth/verify-email", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  const { email, code } = req.body;
 
+  if (!email || !code) {
+    return res.status(400).json({ error: "Email and 6-digit code are required" });
+  }
+
+  const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  if (!user) {
+    return res.status(404).json({ error: "User account not found" });
+  }
+
+  if (user.isVerified) {
+    const { password: _, verificationCode: __, verificationCodeExpires: ___, ...userWithoutSecrets } = user;
+    return res.json({ success: true, message: "Account already verified", user: userWithoutSecrets });
+  }
+
+  if (!user.verificationCode || user.verificationCode !== code) {
+    return res.status(400).json({ error: "Invalid 6-digit verification code" });
+  }
+
+  const isExpired = new Date(user.verificationCodeExpires).getTime() < Date.now();
+  if (isExpired) {
+    return res.status(400).json({ error: "Verification code has expired. Please request a new one." });
+  }
+
+  // Verification succeeds
   user.isVerified = true;
+  delete user.verificationCode;
+  delete user.verificationCodeExpires;
+  delete user.verificationCodeLastSent;
+  
   saveDB();
 
-  const { password: _, ...userWithoutPassword } = user;
-  res.json({ success: true, user: userWithoutPassword });
+  const { password: _, ...userWithoutSecrets } = user;
+  res.json({ success: true, message: "Email successfully verified!", user: userWithoutSecrets });
+});
+
+app.post("/api/auth/resend-code", async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: "Email address is required" });
+  }
+
+  const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  if (!user) {
+    return res.status(404).json({ error: "User account not found" });
+  }
+
+  // Rate limit: 60 seconds
+  const lastSent = user.verificationCodeLastSent ? new Date(user.verificationCodeLastSent).getTime() : 0;
+  const elapsed = Date.now() - lastSent;
+  if (elapsed < 60 * 1000) {
+    const remainingSeconds = Math.ceil((60 * 1000 - elapsed) / 1000);
+    return res.status(429).json({ error: `Please wait ${remainingSeconds} seconds before requesting a new code.` });
+  }
+
+  // Generate new code
+  const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+  user.verificationCode = newCode;
+  user.verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  user.verificationCodeLastSent = new Date().toISOString();
+
+  saveDB();
+
+  try {
+    await sendVerificationEmail(user.email, user.name, newCode);
+    res.json({ success: true, message: "A new 6-digit verification code has been successfully sent." });
+  } catch (err) {
+    console.error("Resend verification code failed: ", err);
+    res.status(500).json({ error: "Failed to deliver email. Please try again." });
+  }
 });
 
 app.get("/api/auth/me", (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: "Unauthorized" });
 
-  const { password: _, ...userWithoutPassword } = user;
-  res.json({ user: userWithoutPassword });
+  const { password: _, verificationCode: __, verificationCodeExpires: ___, ...userWithoutSecrets } = user;
+  res.json({ user: userWithoutSecrets });
 });
 
 // -----------------------------------------------------------------------------
@@ -681,6 +831,14 @@ app.post("/api/earner/tasks/:id/submit", (req, res) => {
   // Let's increment filled slots only when APPROVED.
 
   saveDB();
+
+  // Send real-time notification to Admin Dashboard
+  notifyAdmin({
+    type: "submission",
+    message: `New task submission from ${user.name} for "${task.title}"`,
+    referenceId: newSubmission.id
+  });
+
   res.json({ success: true, submission: newSubmission });
 });
 
@@ -719,13 +877,20 @@ app.post("/api/earner/withdraw", (req, res) => {
     return res.status(400).json({ error: `Minimum withdrawal amount is ₦${db.settings.minWithdrawal}` });
   }
 
-  if (user.walletBalance < withdrawAmount) {
-    return res.status(400).json({ error: "Insufficient wallet balance" });
+  // Calculate sum of all pending withdrawals to get real available balance
+  const pendingWithdrawalsTotal = db.transactions
+    .filter(t => t.userId === user.id && t.type === TransactionType.WITHDRAWAL && t.status === TransactionStatus.PENDING)
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const availableBalance = user.walletBalance - pendingWithdrawalsTotal;
+
+  if (availableBalance < withdrawAmount) {
+    return res.status(400).json({ 
+      error: `Insufficient available balance. Your total balance is ₦${user.walletBalance.toLocaleString()}, but you have ₦${pendingWithdrawalsTotal.toLocaleString()} locked in pending withdrawals. Real available balance: ₦${availableBalance.toLocaleString()}` 
+    });
   }
 
-  // Deduct immediately to prevent double spend
-  user.walletBalance -= withdrawAmount;
-
+  // Record withdrawal request but do NOT deduct from wallet balance yet
   const txId = "tx-" + Math.random().toString(36).substr(2, 9);
   const ref = "W-BANK-" + Math.floor(10000000 + Math.random() * 90000000);
 
@@ -750,7 +915,19 @@ app.post("/api/earner/withdraw", (req, res) => {
   db.transactions.push(newTx);
   saveDB();
 
-  res.json({ success: true, transaction: newTx, remainingBalance: user.walletBalance });
+  // Send real-time notification to Admin Dashboard
+  notifyAdmin({
+    type: "withdrawal",
+    message: `New withdrawal request of ₦${withdrawAmount.toLocaleString()} from ${user.name}`,
+    referenceId: newTx.id
+  });
+
+  res.json({ 
+    success: true, 
+    transaction: newTx, 
+    walletBalance: user.walletBalance,
+    availableBalance: availableBalance - withdrawAmount 
+  });
 });
 
 // -----------------------------------------------------------------------------
@@ -990,22 +1167,19 @@ app.post("/api/advertiser/submissions/:id/review", (req, res) => {
   res.json({ success: true, submission });
 });
 
-app.post("/api/advertiser/deposit", (req, res) => {
+app.post("/api/advertiser/deposit/initialize", async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
 
-  const { amount, gateway } = req.body;
+  const { amount } = req.body;
   const depositAmount = parseFloat(amount);
 
   if (isNaN(depositAmount) || depositAmount < db.settings.minDeposit) {
     return res.status(400).json({ error: `Minimum deposit amount is ₦${db.settings.minDeposit}` });
   }
 
-  // Simulate Instant Gateway Payment Approval (Paystack/Flutterwave)
-  user.walletBalance += depositAmount;
-
   const txId = "tx-" + Math.random().toString(36).substr(2, 9);
-  const ref = "T-PAYSTACK-" + Math.floor(10000000 + Math.random() * 90000000);
+  const ref = "DEP-" + Math.floor(10000000 + Math.random() * 90000000);
 
   const newTx = {
     id: txId,
@@ -1014,17 +1188,149 @@ app.post("/api/advertiser/deposit", (req, res) => {
     userRole: user.role,
     amount: depositAmount,
     type: TransactionType.DEPOSIT,
-    status: TransactionStatus.SUCCESS,
-    description: `Wallet Funding via ${gateway || "Paystack"} Card`,
+    status: TransactionStatus.PENDING,
+    description: "Wallet Funding via Paystack Checkout",
     reference: ref,
-    gateway: gateway || "Paystack",
+    gateway: "Paystack",
     createdAt: new Date().toISOString()
   };
 
   db.transactions.push(newTx);
   saveDB();
 
-  res.json({ success: true, transaction: newTx, walletBalance: user.walletBalance });
+  const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+  if (paystackKey) {
+    try {
+      const origin = req.headers.referer || req.headers.origin || `http://localhost:${PORT}`;
+      // Clean up origin trailing slash if any
+      const baseOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
+      const callbackUrl = `${baseOrigin}/#paystack_ref=${ref}`;
+
+      const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${paystackKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email: user.email,
+          amount: Math.round(depositAmount * 100), // convert to kobo and ensure integer
+          reference: ref,
+          callback_url: callbackUrl
+        })
+      });
+
+      const paystackData: any = await paystackRes.json();
+      if (paystackData && paystackData.status && paystackData.data) {
+        return res.json({ 
+          success: true, 
+          authorization_url: paystackData.data.authorization_url, 
+          reference: ref 
+        });
+      } else {
+        console.error("Paystack API error: ", paystackData);
+        return res.status(500).json({ error: paystackData.message || "Failed to initialize payment gateway" });
+      }
+    } catch (err) {
+      console.error("Paystack Initialize Fetch error: ", err);
+      return res.status(500).json({ error: "Failed to connect to Paystack payment gateway" });
+    }
+  } else {
+    // Simulated Mode for development & preview
+    return res.json({ 
+      success: true, 
+      authorization_url: "SIMULATED", 
+      reference: ref 
+    });
+  }
+});
+
+app.post("/api/advertiser/deposit/verify", async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
+
+  const { reference } = req.body;
+  if (!reference) {
+    return res.status(400).json({ error: "Transaction reference is required" });
+  }
+
+  const transaction = db.transactions.find(t => t.reference === reference && t.userId === user.id);
+  if (!transaction) {
+    return res.status(404).json({ error: "Transaction record not found" });
+  }
+
+  // Prevent duplicate credit
+  if (transaction.status === TransactionStatus.SUCCESS) {
+    return res.json({ 
+      success: true, 
+      alreadyProcessed: true, 
+      walletBalance: user.walletBalance,
+      transaction 
+    });
+  }
+
+  if (transaction.status === TransactionStatus.FAILED || transaction.status === TransactionStatus.REJECTED) {
+    return res.status(400).json({ error: "This transaction has already been processed as failed" });
+  }
+
+  const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+  if (paystackKey) {
+    try {
+      const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${paystackKey}`
+        }
+      });
+
+      const paystackData: any = await paystackRes.json();
+      if (paystackData && paystackData.status && paystackData.data) {
+        const paystackStatus = paystackData.data.status;
+        const paystackAmount = paystackData.data.amount / 100; // convert back from kobo
+
+        if (paystackStatus === "success") {
+          // Double check amount to prevent tampering
+          if (Math.abs(paystackAmount - transaction.amount) > 0.01) {
+            transaction.status = TransactionStatus.FAILED;
+            saveDB();
+            return res.status(400).json({ error: "Transaction amount mismatch. Audit flag raised." });
+          }
+
+          transaction.status = TransactionStatus.SUCCESS;
+          user.walletBalance += transaction.amount;
+          saveDB();
+
+          return res.json({ 
+            success: true, 
+            walletBalance: user.walletBalance, 
+            transaction 
+          });
+        } else {
+          transaction.status = TransactionStatus.FAILED;
+          saveDB();
+          return res.status(400).json({ error: `Payment failed. Paystack status: ${paystackStatus}` });
+        }
+      } else {
+        console.error("Paystack Verification Error: ", paystackData);
+        return res.status(500).json({ error: "Could not verify payment status with gateway" });
+      }
+    } catch (err) {
+      console.error("Paystack Verify Fetch error: ", err);
+      return res.status(500).json({ error: "Failed to verify transaction with payment gateway" });
+    }
+  } else {
+    // Simulated Mode: Approve deposit instantly for preview convenience
+    transaction.status = TransactionStatus.SUCCESS;
+    user.walletBalance += transaction.amount;
+    saveDB();
+
+    return res.json({ 
+      success: true, 
+      simulated: true, 
+      walletBalance: user.walletBalance, 
+      transaction 
+    });
+  }
 });
 
 // -----------------------------------------------------------------------------
@@ -1210,14 +1516,21 @@ app.post("/api/admin/withdrawals/:id/review", (req, res) => {
     return res.status(400).json({ error: "Withdrawal already reviewed" });
   }
 
-  transaction.status = status;
+  const isApproved = status === TransactionStatus.SUCCESS || status === TransactionStatus.APPROVED || status === "Success" || status === "Approved";
 
-  if (status === TransactionStatus.FAILED || status === TransactionStatus.REJECTED) {
-    // Refund the earner
+  if (isApproved) {
+    // Deduct the wallet balance now that it's approved
     const earner = db.users.find(u => u.id === transaction.userId);
     if (earner) {
-      earner.walletBalance += transaction.amount;
+      if (earner.walletBalance < transaction.amount) {
+        return res.status(400).json({ error: `User has insufficient balance (₦${earner.walletBalance}) to complete this payout of ₦${transaction.amount}.` });
+      }
+      earner.walletBalance -= transaction.amount;
     }
+    transaction.status = TransactionStatus.SUCCESS;
+  } else {
+    // Rejected/failed: No balance deduction needed as it was never deducted during request
+    transaction.status = TransactionStatus.REJECTED;
   }
 
   saveDB();
@@ -1375,6 +1688,114 @@ app.put("/api/admin/settings", (req, res) => {
   res.json({ success: true, settings: db.settings });
 });
 
+// -----------------------------------------------------------------------------
+// WEBSOCKET & NOTIFICATION SYSTEM
+// -----------------------------------------------------------------------------
+const server = createHttpServer(app);
+const wss = new WebSocketServer({ noServer: true });
+const adminClients = new Set<WebSocket>();
+
+wss.on("connection", (ws) => {
+  console.log("[WS] Admin client connected");
+  
+  ws.on("message", (message) => {
+    try {
+      const data = JSON.parse(message.toString());
+      if (data.type === "register-admin") {
+        adminClients.add(ws);
+        console.log("[WS] Admin client registered");
+        // Send initial unread notifications count and list
+        const unread = db.notifications ? db.notifications.filter(n => !n.read) : [];
+        ws.send(JSON.stringify({ 
+          type: "init-unread", 
+          count: unread.length, 
+          notifications: db.notifications || [] 
+        }));
+      }
+    } catch (e) {
+      console.error("[WS] Error parsing message:", e);
+    }
+  });
+
+  ws.on("close", () => {
+    adminClients.delete(ws);
+    console.log("[WS] Admin client disconnected");
+  });
+  
+  ws.on("error", (err) => {
+    console.error("[WS] Socket error:", err);
+    adminClients.delete(ws);
+  });
+});
+
+server.on("upgrade", (request, socket, head) => {
+  const { pathname } = new URL(request.url || "", `http://${request.headers.host || "localhost"}`);
+  if (pathname === "/ws") {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit("connection", ws, request);
+    });
+  }
+});
+
+// Helper to notify admin
+function notifyAdmin(notification: { type: "submission" | "withdrawal"; message: string; referenceId: string }) {
+  if (!db.notifications) db.notifications = [];
+  
+  const newNotif: AdminNotification = {
+    id: "notif-" + Math.random().toString(36).substr(2, 9),
+    type: notification.type,
+    message: notification.message,
+    referenceId: notification.referenceId,
+    createdAt: new Date().toISOString(),
+    read: false
+  };
+
+  db.notifications.unshift(newNotif); // latest first
+  // Limit to last 100 notifications for memory efficiency
+  if (db.notifications.length > 100) {
+    db.notifications = db.notifications.slice(0, 100);
+  }
+  saveDB();
+
+  // Broadcast to all active admin sockets
+  const payload = JSON.stringify({ type: "notification", notification: newNotif });
+  adminClients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(payload);
+    }
+  });
+}
+
+// Admin Notifications API Endpoints
+app.get("/api/admin/notifications", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+  
+  res.json(db.notifications || []);
+});
+
+app.post("/api/admin/notifications/read-all", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+  
+  if (db.notifications) {
+    db.notifications.forEach(n => n.read = true);
+  }
+  saveDB();
+  res.json({ success: true });
+});
+
+app.post("/api/admin/notifications/:id/read", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+  
+  const notif = db.notifications?.find(n => n.id === req.params.id);
+  if (notif) {
+    notif.read = true;
+    saveDB();
+  }
+  res.json({ success: true, notification: notif });
+});
 
 // -----------------------------------------------------------------------------
 // VITE CLIENT DEV SERVER INTEGRATION & SPA FALLBACK
@@ -1394,7 +1815,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`[TasksEarn Server] running on http://0.0.0.0:${PORT}`);
   });
 }

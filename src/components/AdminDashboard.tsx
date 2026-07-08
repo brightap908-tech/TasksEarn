@@ -11,7 +11,8 @@ import {
   UserRole, 
   SubmissionStatus, 
   TransactionStatus, 
-  TaskStatus 
+  TaskStatus,
+  AdminNotification
 } from "../types";
 import { 
   LayoutGrid, 
@@ -33,7 +34,11 @@ import {
   CheckCircle,
   HelpCircle,
   TrendingUp,
-  Percent
+  Percent,
+  Bell,
+  BellRing,
+  CheckCheck,
+  Clock
 } from "lucide-react";
 
 interface AdminDashboardProps {
@@ -65,6 +70,11 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   const [referralsList, setReferralsList] = React.useState<Referral[]>([]);
   const [announcements, setAnnouncements] = React.useState<Announcement[]>([]);
   const [banners, setBanners] = React.useState<Banner[]>([]);
+  
+  // Real-Time Notification System States
+  const [notifications, setNotifications] = React.useState<AdminNotification[]>([]);
+  const [showNotifDropdown, setShowNotifDropdown] = React.useState(false);
+  const [activeToast, setActiveToast] = React.useState<AdminNotification | null>(null);
   
   // CMS Content State
   const [pagesCMS, setPagesCMS] = React.useState<{ [key: string]: { title: string; content: string } }>({});
@@ -207,6 +217,144 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
       setCmsPageContent(pagesCMS[selectedCMSPage].content);
     }
   }, [selectedCMSPage, pagesCMS]);
+
+  // Real-Time Notification Stream Hook & Helpers
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  React.useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const list = await apiFetch("/api/admin/notifications");
+        if (Array.isArray(list)) {
+          setNotifications(list);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch notifications list", e);
+      }
+    };
+    fetchNotifications();
+
+    let socket: WebSocket | null = null;
+    let isConnected = false;
+
+    const connectWS = () => {
+      try {
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const host = window.location.host;
+        socket = new WebSocket(`${protocol}//${host}/ws`);
+
+        socket.onopen = () => {
+          isConnected = true;
+          console.log("[Admin WS] Connected to notification server");
+          socket?.send(JSON.stringify({ type: "register-admin" }));
+        };
+
+        socket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === "init-unread") {
+              setNotifications(data.notifications);
+            } else if (data.type === "notification") {
+              const newNotif = data.notification;
+              setNotifications(prev => [newNotif, ...prev.slice(0, 99)]);
+              setActiveToast(newNotif);
+              
+              // Refreshes Stats and Tables
+              fetchStats();
+              if (activeTab === "stats") fetchDepositsAndReferrals();
+              if (activeTab === "withdrawals") fetchWithdrawals();
+              if (activeTab === "audits") fetchAudits();
+            }
+          } catch (e) {
+            console.error("[Admin WS] Error parsing message", e);
+          }
+        };
+
+        socket.onclose = () => {
+          isConnected = false;
+          console.log("[Admin WS] Connection closed, retrying in 5s...");
+          setTimeout(() => {
+            if (!isConnected) connectWS();
+          }, 5000);
+        };
+
+        socket.onerror = (err) => {
+          console.error("[Admin WS] Error:", err);
+          socket?.close();
+        };
+      } catch (err) {
+        console.warn("WS setup failed, using simulated fallback event listener", err);
+      }
+    };
+
+    connectWS();
+
+    const handleMockNotification = (e: Event) => {
+      const customEvent = e as CustomEvent<AdminNotification>;
+      if (customEvent.detail) {
+        const newNotif = customEvent.detail;
+        setNotifications(prev => [newNotif, ...prev.slice(0, 99)]);
+        setActiveToast(newNotif);
+        
+        fetchStats();
+        if (activeTab === "stats") fetchDepositsAndReferrals();
+        if (activeTab === "withdrawals") fetchWithdrawals();
+        if (activeTab === "audits") fetchAudits();
+      }
+    };
+
+    window.addEventListener("mock-notification", handleMockNotification);
+
+    return () => {
+      if (socket) {
+        socket.close();
+      }
+      window.removeEventListener("mock-notification", handleMockNotification);
+    };
+  }, [activeTab]);
+
+  React.useEffect(() => {
+    if (activeToast) {
+      const timer = setTimeout(() => {
+        setActiveToast(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [activeToast]);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await apiFetch("/api/admin/notifications/read-all", {
+        method: "POST"
+      });
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch (e) {
+      console.warn("Failed to mark all notifications as read", e);
+    }
+  };
+
+  const handleMarkRead = async (id: string) => {
+    try {
+      await apiFetch(`/api/admin/notifications/${id}/read`, {
+        method: "POST"
+      });
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch (e) {
+      console.warn("Failed to mark notification as read", e);
+    }
+  };
+
+  const handleNotificationClick = async (notif: AdminNotification) => {
+    await handleMarkRead(notif.id);
+    setShowNotifDropdown(false);
+    
+    // Direct routing to the target panel
+    if (notif.type === "submission") {
+      setActiveTab("audits");
+    } else if (notif.type === "withdrawal") {
+      setActiveTab("withdrawals");
+    }
+  };
 
   // Adjust balance
   const handleAdjustBalance = async (e: React.FormEvent) => {
@@ -407,7 +555,134 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+    <div className="space-y-6 relative">
+      
+      {/* Live Real-Time Toast Alert */}
+      {activeToast && (
+        <div 
+          onClick={() => handleNotificationClick(activeToast)}
+          className="fixed top-4 right-4 z-50 max-w-sm w-full bg-white rounded-2xl border-l-4 border-emerald-500 shadow-2xl p-4 flex gap-3.5 items-start animate-bounce hover:shadow-emerald-100/50 transition-all cursor-pointer"
+        >
+          <div className="rounded-full bg-emerald-50 p-2 text-emerald-600 shrink-0">
+            {activeToast.type === "submission" ? <ShieldAlert className="h-5 w-5" /> : <CreditCard className="h-5 w-5" />}
+          </div>
+          <div className="flex-1 space-y-1">
+            <div className="flex justify-between items-center">
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                {activeToast.type === "submission" ? "Submission Pending" : "Withdrawal Requested"}
+              </span>
+              <button 
+                className="text-gray-400 hover:text-gray-600 text-xs font-bold" 
+                onClick={(e) => { e.stopPropagation(); setActiveToast(null); }}
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs font-semibold text-gray-800 leading-snug">{activeToast.message}</p>
+            <p className="text-[9px] text-gray-400 flex items-center gap-1">
+              <Clock className="h-3 w-3" /> Just now
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Top Admin Header with Notification Bell */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white rounded-3xl p-6 border border-slate-100 shadow-sm gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+            Admin Control Center
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-100">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live WebSocket
+            </span>
+          </h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">
+            System administration & real-time transaction clearing desks. Welcome back, <span className="font-bold text-slate-700">{user.name}</span>.
+          </p>
+        </div>
+
+        {/* Real-time Notification Desk */}
+        <div className="relative shrink-0">
+          <button 
+            id="admin-notification-bell"
+            onClick={() => setShowNotifDropdown(!showNotifDropdown)}
+            className={`relative rounded-full p-2.5 transition-all outline-none cursor-pointer ${
+              showNotifDropdown ? "bg-slate-100 text-slate-800" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            {unreadCount > 0 ? (
+              <>
+                <BellRing className="h-5 w-5 text-emerald-500 animate-bounce" />
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white ring-2 ring-white">
+                  {unreadCount}
+                </span>
+              </>
+            ) : (
+              <Bell className="h-5 w-5" />
+            )}
+          </button>
+
+          {/* Notifications Dropdown Card */}
+          {showNotifDropdown && (
+            <div className="absolute right-0 mt-3 z-50 w-80 rounded-2xl border border-slate-100 bg-white p-4 shadow-2xl space-y-3 animate-fadeIn">
+              <div className="flex justify-between items-center border-b border-slate-50 pb-2.5">
+                <div>
+                  <h4 className="font-display text-xs font-extrabold text-slate-900">Notifications ({unreadCount})</h4>
+                  <p className="text-[9px] text-slate-400 font-medium">Real-time alerts & activities</p>
+                </div>
+                {unreadCount > 0 && (
+                  <button 
+                    onClick={handleMarkAllRead}
+                    className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-700 hover:bg-emerald-100 transition-all cursor-pointer"
+                  >
+                    <CheckCheck className="h-3 w-3" /> Mark all read
+                  </button>
+                )}
+              </div>
+
+              {/* Notification Items List */}
+              <div className="max-h-64 overflow-y-auto divide-y divide-slate-50 pr-1 space-y-1">
+                {notifications.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <Bell className="h-8 w-8 mx-auto stroke-1 mb-2 opacity-40" />
+                    <p className="text-xs font-semibold">All quiet for now</p>
+                    <p className="text-[10px] mt-0.5">No new notifications received.</p>
+                  </div>
+                ) : (
+                  notifications.map((notif) => (
+                    <div 
+                      key={notif.id}
+                      onClick={() => handleNotificationClick(notif)}
+                      className={`py-2.5 px-2 rounded-xl transition-all flex gap-2.5 cursor-pointer text-left items-start ${
+                        notif.read ? "hover:bg-slate-50/50" : "bg-emerald-50/40 hover:bg-emerald-50"
+                      }`}
+                    >
+                      <div className={`rounded-full p-1.5 shrink-0 ${
+                        notif.type === "submission" ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"
+                      }`}>
+                        {notif.type === "submission" ? <ShieldAlert className="h-3.5 w-3.5" /> : <CreditCard className="h-3.5 w-3.5" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-[11px] leading-tight ${notif.read ? "text-slate-600 font-medium" : "text-slate-900 font-bold"}`}>
+                          {notif.message}
+                        </p>
+                        <p className="text-[9px] text-slate-400 mt-1 flex items-center gap-1">
+                          <Clock className="h-2.5 w-2.5" /> 
+                          {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                      {!notif.read && (
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0 mt-2" />
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
       
       {/* Left Sidebar Menu Rail */}
       <div className="lg:col-span-1 space-y-1">
@@ -1239,5 +1514,6 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
       </div>
 
     </div>
+  </div>
   );
 }

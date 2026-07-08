@@ -166,3 +166,13 @@ export interface WebsiteSettings {
   telegramChannel?: string;
   whatsappGroup?: string;
 }
+
+export interface AdminNotification {
+  id: string;
+  type: "submission" | "withdrawal";
+  message: string;
+  referenceId: string;
+  createdAt: string;
+  read: boolean;
+}
+

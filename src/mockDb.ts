@@ -18,7 +18,8 @@ import {
   Referral,
   Announcement,
   Banner,
-  WebsiteSettings
+  WebsiteSettings,
+  AdminNotification
 } from "./types";
 
 interface DBState {
@@ -29,6 +30,7 @@ interface DBState {
   referrals: Referral[];
   announcements: Announcement[];
   banners: Banner[];
+  notifications: AdminNotification[];
   pages: { [key: string]: { title: string; content: string } };
   settings: WebsiteSettings;
 }
@@ -348,6 +350,7 @@ For every friend you refer using your unique link who completes at least one tas
     referrals,
     announcements,
     banners,
+    notifications: [],
     pages,
     settings
   };
@@ -361,7 +364,12 @@ function getDB(): DBState {
     saveDB(initial);
     return initial;
   }
-  return JSON.parse(data);
+  const parsed = JSON.parse(data);
+  if (!parsed.notifications) {
+    parsed.notifications = [];
+    saveDB(parsed);
+  }
+  return parsed;
 }
 
 // Save state to localStorage
@@ -395,17 +403,32 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
           resolve({ success: false, error: "Invalid email address or password." });
           return;
         }
+
+        const isDemo = ["admin@tasksearn.com", "earner@tasksearn.com", "advertiser@tasksearn.com"].includes(matchedUser.email.toLowerCase());
         const storedHash = localStorage.getItem(`tasksearn_mock_pwd_${matchedUser.email.toLowerCase()}`);
-        if (storedHash === hashPassword(password) || password === "password123") {
-          resolve({ success: true, user: matchedUser, token: matchedUser.id });
-        } else {
-          resolve({ success: false, error: "Invalid email address or password." });
+        const expectedHash = storedHash || hashPassword("password123");
+
+        if (hashPassword(password) !== expectedHash && password !== "password123") {
+          if (isDemo) {
+            resolve({ success: false, error: "Invalid password" });
+          } else {
+            resolve({ success: false, error: "Invalid email address or password." });
+          }
+          return;
         }
+
+        // Email verification gate
+        if (!matchedUser.isVerified) {
+          resolve({ success: false, error: "EMAIL_NOT_VERIFIED", userId: matchedUser.id, email: matchedUser.email });
+          return;
+        }
+
+        resolve({ success: true, user: matchedUser, token: matchedUser.id });
         return;
       }
 
       if (endpoint === "/api/auth/register" && method === "POST") {
-        const { name, email, password, role, referredBy } = body;
+        const { name, email, password, role, referralCode } = body;
         const exists = db.users.some(u => u.email.toLowerCase() === email.toLowerCase());
         if (exists) {
           resolve({ success: false, error: "Email address is already in use." });
@@ -420,10 +443,10 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
           name,
           email,
           role,
-          isVerified: false,
+          isVerified: false, // Starts unverified to trigger email verification page
           walletBalance: 0,
           referralCode: refCode,
-          referredBy: referredBy || undefined,
+          referredBy: referralCode || undefined,
           createdAt: new Date().toISOString()
         };
 
@@ -431,8 +454,8 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
         localStorage.setItem(`tasksearn_mock_pwd_${email.toLowerCase()}`, hashPassword(password));
         
         // Handle referral link record
-        if (referredBy) {
-          const referrer = db.users.find(u => u.referralCode === referredBy);
+        if (referralCode) {
+          const referrer = db.users.find(u => u.referralCode === referralCode);
           if (referrer && referrer.role === UserRole.EARNER) {
             const referralRecord: Referral = {
               id: `ref-${Date.now()}`,
@@ -444,11 +467,25 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
               createdAt: new Date().toISOString()
             };
             db.referrals.push(referralRecord);
+            referrer.walletBalance += db.settings.referralReward;
+
+            db.transactions.push({
+              id: `tx-ref-${Date.now()}`,
+              userId: referrer.id,
+              userName: referrer.name,
+              userRole: referrer.role,
+              amount: db.settings.referralReward,
+              type: TransactionType.REFERRAL,
+              status: TransactionStatus.SUCCESS,
+              description: `Referral bonus for inviting ${name}`,
+              reference: `R-MOCK-${Math.floor(10000000 + Math.random() * 90000000)}`,
+              createdAt: new Date().toISOString()
+            });
           }
         }
 
         saveDB(db);
-        resolve({ success: true, user: newUser, token: newId });
+        resolve({ success: true, user: newUser });
         return;
       }
 
@@ -458,13 +495,23 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
       }
 
       if (endpoint === "/api/auth/verify-email" && method === "POST") {
-        if (!currentUser) {
-          resolve({ success: false, error: "Session expired." });
+        const { email, code } = body;
+        const targetEmail = email || (currentUser ? currentUser.email : "");
+        const targetUser = db.users.find(u => u.email.toLowerCase() === targetEmail.toLowerCase());
+
+        if (!targetUser) {
+          resolve({ success: false, error: "User account not found" });
           return;
         }
-        currentUser.isVerified = true;
+
+        targetUser.isVerified = true;
         saveDB(db);
-        resolve({ success: true, user: currentUser });
+        resolve({ success: true, message: "Email successfully verified!", user: targetUser });
+        return;
+      }
+
+      if (endpoint === "/api/auth/resend-code" && method === "POST") {
+        resolve({ success: true, message: "A new 6-digit verification code has been successfully sent (simulated)." });
         return;
       }
 
@@ -579,7 +626,25 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
         }
 
         db.submissions.push(newSub);
+
+        // Generate and dispatch simulated admin notification
+        const mockNotif: AdminNotification = {
+          id: `notif-${Date.now()}`,
+          type: "submission",
+          message: `New task submission from ${currentUser.name} for "${task.title}"`,
+          referenceId: newSub.id,
+          createdAt: new Date().toISOString(),
+          read: false
+        };
+        db.notifications = db.notifications || [];
+        db.notifications.unshift(mockNotif);
+        if (db.notifications.length > 100) {
+          db.notifications = db.notifications.slice(0, 100);
+        }
+
         saveDB(db);
+        window.dispatchEvent(new CustomEvent("mock-notification", { detail: mockNotif }));
+
         resolve({ success: true, submission: newSub });
         return;
       }
@@ -590,31 +655,55 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
           return;
         }
         const { amount, bankName, accountNumber, accountName } = body;
-        const totalCost = Number(amount) + db.settings.withdrawalFee;
+        const withdrawAmount = Number(amount);
 
-        if (currentUser.walletBalance < totalCost) {
-          resolve({ success: false, error: "Insufficient wallet balance." });
+        // Calculate sum of all pending withdrawals to get real available balance
+        const pendingWithdrawalsTotal = db.transactions
+          .filter(t => t.userId === currentUser.id && t.type === TransactionType.WITHDRAWAL && t.status === TransactionStatus.PENDING)
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        const availableBalance = currentUser.walletBalance - pendingWithdrawalsTotal;
+
+        if (availableBalance < withdrawAmount) {
+          resolve({ success: false, error: `Insufficient available balance. Your total balance is ₦${currentUser.walletBalance.toLocaleString()}, but you have ₦${pendingWithdrawalsTotal.toLocaleString()} locked in pending withdrawals.` });
           return;
         }
 
-        currentUser.walletBalance -= totalCost;
         const newTx: Transaction = {
           id: `tx-${Date.now()}`,
           userId: currentUser.id,
           userName: currentUser.name,
           userRole: currentUser.role,
-          amount: Number(amount),
+          amount: withdrawAmount,
           type: TransactionType.WITHDRAWAL,
           status: TransactionStatus.PENDING,
-          description: `Withdrawal request to ${bankName}`,
+          description: `Withdrawal request to ${bankName} (${accountNumber})`,
           reference: `W-MOCK-${Math.floor(100000 + Math.random() * 900000)}`,
           bankDetails: { bankName, accountNumber, accountName },
           createdAt: new Date().toISOString()
         };
 
         db.transactions.push(newTx);
+
+        // Generate and dispatch simulated admin notification
+        const mockNotif: AdminNotification = {
+          id: `notif-${Date.now()}`,
+          type: "withdrawal",
+          message: `New withdrawal request of ₦${withdrawAmount.toLocaleString()} from ${currentUser.name}`,
+          referenceId: newTx.id,
+          createdAt: new Date().toISOString(),
+          read: false
+        };
+        db.notifications = db.notifications || [];
+        db.notifications.unshift(mockNotif);
+        if (db.notifications.length > 100) {
+          db.notifications = db.notifications.slice(0, 100);
+        }
+
         saveDB(db);
-        resolve({ success: true, user: currentUser });
+        window.dispatchEvent(new CustomEvent("mock-notification", { detail: mockNotif }));
+
+        resolve({ success: true, user: currentUser, availableBalance: availableBalance - withdrawAmount });
         return;
       }
 
@@ -721,31 +810,57 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
         return;
       }
 
-      if (endpoint === "/api/advertiser/deposit" && method === "POST") {
+      if (endpoint === "/api/advertiser/deposit/initialize" && method === "POST") {
         if (!currentUser) {
           resolve({ success: false, error: "Unauthorized" });
           return;
         }
-        const { amount, gateway, channel } = body;
-        
-        currentUser.walletBalance += Number(amount);
+        const { amount } = body;
+        const depositAmount = Number(amount);
+
+        const ref = `D-MOCK-${Math.floor(10000000 + Math.random() * 90000000)}`;
         const newTx: Transaction = {
           id: `tx-${Date.now()}`,
           userId: currentUser.id,
           userName: currentUser.name,
           userRole: currentUser.role,
-          amount: Number(amount),
+          amount: depositAmount,
           type: TransactionType.DEPOSIT,
-          status: TransactionStatus.SUCCESS,
-          description: `Wallet Funding via ${gateway} ${channel}`,
-          reference: `D-MOCK-${Math.floor(100000 + Math.random() * 900000)}`,
-          gateway,
+          status: TransactionStatus.PENDING,
+          description: "Wallet Funding via Paystack Checkout (Simulated)",
+          reference: ref,
+          gateway: "Paystack",
           createdAt: new Date().toISOString()
         };
 
         db.transactions.push(newTx);
         saveDB(db);
-        resolve({ success: true, user: currentUser });
+        resolve({ success: true, authorization_url: "SIMULATED", reference: ref });
+        return;
+      }
+
+      if (endpoint === "/api/advertiser/deposit/verify" && method === "POST") {
+        if (!currentUser) {
+          resolve({ success: false, error: "Unauthorized" });
+          return;
+        }
+        const { reference } = body;
+        const tx = db.transactions.find(t => t.reference === reference && t.userId === currentUser.id);
+
+        if (!tx) {
+          resolve({ success: false, error: "Transaction record not found" });
+          return;
+        }
+
+        if (tx.status === TransactionStatus.SUCCESS) {
+          resolve({ success: true, alreadyProcessed: true, user: currentUser, transaction: tx });
+          return;
+        }
+
+        tx.status = TransactionStatus.SUCCESS;
+        currentUser.walletBalance += tx.amount;
+        saveDB(db);
+        resolve({ success: true, user: currentUser, transaction: tx });
         return;
       }
 
@@ -901,6 +1016,32 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
         return;
       }
 
+      if (endpoint === "/api/admin/notifications") {
+        resolve(db.notifications || []);
+        return;
+      }
+
+      if (endpoint === "/api/admin/notifications/read-all" && method === "POST") {
+        if (db.notifications) {
+          db.notifications.forEach(n => n.read = true);
+        }
+        saveDB(db);
+        resolve({ success: true });
+        return;
+      }
+
+      if (endpoint.startsWith("/api/admin/notifications/") && endpoint.endsWith("/read") && method === "POST") {
+        const parts = endpoint.split("/");
+        const notifId = parts[4];
+        const notif = db.notifications?.find(n => n.id === notifId);
+        if (notif) {
+          notif.read = true;
+          saveDB(db);
+        }
+        resolve({ success: true, notification: notif });
+        return;
+      }
+
       if (endpoint === "/api/admin/announcements") {
         resolve(db.announcements);
         return;
@@ -941,14 +1082,20 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
           return;
         }
 
-        tx.status = status === "approve" ? TransactionStatus.SUCCESS : TransactionStatus.FAILED;
-        
-        // If rejected, refund the earner
-        if (status !== "approve") {
+        const isApproved = status === "approve" || status === TransactionStatus.SUCCESS || status === TransactionStatus.APPROVED;
+
+        if (isApproved) {
           const earner = db.users.find(u => u.id === tx.userId);
           if (earner) {
-            earner.walletBalance += (tx.amount + db.settings.withdrawalFee);
+            if (earner.walletBalance < tx.amount) {
+              resolve({ success: false, error: "User has insufficient balance to complete this withdrawal." });
+              return;
+            }
+            earner.walletBalance -= tx.amount;
           }
+          tx.status = TransactionStatus.SUCCESS;
+        } else {
+          tx.status = TransactionStatus.FAILED;
         }
 
         saveDB(db);
