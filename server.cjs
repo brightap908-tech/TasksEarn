@@ -27,7 +27,7 @@ var import_path = __toESM(require("path"), 1);
 var import_fs = __toESM(require("fs"), 1);
 var import_crypto = __toESM(require("crypto"), 1);
 var import_vite = require("vite");
-var PORT = 3e3;
+var PORT = Number(process.env.PORT) || 3e3;
 var DB_FILE = import_path.default.join(process.cwd(), "db.json");
 function hashPassword(password) {
   return import_crypto.default.createHash("sha256").update(password).digest("hex");
