@@ -185,14 +185,14 @@
     {
       "id": "ann-1",
       "title": "Welcome to TasksEarn Platform",
-      "content": "Welcome Nigerians to the most trusted social media microtask exchange platform! Advertisers can publish tasks, and Earners can complete simple tasks and earn directly in Naira (₦) paid to their local bank accounts.",
+      "content": "Welcome Nigerians to the most trusted social media microtask exchange platform! Advertisers can publish tasks, and Earners can complete simple tasks and earn directly in Naira ([...]",
       "type": "success",
       "createdAt": "2026-06-27T19:12:25.716Z"
     },
     {
       "id": "ann-2",
       "title": "Withdrawal Process Audits",
-      "content": "Withdrawal requests are processed every Friday at 12:00 PM. Please ensure your submitted bank details are accurate and your name matches your verification profile to avoid rejections.",
+      "content": "Withdrawal requests are processed every Friday at 12:00 PM. Please ensure your submitted bank details are accurate and your name matches your verification profile to avoid rejec[...]",
       "type": "info",
       "createdAt": "2026-07-05T19:12:25.716Z"
     }
@@ -213,37 +213,27 @@
       "active": true
     }
   ],
+  "taskPricing": [
+    { "platform": "Instagram", "user_reward": 10.00, "advertiser_cost": 15.00 },
+    { "platform": "Facebook", "user_reward": 10.00, "advertiser_cost": 15.00 },
+    { "platform": "TikTok", "user_reward": 10.00, "advertiser_cost": 15.00 },
+    { "platform": "YouTube", "user_reward": 15.00, "advertiser_cost": 20.00 },
+    { "platform": "X", "user_reward": 8.00, "advertiser_cost": 12.00 },
+    { "platform": "Telegram", "user_reward": 12.00, "advertiser_cost": 18.00 },
+    { "platform": "WhatsApp", "user_reward": 12.00, "advertiser_cost": 18.00 },
+    { "platform": "Snapchat", "user_reward": 10.00, "advertiser_cost": 15.00 },
+    { "platform": "LinkedIn", "user_reward": 12.00, "advertiser_cost": 18.00 },
+    { "platform": "Threads", "user_reward": 10.00, "advertiser_cost": 15.00 },
+    { "platform": "Pinterest", "user_reward": 10.00, "advertiser_cost": 15.00 },
+    { "platform": "Reddit", "user_reward": 9.00, "advertiser_cost": 14.00 },
+    { "platform": "Discord", "user_reward": 12.00, "advertiser_cost": 18.00 },
+    { "platform": "Messenger", "user_reward": 10.00, "advertiser_cost": 15.00 },
+    { "platform": "Kwai", "user_reward": 8.00, "advertiser_cost": 12.00 },
+    { "platform": "Likee", "user_reward": 8.00, "advertiser_cost": 12.00 },
+    { "platform": "Custom", "user_reward": 10.00, "advertiser_cost": 15.00 }
+  ],
   "pages": {
     "about": {
       "title": "About TasksEarn",
-      "content": "TasksEarn is Nigeria's premier microtask marketplace designed to bridge the gap between digital content advertisers and micro-job earners. Built to support digital marketers, small business owners, and online earners across Nigeria, we enable seamless social media engagements on platforms like Facebook, Instagram, TikTok, YouTube, WhatsApp, and Telegram.\n\nOur mission is to empower thousands of young Nigerians to monetize their spare social media screen-time, while providing advertisers with cost-effective, organic, and highly targeted growth.\n\nWhy Choose TasksEarn?\n- Instant Wallet Funding: Easily fund your advertising wallet using local cards, bank transfers, OPay, Moniepoint, and PalmPay.\n- Quality Auditing: Our advanced screenshot & link proof engine allows advertisers and administrators to verify proof with ultimate precision before release of payouts.\n- Swift Withdrawals: Withdraw your earnings straight into any Nigerian bank, with payouts processed seamlessly.\n- Robust Referral Network: Earn generous referral bonuses for every friend you introduce to the platform who completes tasks or creates campaigns."
-    },
-    "contact": {
-      "title": "Contact Us",
-      "content": "Have questions, disputes, or looking to discuss custom high-volume ad packages? Our friendly support team is here to assist you 24/7.\n\n- Email Support: support@tasksearn.com\n- Phone Contact: 09164444315\n- WhatsApp Support: 09164444315\n- Telegram Support: @TasksEarnSupport\n- Office Address: 12, Herbert Macaulay Way, Yaba, Lagos State, Nigeria.\n\nAlternatively, you can join our Telegram announcements channel and WhatsApp support chat using the quick links on your dashboard."
-    },
-    "faq": {
-      "title": "Frequently Asked Questions",
-      "content": "### 1. What is TasksEarn?\nTasksEarn is a digital engagement community where advertisers pay everyday social media users (Earners) to perform small online tasks such as liking a Facebook page, subscribing to a YouTube channel, following an Instagram profile, or joining a Telegram community.\n\n### 2. How much can I earn as an Earner?\nThere is no fixed limit! Your earnings depend on how many tasks you successfully complete. Tasks are rewarded between ₦10 and ₦500 depending on complexity. Active earners can withdraw thousands of Naira weekly.\n\n### 3. What is the minimum withdrawal and deposit?\n- Minimum Withdrawal: ₦2,000 (with a standard flat fee of ₦100 per transaction).\n- Minimum Deposit for Advertisers: ₦1,000.\n\n### 4. How long does deposit and withdrawal validation take?\n- Deposits via Paystack card payment are credited **instantly**. Bank transfer deposits are confirmed by our system inside 1 hour.\n- Withdrawals are processed on our payout cycles every week, usually within 24 to 48 hours of approval.\n\n### 5. Why was my task submission rejected?\nA submission is rejected if you did not follow the instructions, if you did not complete the social media action, or if you submitted fake/unrelated screenshots. Submitting fraudulent proofs repeatedly will lead to permanent account suspension."
-    },
-    "terms": {
-      "title": "Terms of Service",
-      "content": "Welcome to TasksEarn (\"the Platform\"). By registering an account and using our services, you agree to comply with and be bound by the following Terms and Conditions:\n\n1. Account Eligibility & Authenticity\n- You must be at least 18 years of age or have parental consent.\n- You are strictly prohibited from opening multiple Earner accounts. Users caught using bots, multi-accounts, or automation scripts to complete tasks will have all their accounts permanently terminated and wallets forfeited.\n\n2. Social Media Action Integrity\n- Once you complete a task (e.g., following a page or subscribing), you must maintain that follow/subscription for a minimum of 6 months.\n- Our automatic auditing crawlers periodically check for drop-offs. If you unsubscribe or unfollow, the system will retract the earnings and apply a penalty fee to your balance.\n\n3. Advertiser Refund Policy\n- Advertisers are purchasing real user actions. Once a task slot is completed and approved, payments are final and non-refundable.\n- If an advertiser terminates a campaign prematurely, any remaining unallocated funds for uncompleted slots will be instantly returned to their advertiser wallet.\n\n4. Platform Fees\n- TasksEarn reserves the right to charge transaction fees on deposits (payment gateway charge) and withdrawals (₦100 flat fee). Fees are clearly stated at checkout."
-    },
-    "privacy": {
-      "title": "Privacy Policy",
-      "content": "Your privacy is incredibly important to us at TasksEarn. This Privacy Policy outlines the types of personal information we collect and how we safeguard it:\n\n1. Information We Collect\n- Contact Details: Name, email address, telephone number, and Nigerian bank details (for withdrawal processing).\n- Verification Proofs: Text usernames, social media handle names, and screenshots submitted as proof of task completion.\n- Network Data: IP addresses and browser details to protect our community against automated bot attacks and multi-account fraud.\n\n2. How We Use Your Data\n- To manage your secure login, calculate referral bonuses, process deposits, and credit bank payouts.\n- Verification proofs are made visible ONLY to the advertiser of that specific campaign and the platform administrators for auditing purposes. We do not sell or trade your visual data to third parties.\n\n3. Cookies and Browser Cache\n- We use temporary cookies and local session identifiers to keep you logged in securely while navigating the app dashboard."
-    }
-  },
-  "settings": {
-    "platformName": "TasksEarn",
-    "referralReward": 200,
-    "withdrawalFee": 100,
-    "minWithdrawal": 2000,
-    "minDeposit": 1000,
-    "contactEmail": "support@tasksearn.com",
-    "contactPhone": "09164444315",
-    "telegramChannel": "https://t.me/tasksearn_ng",
-    "whatsappGroup": "https://wa.me/2349164444315"
-  }
-}
+      "content": "TasksEarn is Nigeria's premier microtask marketplace designed to bridge the gap between digital content advertisers and micro-job earners. Built to support digital marketers, sm[...]",
+      "
