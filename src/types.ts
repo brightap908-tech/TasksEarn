@@ -25,10 +25,29 @@ export enum TaskCategory {
   TELEGRAM_JOIN = "Telegram Join",
   WHATSAPP_JOIN = "WhatsApp Join",
   X_FOLLOW = "X (Twitter) Follow",
+  
+  // Custom non-social media tasks
   WEB_VISIT = "Website Visit",
   APP_DOWNLOAD = "App Download",
-  SURVEY = "Survey",
-  CUSTOM = "Custom Tasks"
+  APP_REGISTRATION = "App Registration",
+  EMAIL_SIGNUP = "Email Signup",
+  SURVEY = "Survey Completion",
+  REVIEW_SUBMISSION = "Review Submission",
+  REFERRAL_TASK = "Referral Task",
+  QR_CODE_SCAN = "QR Code Scan",
+  DOCUMENT_DOWNLOAD = "Document Download",
+  
+  // Additional social platforms
+  SNAPCHAT_ADD = "Snapchat Add/Follow",
+  LINKEDIN_FOLLOW = "LinkedIn Follow/Connect",
+  THREADS_FOLLOW = "Threads Follow",
+  PINTEREST_FOLLOW = "Pinterest Follow",
+  REDDIT_JOIN = "Reddit Join",
+  DISCORD_JOIN = "Discord Join",
+  MESSENGER_CHAT = "Messenger Chat",
+  KWAI_FOLLOW = "Kwai Follow",
+  LIKEE_FOLLOW = "Likee Follow",
+  CUSTOM = "Other Custom Task"
 }
 
 export enum TaskStatus {
@@ -174,5 +193,79 @@ export interface AdminNotification {
   referenceId: string;
   createdAt: string;
   read: boolean;
+}
+
+export enum Platform {
+  INSTAGRAM = "Instagram",
+  FACEBOOK = "Facebook",
+  TIKTOK = "TikTok",
+  YOUTUBE = "YouTube",
+  X_TWITTER = "X (Twitter)",
+  TELEGRAM = "Telegram",
+  WHATSAPP = "WhatsApp",
+  SNAPCHAT = "Snapchat",
+  LINKEDIN = "LinkedIn",
+  THREADS = "Threads",
+  PINTEREST = "Pinterest",
+  REDDIT = "Reddit",
+  DISCORD = "Discord",
+  MESSENGER = "Messenger (Facebook Messenger)",
+  KWAI = "Kwai",
+  LIKEE = "Likee",
+  CUSTOM = "Custom Tasks"
+}
+
+export interface TaskPricing {
+  id: string;
+  platform: Platform;
+  costPerSlot: number; // What the advertiser pays
+  earningPerSlot: number; // What the earner receives
+}
+
+export function getPlatformForCategory(category: TaskCategory): Platform {
+  switch (category) {
+    case TaskCategory.FB_LIKE:
+    case TaskCategory.FB_FOLLOW:
+    case TaskCategory.FB_SHARE:
+    case TaskCategory.FB_COMMENT:
+      return Platform.FACEBOOK;
+    case TaskCategory.IG_LIKE:
+    case TaskCategory.IG_FOLLOW:
+      return Platform.INSTAGRAM;
+    case TaskCategory.TIKTOK_LIKE:
+    case TaskCategory.TIKTOK_FOLLOW:
+    case TaskCategory.TIKTOK_COMMENT:
+      return Platform.TIKTOK;
+    case TaskCategory.YT_SUBSCRIBE:
+    case TaskCategory.YT_LIKE:
+    case TaskCategory.YT_WATCH:
+      return Platform.YOUTUBE;
+    case TaskCategory.X_FOLLOW:
+      return Platform.X_TWITTER;
+    case TaskCategory.TELEGRAM_JOIN:
+      return Platform.TELEGRAM;
+    case TaskCategory.WHATSAPP_JOIN:
+      return Platform.WHATSAPP;
+    case TaskCategory.SNAPCHAT_ADD:
+      return Platform.SNAPCHAT;
+    case TaskCategory.LINKEDIN_FOLLOW:
+      return Platform.LINKEDIN;
+    case TaskCategory.THREADS_FOLLOW:
+      return Platform.THREADS;
+    case TaskCategory.PINTEREST_FOLLOW:
+      return Platform.PINTEREST;
+    case TaskCategory.REDDIT_JOIN:
+      return Platform.REDDIT;
+    case TaskCategory.DISCORD_JOIN:
+      return Platform.DISCORD;
+    case TaskCategory.MESSENGER_CHAT:
+      return Platform.MESSENGER;
+    case TaskCategory.KWAI_FOLLOW:
+      return Platform.KWAI;
+    case TaskCategory.LIKEE_FOLLOW:
+      return Platform.LIKEE;
+    default:
+      return Platform.CUSTOM;
+  }
 }
 

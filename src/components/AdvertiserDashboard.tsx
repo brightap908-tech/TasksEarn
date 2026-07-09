@@ -8,7 +8,8 @@ import {
   TaskStatus, 
   SubmissionStatus,
   TransactionStatus,
-  TransactionType
+  TransactionType,
+  getPlatformForCategory
 } from "../types";
 import { 
   LayoutDashboard, 
@@ -58,6 +59,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
   const [campaigns, setCampaigns] = React.useState<Task[]>([]);
   const [submissions, setSubmissions] = React.useState<TaskSubmission[]>([]);
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
+  const [pricingList, setPricingList] = React.useState<any[]>([]);
 
   // Selected Submission for active auditing
   const [auditingSub, setAuditingSub] = React.useState<TaskSubmission | null>(null);
@@ -79,9 +81,11 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
   const [formSubmitting, setFormSubmitting] = React.useState(false);
 
   // Auto Calculations
-  const earningVal = parseFloat(campaignForm.earningPerSlot) || 0;
+  const platform = getPlatformForCategory(campaignForm.category);
+  const matchingPricing = pricingList.find(p => p.platform === platform);
+  const earningVal = matchingPricing ? matchingPricing.earningPerSlot : (parseFloat(campaignForm.earningPerSlot) || 0);
   const slotsVal = parseInt(campaignForm.totalSlots) || 0;
-  const costPerSlot = Math.ceil(earningVal * 1.35); // 35% commission markup
+  const costPerSlot = matchingPricing ? matchingPricing.costPerSlot : Math.ceil(earningVal * 1.35); // 35% commission markup
   const totalCost = costPerSlot * slotsVal;
 
   // Fetch stats & data
@@ -123,9 +127,21 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
     } catch (e) {}
   };
 
+  const fetchPricing = async () => {
+    try {
+      const data = await apiFetch("/api/pricing");
+      if (Array.isArray(data)) {
+        setPricingList(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   React.useEffect(() => {
     fetchStats();
     fetchTransactions();
+    fetchPricing();
   }, [user.walletBalance]);
 
   React.useEffect(() => {
@@ -162,7 +178,8 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
           category: campaignForm.category,
           proofRequirements: campaignForm.proofRequirements,
           link: campaignForm.link,
-          earningPerSlot: campaignForm.earningPerSlot,
+          costPerSlot: costPerSlot,
+          earningPerSlot: earningVal,
           totalSlots: campaignForm.totalSlots
         })
       });
@@ -197,7 +214,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
   const handleToggleStatus = async (taskId: string) => {
     try {
       const res = await apiFetch(`/api/advertiser/tasks/${taskId}/toggle`, {
-        method: "PUT"
+        method: "POST"
       });
       if (res && res.success) {
         fetchCampaigns();
@@ -440,7 +457,16 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                       <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Social Task Category</label>
                       <select
                         value={campaignForm.category}
-                        onChange={(e) => setCampaignForm({ ...campaignForm, category: e.target.value as TaskCategory })}
+                        onChange={(e) => {
+                          const cat = e.target.value as TaskCategory;
+                          const platform = getPlatformForCategory(cat);
+                          const matching = pricingList.find(p => p.platform === platform);
+                          setCampaignForm({ 
+                            ...campaignForm, 
+                            category: cat,
+                            earningPerSlot: matching ? matching.earningPerSlot.toString() : campaignForm.earningPerSlot
+                          });
+                        }}
                         className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none bg-white"
                       >
                         {Object.values(TaskCategory).map((cat, idx) => (
@@ -490,14 +516,19 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Earner Payout (₦)</label>
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
+                          Earner Payout (₦) {matchingPricing && "(Fixed)"}
+                        </label>
                         <input 
                           type="number"
                           required
                           min={5}
-                          value={campaignForm.earningPerSlot}
+                          value={matchingPricing ? matchingPricing.earningPerSlot : campaignForm.earningPerSlot}
+                          disabled={!!matchingPricing}
                           onChange={(e) => setCampaignForm({ ...campaignForm, earningPerSlot: e.target.value })}
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none font-mono"
+                          className={`w-full rounded-xl border px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none font-mono ${
+                            matchingPricing ? "bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed" : "border-gray-200"
+                          }`}
                         />
                       </div>
                       <div>

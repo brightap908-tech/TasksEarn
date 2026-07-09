@@ -19,7 +19,10 @@ import {
   Announcement,
   Banner,
   WebsiteSettings,
-  AdminNotification
+  AdminNotification,
+  Platform,
+  TaskPricing,
+  getPlatformForCategory
 } from "./types";
 
 interface DBState {
@@ -33,6 +36,7 @@ interface DBState {
   notifications: AdminNotification[];
   pages: { [key: string]: { title: string; content: string } };
   settings: WebsiteSettings;
+  taskPricing: TaskPricing[];
 }
 
 const STORAGE_KEY = "tasksearn_mock_db";
@@ -49,6 +53,37 @@ function hashPassword(password: string): string {
 }
 
 // Default Seed Data matching server.ts
+
+export function getInitialPricing(): TaskPricing[] {
+  const platforms = Object.values(Platform);
+  const defaults: Record<Platform, { cost: number; earn: number }> = {
+    [Platform.INSTAGRAM]: { cost: 15, earn: 10 },
+    [Platform.FACEBOOK]: { cost: 15, earn: 10 },
+    [Platform.TIKTOK]: { cost: 15, earn: 10 },
+    [Platform.YOUTUBE]: { cost: 25, earn: 18 },
+    [Platform.X_TWITTER]: { cost: 15, earn: 10 },
+    [Platform.TELEGRAM]: { cost: 18, earn: 12 },
+    [Platform.WHATSAPP]: { cost: 18, earn: 12 },
+    [Platform.SNAPCHAT]: { cost: 15, earn: 10 },
+    [Platform.LINKEDIN]: { cost: 20, earn: 14 },
+    [Platform.THREADS]: { cost: 15, earn: 10 },
+    [Platform.PINTEREST]: { cost: 15, earn: 10 },
+    [Platform.REDDIT]: { cost: 18, earn: 12 },
+    [Platform.DISCORD]: { cost: 20, earn: 14 },
+    [Platform.MESSENGER]: { cost: 15, earn: 10 },
+    [Platform.KWAI]: { cost: 15, earn: 10 },
+    [Platform.LIKEE]: { cost: 15, earn: 10 },
+    [Platform.CUSTOM]: { cost: 30, earn: 20 }
+  };
+
+  return platforms.map((plat, idx) => ({
+    id: `prc-${idx + 1}`,
+    platform: plat,
+    costPerSlot: defaults[plat]?.cost || 15,
+    earningPerSlot: defaults[plat]?.earn || 10
+  }));
+}
+
 function getInitialData(): DBState {
   const adminId = "u-admin-1";
   const earnerId = "u-earner-1";
@@ -352,7 +387,8 @@ For every friend you refer using your unique link who completes at least one tas
     banners,
     notifications: [],
     pages,
-    settings
+    settings,
+    taskPricing: getInitialPricing()
   };
 }
 
@@ -367,6 +403,10 @@ function getDB(): DBState {
   const parsed = JSON.parse(data);
   if (!parsed.notifications) {
     parsed.notifications = [];
+    saveDB(parsed);
+  }
+  if (!parsed.taskPricing || parsed.taskPricing.length === 0) {
+    parsed.taskPricing = getInitialPricing();
     saveDB(parsed);
   }
   return parsed;
@@ -516,6 +556,43 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
       }
 
       // --- PUBLIC DATA ENDPOINTS ---
+      if (endpoint === "/api/pricing") {
+        resolve(db.taskPricing || []);
+        return;
+      }
+
+      if (endpoint === "/api/public/stats") {
+        const earnersCount = db.users.filter(u => u.role === UserRole.EARNER).length;
+        const tasksCount = db.tasks.length;
+        const totalPaidOut = db.transactions
+          .filter(t => t.type === TransactionType.WITHDRAWAL && t.status === TransactionStatus.SUCCESS)
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        const latestWithdrawalTx = db.transactions
+          .filter(t => t.type === TransactionType.WITHDRAWAL)
+          .slice(-1)[0] || null;
+
+        const latestCampaign = db.tasks
+          .filter(t => t.status === TaskStatus.ACTIVE)
+          .slice(-1)[0] || null;
+
+        resolve({
+          earnersCount,
+          tasksCount,
+          totalPaidOut,
+          latestWithdrawal: latestWithdrawalTx ? {
+            userName: latestWithdrawalTx.userName,
+            bankName: latestWithdrawalTx.bankDetails?.bankName || "Commercial Bank",
+            amount: latestWithdrawalTx.amount
+          } : null,
+          latestCampaign: latestCampaign ? {
+            title: latestCampaign.title,
+            cost: latestCampaign.totalSlots * latestCampaign.costPerSlot
+          } : null
+        });
+        return;
+      }
+
       if (endpoint === "/api/public/banners") {
         resolve(db.banners.filter(b => b.active));
         return;
@@ -543,19 +620,26 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
           return;
         }
         const userSubs = db.submissions.filter(s => s.earnerId === currentUser.id);
-        const pendingAmount = userSubs
-          .filter(s => s.status === SubmissionStatus.PENDING)
-          .reduce((sum, s) => sum + s.reward, 0);
-        const approvedCount = userSubs.filter(s => s.status === SubmissionStatus.APPROVED).length;
-        const recent = userSubs
-          .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())
-          .slice(0, 5);
+        const approved = userSubs.filter(s => s.status === SubmissionStatus.APPROVED);
+        const pending = userSubs.filter(s => s.status === SubmissionStatus.PENDING);
+        const rejected = userSubs.filter(s => s.status === SubmissionStatus.REJECTED);
+
+        const totalEarned = approved.reduce((sum, s) => sum + s.reward, 0);
+        const referralsCount = db.referrals.filter(r => r.referrerId === currentUser.id).length;
+
+        const submittedTaskIds = userSubs.map(s => s.taskId);
+        const availableTasks = db.tasks.filter(t => t.status === TaskStatus.ACTIVE && !submittedTaskIds.includes(t.id));
 
         resolve({
-          balance: currentUser.walletBalance,
-          pendingAmount,
-          approvedTasks: approvedCount,
-          recentSubmissions: recent
+          walletBalance: currentUser.walletBalance,
+          totalEarned,
+          approvedCount: approved.length,
+          pendingCount: pending.length,
+          rejectedCount: rejected.length,
+          referralsCount,
+          availableTasksCount: availableTasks.length,
+          recentSubmissions: userSubs.slice(-5).reverse(),
+          referralCode: currentUser.referralCode
         });
         return;
       }
@@ -713,21 +797,28 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
           resolve({ success: false, error: "Unauthorized" });
           return;
         }
-        const myTasks = db.tasks.filter(t => t.advertiserId === currentUser.id);
-        const activeCount = myTasks.filter(t => t.status === TaskStatus.ACTIVE).length;
-        
-        const totalSpend = db.transactions
+        const advertiserTasks = db.tasks.filter(t => t.advertiserId === currentUser.id);
+        const activeCount = advertiserTasks.filter(t => t.status === TaskStatus.ACTIVE).length;
+        const pausedCount = advertiserTasks.filter(t => t.status === TaskStatus.PAUSED).length;
+        const completedCount = advertiserTasks.filter(t => t.status === TaskStatus.COMPLETED).length;
+
+        const totalSpent = db.transactions
           .filter(t => t.userId === currentUser.id && t.type === TransactionType.SPEND && t.status === TransactionStatus.SUCCESS)
           .reduce((sum, t) => sum + t.amount, 0);
 
-        const myTaskIds = myTasks.map(t => t.id);
-        const pendingAudits = db.submissions.filter(s => myTaskIds.includes(s.taskId) && s.status === SubmissionStatus.PENDING).length;
+        const taskIds = advertiserTasks.map(t => t.id);
+        const advertiserSubmissions = db.submissions.filter(s => taskIds.includes(s.taskId));
+        const pendingSubmissionsCount = advertiserSubmissions.filter(s => s.status === SubmissionStatus.PENDING).length;
 
         resolve({
-          balance: currentUser.walletBalance,
-          activeCampaigns: activeCount,
-          totalSpend,
-          pendingAudits
+          walletBalance: currentUser.walletBalance,
+          totalSpent,
+          campaignsCount: advertiserTasks.length,
+          activeCount,
+          pausedCount,
+          completedCount,
+          pendingSubmissionsCount,
+          recentTasks: advertiserTasks.slice(-5).reverse()
         });
         return;
       }
@@ -739,7 +830,14 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
         }
         if (method === "POST") {
           const { title, description, category, proofRequirements, link, costPerSlot, earningPerSlot, totalSlots } = body;
-          const totalCost = Number(costPerSlot) * Number(totalSlots);
+          
+          // Use pricing defaults when advertisers create campaigns if available
+          const platform = getPlatformForCategory(category);
+          const pricingDef = db.taskPricing ? db.taskPricing.find(p => p.platform === platform) : null;
+          const finalCostPerSlot = pricingDef ? pricingDef.costPerSlot : (costPerSlot ? Number(costPerSlot) : Math.ceil(Number(earningPerSlot) * 1.35));
+          const finalEarningPerSlot = pricingDef ? pricingDef.earningPerSlot : Number(earningPerSlot);
+          
+          const totalCost = finalCostPerSlot * Number(totalSlots);
 
           if (currentUser.walletBalance < totalCost) {
             resolve({ success: false, error: "Insufficient balance to fund this microtask campaign. Please deposit first." });
@@ -754,8 +852,8 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
             category,
             proofRequirements,
             link,
-            costPerSlot: Number(costPerSlot),
-            earningPerSlot: Number(earningPerSlot),
+            costPerSlot: finalCostPerSlot,
+            earningPerSlot: finalEarningPerSlot,
             totalSlots: Number(totalSlots),
             filledSlots: 0,
             status: TaskStatus.ACTIVE,
@@ -883,9 +981,34 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
         const taskId = parts[4];
         const index = db.tasks.findIndex(t => t.id === taskId);
         if (index !== -1) {
+          const task = db.tasks[index];
+          const unusedSlots = task.totalSlots - task.filledSlots;
+          let refundedAmount = 0;
+          
+          if (unusedSlots > 0 && task.status !== TaskStatus.COMPLETED) {
+            refundedAmount = unusedSlots * task.costPerSlot;
+            const advertiser = db.users.find(u => u.id === task.advertiserId);
+            if (advertiser) {
+              advertiser.walletBalance += refundedAmount;
+              
+              db.transactions.push({
+                id: `tx-refund-${Date.now()}`,
+                userId: advertiser.id,
+                userName: advertiser.name,
+                userRole: advertiser.role,
+                amount: refundedAmount,
+                type: TransactionType.DEPOSIT,
+                status: TransactionStatus.SUCCESS,
+                description: `Refund for ${unusedSlots} unfilled slots of Campaign: ${task.title}`,
+                reference: `REFUND-${Math.floor(100000 + Math.random() * 900000)}`,
+                createdAt: new Date().toISOString()
+              });
+            }
+          }
+          
           db.tasks[index].status = TaskStatus.COMPLETED; // Mark completed instead of hard deleting to preserve submission integrity
           saveDB(db);
-          resolve({ success: true });
+          resolve({ success: true, refundedAmount });
         } else {
           resolve({ success: false, error: "Task not found." });
         }
@@ -914,7 +1037,13 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
         if (status === SubmissionStatus.APPROVED) {
           const earner = db.users.find(u => u.id === sub.earnerId);
           if (earner) {
-            earner.walletBalance += sub.reward;
+            // Use pricing defaults during submission approval
+            const platform = getPlatformForCategory(sub.category);
+            const pricingDef = db.taskPricing ? db.taskPricing.find(p => p.platform === platform) : null;
+            const finalReward = pricingDef ? pricingDef.earningPerSlot : sub.reward;
+            sub.reward = finalReward;
+            
+            earner.walletBalance += finalReward;
             
             // Create earnings transaction
             const earnTx: Transaction = {
@@ -922,7 +1051,7 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
               userId: earner.id,
               userName: earner.name,
               userRole: earner.role,
-              amount: sub.reward,
+              amount: finalReward,
               type: TransactionType.EARN,
               status: TransactionStatus.SUCCESS,
               description: `Earnings from task: ${sub.taskTitle}`,
@@ -966,22 +1095,36 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
 
       // --- ADMIN ENDPOINTS ---
       if (endpoint === "/api/admin/dashboard") {
+        const earnersCount = db.users.filter(u => u.role === UserRole.EARNER).length;
+        const advertisersCount = db.users.filter(u => u.role === UserRole.ADVERTISER).length;
+
         const approvedSubs = db.submissions.filter(s => s.status === SubmissionStatus.APPROVED);
         // markup per slot earned by admin = costPerSlot - earningPerSlot
-        let totalEarnings = 0;
+        let totalEarned = 0;
         approvedSubs.forEach(s => {
           const task = db.tasks.find(t => t.id === s.taskId);
           if (task) {
             const markup = task.costPerSlot - task.earningPerSlot;
-            totalEarnings += markup;
+            totalEarned += markup;
           }
         });
 
+        const pendingWithdrawals = db.transactions
+          .filter(t => t.type === TransactionType.WITHDRAWAL && t.status === TransactionStatus.PENDING)
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        const totalDeposited = db.transactions
+          .filter(t => t.type === TransactionType.DEPOSIT && t.status === TransactionStatus.SUCCESS)
+          .reduce((sum, t) => sum + t.amount, 0);
+
         resolve({
-          totalEarnings,
-          activeTasks: db.tasks.filter(t => t.status === TaskStatus.ACTIVE).length,
-          totalUsers: db.users.length,
-          pendingWithdrawals: db.transactions.filter(t => t.type === TransactionType.WITHDRAWAL && t.status === TransactionStatus.PENDING).length
+          earnersCount,
+          advertisersCount,
+          tasksCount: db.tasks.length,
+          totalEarned,
+          pendingWithdrawals,
+          totalDeposited,
+          settings: db.settings
         });
         return;
       }
@@ -1003,6 +1146,25 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
 
       if (endpoint === "/api/admin/submissions") {
         resolve(db.submissions);
+        return;
+      }
+
+      if (endpoint === "/api/admin/task-pricing") {
+        if (method === "PUT") {
+          let updatedPricing = body;
+          if (body && body.pricing) {
+            updatedPricing = body.pricing;
+          }
+          if (Array.isArray(updatedPricing)) {
+            db.taskPricing = updatedPricing;
+          } else if (body && body.id) {
+            db.taskPricing = (db.taskPricing || []).map(p => p.id === body.id ? { ...p, ...body } : p);
+          }
+          saveDB(db);
+          resolve({ success: true, pricing: db.taskPricing });
+        } else {
+          resolve(db.taskPricing || []);
+        }
         return;
       }
 
@@ -1126,13 +1288,19 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
         if (status === SubmissionStatus.APPROVED) {
           const earner = db.users.find(u => u.id === sub.earnerId);
           if (earner) {
-            earner.walletBalance += sub.reward;
+            // Use pricing defaults during submission approval (admin override)
+            const platform = getPlatformForCategory(sub.category);
+            const pricingDef = db.taskPricing ? db.taskPricing.find(p => p.platform === platform) : null;
+            const finalReward = pricingDef ? pricingDef.earningPerSlot : sub.reward;
+            sub.reward = finalReward;
+            
+            earner.walletBalance += finalReward;
             const earnTx: Transaction = {
               id: `tx-earn-${Date.now()}`,
               userId: earner.id,
               userName: earner.name,
               userRole: earner.role,
-              amount: sub.reward,
+              amount: finalReward,
               type: TransactionType.EARN,
               status: TransactionStatus.SUCCESS,
               description: `Earnings from task: ${sub.taskTitle}`,

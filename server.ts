@@ -16,7 +16,10 @@ import {
   TransactionType, 
   TransactionStatus, 
   TaskCategory,
-  AdminNotification
+  AdminNotification,
+  Platform,
+  TaskPricing,
+  getPlatformForCategory
 } from "./src/types.js";
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -49,6 +52,7 @@ let db: {
     telegramChannel?: string;
     whatsappGroup?: string;
   };
+  taskPricing: TaskPricing[];
 } = {
   users: [],
   tasks: [],
@@ -70,8 +74,40 @@ let db: {
     contactPhone: "09164444315",
     telegramChannel: "https://t.me/tasksearn_ng",
     whatsappGroup: "https://wa.me/2349164444315"
-  }
+  },
+
+  taskPricing: []
 };
+
+function getInitialPricing(): TaskPricing[] {
+  const platforms = Object.values(Platform);
+  const defaults: Record<Platform, { cost: number; earn: number }> = {
+    [Platform.INSTAGRAM]: { cost: 15, earn: 10 },
+    [Platform.FACEBOOK]: { cost: 15, earn: 10 },
+    [Platform.TIKTOK]: { cost: 15, earn: 10 },
+    [Platform.YOUTUBE]: { cost: 25, earn: 18 },
+    [Platform.X_TWITTER]: { cost: 15, earn: 10 },
+    [Platform.TELEGRAM]: { cost: 18, earn: 12 },
+    [Platform.WHATSAPP]: { cost: 18, earn: 12 },
+    [Platform.SNAPCHAT]: { cost: 15, earn: 10 },
+    [Platform.LINKEDIN]: { cost: 20, earn: 14 },
+    [Platform.THREADS]: { cost: 15, earn: 10 },
+    [Platform.PINTEREST]: { cost: 15, earn: 10 },
+    [Platform.REDDIT]: { cost: 18, earn: 12 },
+    [Platform.DISCORD]: { cost: 20, earn: 14 },
+    [Platform.MESSENGER]: { cost: 15, earn: 10 },
+    [Platform.KWAI]: { cost: 15, earn: 10 },
+    [Platform.LIKEE]: { cost: 15, earn: 10 },
+    [Platform.CUSTOM]: { cost: 30, earn: 20 }
+  };
+
+  return platforms.map((plat, idx) => ({
+    id: `prc-${idx + 1}`,
+    platform: plat,
+    costPerSlot: defaults[plat]?.cost || 15,
+    earningPerSlot: defaults[plat]?.earn || 10
+  }));
+}
 
 // Initialize DB file if not exists, otherwise load it
 function loadDB() {
@@ -88,6 +124,7 @@ function loadDB() {
       if (!db.banners) db.banners = [];
       if (!db.notifications) db.notifications = [];
       if (!db.pages) db.pages = {};
+      if (!db.taskPricing || db.taskPricing.length === 0) db.taskPricing = getInitialPricing();
       if (!db.settings) {
         db.settings = {
           platformName: "TasksEarn",
@@ -414,6 +451,7 @@ A submission is rejected if you did not follow the instructions, if you did not 
     }
   };
 
+  db.taskPricing = getInitialPricing();
   saveDB();
 }
 
@@ -1053,6 +1091,45 @@ app.post("/api/earner/withdraw", (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
+// PUBLIC & ADVERTISER PRICING ENDPOINT
+// -----------------------------------------------------------------------------
+app.get("/api/pricing", (req, res) => {
+  res.json(db.taskPricing || []);
+});
+
+app.get("/api/public/stats", (req, res) => {
+  const earnersCount = db.users.filter(u => u.role === UserRole.EARNER).length;
+  const tasksCount = db.tasks.length;
+  
+  const totalPaidOut = db.transactions
+    .filter(t => t.type === TransactionType.WITHDRAWAL && t.status === TransactionStatus.SUCCESS)
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const latestWithdrawalTx = db.transactions
+    .filter(t => t.type === TransactionType.WITHDRAWAL)
+    .slice(-1)[0] || null;
+
+  const latestCampaign = db.tasks
+    .filter(t => t.status === TaskStatus.ACTIVE)
+    .slice(-1)[0] || null;
+
+  res.json({
+    earnersCount,
+    tasksCount,
+    totalPaidOut,
+    latestWithdrawal: latestWithdrawalTx ? {
+      userName: latestWithdrawalTx.userName,
+      bankName: latestWithdrawalTx.bankDetails?.bankName || "Commercial Bank",
+      amount: latestWithdrawalTx.amount
+    } : null,
+    latestCampaign: latestCampaign ? {
+      title: latestCampaign.title,
+      cost: latestCampaign.totalSlots * latestCampaign.costPerSlot
+    } : null
+  });
+});
+
+// -----------------------------------------------------------------------------
 // ADVERTISER API ENDPOINTS
 // -----------------------------------------------------------------------------
 app.get("/api/advertiser/dashboard", (req, res) => {
@@ -1110,14 +1187,17 @@ app.post("/api/advertiser/tasks", (req, res) => {
     return res.status(400).json({ error: "Invalid earning value or slot count" });
   }
 
-  // Calculate costs: TasksEarn platform takes a small commission.
-  // Advertiser pays a premium: let's say 25% or flat ₦5 markup.
-  const costPerSlot = Math.ceil(rewardPerSlot * 1.35); // 35% margin for platform
-  const totalCampaignCost = costPerSlot * slots;
+  // Look up platform-level configured pricing from the database
+  const platform = getPlatformForCategory(category as TaskCategory);
+  const pricing = db.taskPricing ? db.taskPricing.find(p => p.platform === platform) : null;
+
+  const finalCostPerSlot = pricing ? pricing.costPerSlot : Math.ceil(rewardPerSlot * 1.35);
+  const finalEarningPerSlot = pricing ? pricing.earningPerSlot : rewardPerSlot;
+  const totalCampaignCost = finalCostPerSlot * slots;
 
   if (user.walletBalance < totalCampaignCost) {
     return res.status(400).json({ 
-      error: `Insufficient balance. This campaign costs ₦${totalCampaignCost.toLocaleString()} (₦${costPerSlot}/slot). Please fund your wallet.` 
+      error: `Insufficient balance. This campaign costs ₦${totalCampaignCost.toLocaleString()} (₦${finalCostPerSlot}/slot). Please fund your wallet.` 
     });
   }
 
@@ -1132,8 +1212,8 @@ app.post("/api/advertiser/tasks", (req, res) => {
     category,
     proofRequirements,
     link,
-    costPerSlot,
-    earningPerSlot: rewardPerSlot,
+    costPerSlot: finalCostPerSlot,
+    earningPerSlot: finalEarningPerSlot,
     totalSlots: slots,
     filledSlots: 0,
     status: TaskStatus.ACTIVE,
@@ -1793,6 +1873,27 @@ app.put("/api/admin/settings", (req, res) => {
 
   saveDB();
   res.json({ success: true, settings: db.settings });
+});
+
+// Manage Task Pricing
+app.get("/api/admin/task-pricing", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+  res.json(db.taskPricing || []);
+});
+
+app.put("/api/admin/task-pricing", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+  const { pricing } = req.body;
+  if (!pricing || !Array.isArray(pricing)) {
+    return res.status(400).json({ error: "Invalid pricing array data" });
+  }
+
+  db.taskPricing = pricing;
+  saveDB();
+  res.json({ success: true, pricing: db.taskPricing });
 });
 
 // -----------------------------------------------------------------------------

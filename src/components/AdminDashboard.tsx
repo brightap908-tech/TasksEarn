@@ -38,8 +38,10 @@ import {
   Bell,
   BellRing,
   CheckCheck,
-  Clock
+  Clock,
+  Coins
 } from "lucide-react";
+import AdminTaskPricing from "./AdminTaskPricing";
 
 interface AdminDashboardProps {
   user: User;
@@ -49,7 +51,7 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = React.useState<
-    "stats" | "users" | "campaigns" | "withdrawals" | "audits" | "announcements" | "cms" | "settings"
+    "stats" | "users" | "campaigns" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing"
   >("stats");
 
   // Admin states
@@ -766,6 +768,16 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         >
           <Settings className="h-4 w-4 text-slate-400" /> 
           <span>Platform Settings</span>
+        </button>
+
+        <button 
+          onClick={() => setActiveTab("pricing")}
+          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
+            activeTab === "pricing" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+          }`}
+        >
+          <Coins className="h-4 w-4 text-slate-400" /> 
+          <span>Task Pricing</span>
         </button>
       </div>
 
@@ -1508,6 +1520,12 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                 </button>
               </form>
             </div>
+          </div>
+        )}
+
+        {activeTab === "pricing" && (
+          <div className="space-y-6 animate-fadeIn">
+            <AdminTaskPricing apiFetch={apiFetch} />
           </div>
         )}
 

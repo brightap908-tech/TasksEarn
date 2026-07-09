@@ -48,6 +48,13 @@ export default function App() {
   const [banners, setBanners] = React.useState<Banner[]>([]);
   const [announcements, setAnnouncements] = React.useState<Announcement[]>([]);
   const [pagesContent, setPagesContent] = React.useState<{ [key: string]: { title: string; content: string } }>({});
+  const [publicStats, setPublicStats] = React.useState({
+    earnersCount: 45000,
+    tasksCount: 1200000,
+    totalPaidOut: 24000000,
+    latestWithdrawal: null as { userName: string; bankName: string; amount: number } | null,
+    latestCampaign: null as { title: string; cost: number } | null
+  });
   
   // Platform settings
   const [settings, setSettings] = React.useState<WebsiteSettings>({
@@ -215,6 +222,18 @@ export default function App() {
       const d = await apiFetch("/api/public/settings");
       if (d && !d.error) {
         setSettings(d);
+      }
+
+      // Get public stats from database
+      const s = await apiFetch("/api/public/stats");
+      if (s && !s.error) {
+        setPublicStats({
+          earnersCount: s.earnersCount !== undefined ? s.earnersCount : 45000,
+          tasksCount: s.tasksCount !== undefined ? s.tasksCount : 1200000,
+          totalPaidOut: s.totalPaidOut !== undefined ? s.totalPaidOut : 24000000,
+          latestWithdrawal: s.latestWithdrawal,
+          latestCampaign: s.latestCampaign
+        });
       }
     } catch (e) {}
   };
@@ -709,16 +728,24 @@ export default function App() {
                   <div className="space-y-3.5 text-xs">
                     <div className="rounded-xl bg-emerald-50/50 border border-emerald-50 p-3.5 flex justify-between items-center">
                       <div>
-                        <p className="font-bold text-gray-800">Tunde B. (Guaranty Trust Bank)</p>
+                        <p className="font-bold text-gray-800">
+                          {publicStats.latestWithdrawal ? `${publicStats.latestWithdrawal.userName} (${publicStats.latestWithdrawal.bankName})` : "Tunde B. (Guaranty Trust Bank)"}
+                        </p>
                         <p className="text-[10px] text-gray-400 mt-0.5">Withdrawal requested successfully</p>
                       </div>
-                      <span className="font-mono font-black text-emerald-700">₦7,450.00</span>
+                      <span className="font-mono font-black text-emerald-700">
+                        ₦{publicStats.latestWithdrawal ? publicStats.latestWithdrawal.amount.toLocaleString() : "7,450.00"}
+                      </span>
                     </div>
 
                     <div className="rounded-xl bg-indigo-50/50 border border-indigo-50 p-3.5 flex justify-between items-center">
                       <div>
-                        <p className="font-bold text-gray-800">New Campaign: IG Follow GossipMill</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">Budget: ₦15,000 allocated</p>
+                        <p className="font-bold text-gray-800">
+                          {publicStats.latestCampaign ? `New Campaign: ${publicStats.latestCampaign.title}` : "New Campaign: IG Follow GossipMill"}
+                        </p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">
+                          {publicStats.latestCampaign ? `Budget: ₦${publicStats.latestCampaign.cost.toLocaleString()} allocated` : "Budget: ₦15,000 allocated"}
+                        </p>
                       </div>
                       <span className="rounded-lg bg-indigo-100 px-2.5 py-1 text-[9px] font-bold text-indigo-700">LIVE NOW</span>
                     </div>
@@ -726,15 +753,21 @@ export default function App() {
 
                   <div className="grid grid-cols-3 gap-2 border-t border-gray-50 pt-4 text-center font-mono text-[10px] text-gray-400">
                     <div>
-                      <p className="text-base font-black text-gray-800">45K+</p>
+                      <p className="text-base font-black text-gray-800">
+                        {publicStats.earnersCount > 0 ? publicStats.earnersCount.toLocaleString() : "0"}
+                      </p>
                       <p className="mt-0.5">Earners</p>
                     </div>
                     <div>
-                      <p className="text-base font-black text-gray-800">1.2M+</p>
-                      <p className="mt-0.5">Tasks Done</p>
+                      <p className="text-base font-black text-gray-800">
+                        {publicStats.tasksCount > 0 ? publicStats.tasksCount.toLocaleString() : "0"}
+                      </p>
+                      <p className="mt-0.5">Campaigns Created</p>
                     </div>
                     <div>
-                      <p className="text-base font-black text-gray-800">₦24M+</p>
+                      <p className="text-base font-black text-gray-800">
+                        ₦{publicStats.totalPaidOut > 0 ? publicStats.totalPaidOut.toLocaleString() : "0"}
+                      </p>
                       <p className="mt-0.5">Paid Out</p>
                     </div>
                   </div>
