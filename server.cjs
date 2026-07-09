@@ -32,6 +32,76 @@ var import_nodemailer = __toESM(require("nodemailer"), 1);
 var import_vite = require("vite");
 var import_http = require("http");
 var import_ws = require("ws");
+
+// src/types.ts
+var Platform = /* @__PURE__ */ ((Platform2) => {
+  Platform2["INSTAGRAM"] = "Instagram";
+  Platform2["FACEBOOK"] = "Facebook";
+  Platform2["TIKTOK"] = "TikTok";
+  Platform2["YOUTUBE"] = "YouTube";
+  Platform2["X_TWITTER"] = "X (Twitter)";
+  Platform2["TELEGRAM"] = "Telegram";
+  Platform2["WHATSAPP"] = "WhatsApp";
+  Platform2["SNAPCHAT"] = "Snapchat";
+  Platform2["LINKEDIN"] = "LinkedIn";
+  Platform2["THREADS"] = "Threads";
+  Platform2["PINTEREST"] = "Pinterest";
+  Platform2["REDDIT"] = "Reddit";
+  Platform2["DISCORD"] = "Discord";
+  Platform2["MESSENGER"] = "Messenger (Facebook Messenger)";
+  Platform2["KWAI"] = "Kwai";
+  Platform2["LIKEE"] = "Likee";
+  Platform2["CUSTOM"] = "Custom Tasks";
+  return Platform2;
+})(Platform || {});
+function getPlatformForCategory(category) {
+  switch (category) {
+    case "Facebook Like" /* FB_LIKE */:
+    case "Facebook Follow" /* FB_FOLLOW */:
+    case "Facebook Share" /* FB_SHARE */:
+    case "Facebook Comment" /* FB_COMMENT */:
+      return "Facebook" /* FACEBOOK */;
+    case "Instagram Like" /* IG_LIKE */:
+    case "Instagram Follow" /* IG_FOLLOW */:
+      return "Instagram" /* INSTAGRAM */;
+    case "TikTok Like" /* TIKTOK_LIKE */:
+    case "TikTok Follow" /* TIKTOK_FOLLOW */:
+    case "TikTok Comment" /* TIKTOK_COMMENT */:
+      return "TikTok" /* TIKTOK */;
+    case "YouTube Subscribe" /* YT_SUBSCRIBE */:
+    case "YouTube Like" /* YT_LIKE */:
+    case "YouTube Watch" /* YT_WATCH */:
+      return "YouTube" /* YOUTUBE */;
+    case "X (Twitter) Follow" /* X_FOLLOW */:
+      return "X (Twitter)" /* X_TWITTER */;
+    case "Telegram Join" /* TELEGRAM_JOIN */:
+      return "Telegram" /* TELEGRAM */;
+    case "WhatsApp Join" /* WHATSAPP_JOIN */:
+      return "WhatsApp" /* WHATSAPP */;
+    case "Snapchat Add/Follow" /* SNAPCHAT_ADD */:
+      return "Snapchat" /* SNAPCHAT */;
+    case "LinkedIn Follow/Connect" /* LINKEDIN_FOLLOW */:
+      return "LinkedIn" /* LINKEDIN */;
+    case "Threads Follow" /* THREADS_FOLLOW */:
+      return "Threads" /* THREADS */;
+    case "Pinterest Follow" /* PINTEREST_FOLLOW */:
+      return "Pinterest" /* PINTEREST */;
+    case "Reddit Join" /* REDDIT_JOIN */:
+      return "Reddit" /* REDDIT */;
+    case "Discord Join" /* DISCORD_JOIN */:
+      return "Discord" /* DISCORD */;
+    case "Messenger Chat" /* MESSENGER_CHAT */:
+      return "Messenger (Facebook Messenger)" /* MESSENGER */;
+    case "Kwai Follow" /* KWAI_FOLLOW */:
+      return "Kwai" /* KWAI */;
+    case "Likee Follow" /* LIKEE_FOLLOW */:
+      return "Likee" /* LIKEE */;
+    default:
+      return "Custom Tasks" /* CUSTOM */;
+  }
+}
+
+// server.ts
 import_dotenv.default.config();
 var PORT = Number(process.env.PORT) || 3e3;
 var DB_FILE = import_path.default.join(process.cwd(), "db.json");
@@ -58,8 +128,37 @@ var db = {
     contactPhone: "09164444315",
     telegramChannel: "https://t.me/tasksearn_ng",
     whatsappGroup: "https://wa.me/2349164444315"
-  }
+  },
+  taskPricing: []
 };
+function getInitialPricing() {
+  const platforms = Object.values(Platform);
+  const defaults = {
+    ["Instagram" /* INSTAGRAM */]: { cost: 15, earn: 10 },
+    ["Facebook" /* FACEBOOK */]: { cost: 15, earn: 10 },
+    ["TikTok" /* TIKTOK */]: { cost: 15, earn: 10 },
+    ["YouTube" /* YOUTUBE */]: { cost: 25, earn: 18 },
+    ["X (Twitter)" /* X_TWITTER */]: { cost: 15, earn: 10 },
+    ["Telegram" /* TELEGRAM */]: { cost: 18, earn: 12 },
+    ["WhatsApp" /* WHATSAPP */]: { cost: 18, earn: 12 },
+    ["Snapchat" /* SNAPCHAT */]: { cost: 15, earn: 10 },
+    ["LinkedIn" /* LINKEDIN */]: { cost: 20, earn: 14 },
+    ["Threads" /* THREADS */]: { cost: 15, earn: 10 },
+    ["Pinterest" /* PINTEREST */]: { cost: 15, earn: 10 },
+    ["Reddit" /* REDDIT */]: { cost: 18, earn: 12 },
+    ["Discord" /* DISCORD */]: { cost: 20, earn: 14 },
+    ["Messenger (Facebook Messenger)" /* MESSENGER */]: { cost: 15, earn: 10 },
+    ["Kwai" /* KWAI */]: { cost: 15, earn: 10 },
+    ["Likee" /* LIKEE */]: { cost: 15, earn: 10 },
+    ["Custom Tasks" /* CUSTOM */]: { cost: 30, earn: 20 }
+  };
+  return platforms.map((plat, idx) => ({
+    id: `prc-${idx + 1}`,
+    platform: plat,
+    costPerSlot: defaults[plat]?.cost || 15,
+    earningPerSlot: defaults[plat]?.earn || 10
+  }));
+}
 function loadDB() {
   if (import_fs.default.existsSync(DB_FILE)) {
     try {
@@ -73,6 +172,7 @@ function loadDB() {
       if (!db.banners) db.banners = [];
       if (!db.notifications) db.notifications = [];
       if (!db.pages) db.pages = {};
+      if (!db.taskPricing || db.taskPricing.length === 0) db.taskPricing = getInitialPricing();
       if (!db.settings) {
         db.settings = {
           platformName: "TasksEarn",
@@ -393,6 +493,7 @@ A submission is rejected if you did not follow the instructions, if you did not 
 - We use temporary cookies and local session identifiers to keep you logged in securely while navigating the app dashboard.`
     }
   };
+  db.taskPricing = getInitialPricing();
   saveDB();
 }
 function saveDB() {
@@ -884,6 +985,30 @@ app.post("/api/earner/withdraw", (req, res) => {
     availableBalance: availableBalance - withdrawAmount
   });
 });
+app.get("/api/pricing", (req, res) => {
+  res.json(db.taskPricing || []);
+});
+app.get("/api/public/stats", (req, res) => {
+  const earnersCount = db.users.filter((u) => u.role === "Earner" /* EARNER */).length;
+  const tasksCount = db.tasks.length;
+  const totalPaidOut = db.transactions.filter((t) => t.type === "Withdrawal" /* WITHDRAWAL */ && t.status === "Success" /* SUCCESS */).reduce((sum, t) => sum + t.amount, 0);
+  const latestWithdrawalTx = db.transactions.filter((t) => t.type === "Withdrawal" /* WITHDRAWAL */).slice(-1)[0] || null;
+  const latestCampaign = db.tasks.filter((t) => t.status === "Active" /* ACTIVE */).slice(-1)[0] || null;
+  res.json({
+    earnersCount,
+    tasksCount,
+    totalPaidOut,
+    latestWithdrawal: latestWithdrawalTx ? {
+      userName: latestWithdrawalTx.userName,
+      bankName: latestWithdrawalTx.bankDetails?.bankName || "Commercial Bank",
+      amount: latestWithdrawalTx.amount
+    } : null,
+    latestCampaign: latestCampaign ? {
+      title: latestCampaign.title,
+      cost: latestCampaign.totalSlots * latestCampaign.costPerSlot
+    } : null
+  });
+});
 app.get("/api/advertiser/dashboard", (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
@@ -924,11 +1049,14 @@ app.post("/api/advertiser/tasks", (req, res) => {
   if (isNaN(rewardPerSlot) || rewardPerSlot <= 0 || isNaN(slots) || slots <= 0) {
     return res.status(400).json({ error: "Invalid earning value or slot count" });
   }
-  const costPerSlot = Math.ceil(rewardPerSlot * 1.35);
-  const totalCampaignCost = costPerSlot * slots;
+  const platform = getPlatformForCategory(category);
+  const pricing = db.taskPricing ? db.taskPricing.find((p) => p.platform === platform) : null;
+  const finalCostPerSlot = pricing ? pricing.costPerSlot : Math.ceil(rewardPerSlot * 1.35);
+  const finalEarningPerSlot = pricing ? pricing.earningPerSlot : rewardPerSlot;
+  const totalCampaignCost = finalCostPerSlot * slots;
   if (user.walletBalance < totalCampaignCost) {
     return res.status(400).json({
-      error: `Insufficient balance. This campaign costs \u20A6${totalCampaignCost.toLocaleString()} (\u20A6${costPerSlot}/slot). Please fund your wallet.`
+      error: `Insufficient balance. This campaign costs \u20A6${totalCampaignCost.toLocaleString()} (\u20A6${finalCostPerSlot}/slot). Please fund your wallet.`
     });
   }
   user.walletBalance -= totalCampaignCost;
@@ -940,8 +1068,8 @@ app.post("/api/advertiser/tasks", (req, res) => {
     category,
     proofRequirements,
     link,
-    costPerSlot,
-    earningPerSlot: rewardPerSlot,
+    costPerSlot: finalCostPerSlot,
+    earningPerSlot: finalEarningPerSlot,
     totalSlots: slots,
     filledSlots: 0,
     status: "Active" /* ACTIVE */,
@@ -1443,6 +1571,22 @@ app.put("/api/admin/settings", (req, res) => {
   if (whatsappGroup !== void 0) db.settings.whatsappGroup = whatsappGroup;
   saveDB();
   res.json({ success: true, settings: db.settings });
+});
+app.get("/api/admin/task-pricing", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+  res.json(db.taskPricing || []);
+});
+app.put("/api/admin/task-pricing", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+  const { pricing } = req.body;
+  if (!pricing || !Array.isArray(pricing)) {
+    return res.status(400).json({ error: "Invalid pricing array data" });
+  }
+  db.taskPricing = pricing;
+  saveDB();
+  res.json({ success: true, pricing: db.taskPricing });
 });
 var server = (0, import_http.createServer)(app);
 var wss = new import_ws.WebSocketServer({ noServer: true });
