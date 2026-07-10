@@ -4,16 +4,8 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
-  // Automatically detect GitHub Actions environment and use the requested base path
-  let basePath = "/";
-  if (process.env.GITHUB_ACTIONS === "true" || process.env.GITHUB_REPOSITORY) {
-    basePath = "/TasksEarn/";
-  } else if (process.env.VITE_BASE_PATH) {
-    basePath = process.env.VITE_BASE_PATH;
-  }
-
   return {
-    base: basePath,
+    base: "/",
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
