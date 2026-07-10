@@ -11,6 +11,7 @@ import {
   TransactionType,
   getPlatformForCategory
 } from "../types";
+import PlatformIcon from "./PlatformIcon";
 import { 
   LayoutDashboard, 
   PlusCircle, 
@@ -398,9 +399,12 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                 <div className="space-y-3">
                   {stats.recentTasks.map((task, idx) => (
                     <div key={idx} className="flex items-center justify-between border-b border-gray-50 pb-3 last:border-b-0 last:pb-0">
-                      <div>
-                        <p className="text-xs font-bold text-gray-800 line-clamp-1">{task.title}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{task.category} • Cost per action: ₦{task.costPerSlot}</p>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <PlatformIcon category={task.category} size={14} showBg className="shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-gray-800 line-clamp-1">{task.title}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">{task.category} • Cost per action: ₦{task.costPerSlot}</p>
+                        </div>
                       </div>
                       <div className="text-right">
                         <span className="text-[10px] text-gray-400 font-mono">Slots: {task.filledSlots}/{task.totalSlots}</span>
@@ -593,8 +597,9 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                   {campaigns.map((task, idx) => (
                     <div key={idx} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                       <div>
-                        <span className="rounded bg-indigo-50 text-[9px] font-bold text-indigo-700 px-2 py-0.5 uppercase">
-                          {task.category}
+                        <span className="rounded bg-indigo-50 text-[9px] font-bold text-indigo-700 px-2 py-1 uppercase inline-flex items-center gap-1.5">
+                          <PlatformIcon category={task.category} size={11} />
+                          <span>{task.category}</span>
                         </span>
                         <h4 className="font-display text-xs font-bold text-gray-800 mt-2">{task.title}</h4>
                         <div className="flex items-center gap-4 text-[10px] text-gray-400 mt-1 font-mono">
@@ -762,7 +767,12 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                     <tbody>
                       {submissions.filter(s => s.status === SubmissionStatus.PENDING).map((sub, idx) => (
                         <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50/50">
-                          <td className="py-3 px-1 font-bold text-gray-800 max-w-xs truncate">{sub.taskTitle}</td>
+                          <td className="py-3 px-1 font-bold text-gray-800 max-w-xs truncate">
+                            <div className="flex items-center gap-1.5">
+                              <PlatformIcon category={sub.category} size={13} className="shrink-0" />
+                              <span className="truncate">{sub.taskTitle}</span>
+                            </div>
+                          </td>
                           <td className="py-3 px-1 text-gray-600">{sub.earnerName}</td>
                           <td className="py-3 px-1 text-gray-400">{new Date(sub.submittedAt).toLocaleDateString()}</td>
                           <td className="py-3 px-1 font-mono text-gray-500 max-w-xs truncate">{sub.proofText}</td>
@@ -798,10 +808,13 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
               ) : (
                 <div className="space-y-2.5 max-h-80 overflow-y-auto">
                   {submissions.filter(s => s.status !== SubmissionStatus.PENDING).map((sub, idx) => (
-                    <div key={idx} className="flex justify-between items-center text-xs border-b border-gray-50 pb-2">
-                      <div>
-                        <p className="font-bold text-gray-800 line-clamp-1">{sub.taskTitle}</p>
-                        <p className="text-[10px] text-gray-400">Earner: {sub.earnerName} • Reviewed: {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                    <div key={idx} className="flex justify-between items-center text-xs border-b border-gray-50 pb-2 gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <PlatformIcon category={sub.category} size={14} showBg className="shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-800 line-clamp-1">{sub.taskTitle}</p>
+                          <p className="text-[10px] text-gray-400">Earner: {sub.earnerName} • Reviewed: {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                        </div>
                       </div>
                       <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
                         sub.status === SubmissionStatus.APPROVED ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"

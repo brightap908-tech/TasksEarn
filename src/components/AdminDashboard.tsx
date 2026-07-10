@@ -14,6 +14,7 @@ import {
   TaskStatus,
   AdminNotification
 } from "../types";
+import PlatformIcon from "./PlatformIcon";
 import { 
   LayoutGrid, 
   Users, 
@@ -51,7 +52,7 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = React.useState<
-    "stats" | "users" | "campaigns" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing"
+    "stats" | "users" | "campaigns" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platform-earnings"
   >("stats");
 
   // Admin states
@@ -63,6 +64,46 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
     pendingWithdrawals: 0,
     totalDeposited: 0
   });
+
+  // Owner earnings states
+  const [platformStats, setPlatformStats] = React.useState({
+    lifetimeRevenue: 0,
+    totalPlatformRevenue: 0,
+    todayRevenue: 0,
+    thisMonthRevenue: 0,
+    totalWithdrawn: 0,
+    pendingWithdrawalAmount: 0,
+    availableBalance: 0
+  });
+  const [ownerBankAccounts, setOwnerBankAccounts] = React.useState<any[]>([]);
+  const [ownerWithdrawals, setOwnerWithdrawals] = React.useState<any[]>([]);
+  
+  // Bank Form State
+  const [showBankForm, setShowBankForm] = React.useState(false);
+  const [editingBankAccount, setEditingBankAccount] = React.useState<any | null>(null);
+  const [bankNameInput, setBankNameInput] = React.useState("");
+  const [bankAccountNumberInput, setBankAccountNumberInput] = React.useState("");
+  const [bankAccountNameInput, setBankAccountNameInput] = React.useState("");
+  const [bankIsDefaultInput, setBankIsDefaultInput] = React.useState(false);
+  const [bankFormError, setBankFormError] = React.useState("");
+  const [bankFormSuccess, setBankFormSuccess] = React.useState("");
+
+  // Withdrawal Form State
+  const [showWithdrawForm, setShowWithdrawForm] = React.useState(false);
+  const [withdrawAmountInput, setWithdrawAmountInput] = React.useState("");
+  const [selectedBankId, setSelectedBankId] = React.useState("");
+  const [withdrawError, setWithdrawError] = React.useState("");
+  const [withdrawSuccess, setWithdrawSuccess] = React.useState("");
+
+  // Bank dropdown and verification states
+  const [banksList, setBanksList] = React.useState<{ name: string; code: string }[]>([]);
+  const [withdrawBankCode, setWithdrawBankCode] = React.useState("");
+  const [withdrawBankName, setWithdrawBankName] = React.useState("");
+  const [withdrawAccountNumber, setWithdrawAccountNumber] = React.useState("");
+  const [withdrawAccountName, setWithdrawAccountName] = React.useState("");
+  const [isVerifyingBank, setIsVerifyingBank] = React.useState(false);
+  const [isBankVerified, setIsBankVerified] = React.useState(false);
+  const [bankVerificationError, setBankVerificationError] = React.useState("");
 
   const [usersList, setUsersList] = React.useState<any[]>([]);
   const [campaignsList, setCampaignsList] = React.useState<Task[]>([]);
@@ -120,6 +161,87 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   const [rejectingSubId, setRejectingSubId] = React.useState<string | null>(null);
   const [rejectionFeedback, setRejectionFeedback] = React.useState<string>("");
 
+  const fetchPlatformStats = async () => {
+    try {
+      const data = await apiFetch("/api/admin/owner-earnings/stats");
+      if (data && !data.error) {
+        setPlatformStats(data);
+      }
+    } catch (e) {}
+  };
+
+  const fetchOwnerBankAccounts = async () => {
+    try {
+      const data = await apiFetch("/api/admin/owner-earnings/bank-accounts");
+      if (data && !data.error) {
+        setOwnerBankAccounts(data);
+        const defaultAcc = data.find((ba: any) => ba.isDefault);
+        if (defaultAcc) {
+          setSelectedBankId(defaultAcc.id);
+        } else if (data.length > 0) {
+          setSelectedBankId(data[0].id);
+        }
+      }
+    } catch (e) {}
+  };
+
+  const fetchOwnerWithdrawals = async () => {
+    try {
+      const data = await apiFetch("/api/admin/owner-earnings/withdrawals");
+      if (data && !data.error) {
+        setOwnerWithdrawals(data);
+      }
+    } catch (e) {}
+  };
+
+  const fetchBanksList = async () => {
+    try {
+      const data = await apiFetch("/api/admin/owner-earnings/banks");
+      if (data && !data.error) {
+        setBanksList(data);
+      }
+    } catch (e) {}
+  };
+
+  const handleVerifyBankAccount = async () => {
+    setBankVerificationError("");
+    setWithdrawAccountName("");
+    setIsBankVerified(false);
+
+    if (!withdrawBankCode) {
+      setBankVerificationError("Please select a bank from the list.");
+      return;
+    }
+    if (!withdrawAccountNumber || withdrawAccountNumber.length !== 10 || !/^\d+$/.test(withdrawAccountNumber)) {
+      setBankVerificationError("Please enter a valid 10-digit account number.");
+      return;
+    }
+
+    setIsVerifyingBank(true);
+    try {
+      const res = await apiFetch("/api/admin/owner-earnings/resolve-bank", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountNumber: withdrawAccountNumber,
+          bankCode: withdrawBankCode,
+          bankName: withdrawBankName
+        })
+      });
+
+      if (res && res.success) {
+        setWithdrawAccountName(res.accountName);
+        setIsBankVerified(true);
+      } else {
+        setBankVerificationError(res?.error || "Account verification failed. Please check details.");
+      }
+    } catch (err) {
+      setBankVerificationError("Failed to connect to verification service.");
+    } finally {
+      setIsVerifyingBank(false);
+    }
+  };
+
   // Fetch admin dashboard details
   const fetchStats = async () => {
     try {
@@ -136,6 +258,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         if (data.settings) setSettings(data.settings);
       }
     } catch (e) {}
+    fetchPlatformStats();
   };
 
   const fetchUsers = async () => {
@@ -211,6 +334,12 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
     if (activeTab === "audits") fetchAudits();
     if (activeTab === "announcements") fetchAnnouncementsAndBanners();
     if (activeTab === "cms") fetchCMSPages();
+    if (activeTab === "platform-earnings") {
+      fetchPlatformStats();
+      fetchOwnerBankAccounts();
+      fetchOwnerWithdrawals();
+      fetchBanksList();
+    }
   }, [activeTab]);
 
   React.useEffect(() => {
@@ -281,7 +410,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         };
 
         socket.onerror = (err) => {
-          console.error("[Admin WS] Error:", err);
+          console.warn("[Admin WS] Connection status check:", err);
           socket?.close();
         };
       } catch (err) {
@@ -433,6 +562,170 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
       if (res && res.success) {
         fetchAudits();
         fetchStats();
+      }
+    } catch (e) {}
+  };
+
+  const handleAddOrEditBankAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBankFormError("");
+    setBankFormSuccess("");
+
+    if (!bankNameInput || !bankAccountNumberInput || !bankAccountNameInput) {
+      setBankFormError("Please fill out all bank account fields.");
+      return;
+    }
+
+    try {
+      const endpoint = editingBankAccount 
+        ? `/api/admin/owner-earnings/bank-accounts/${editingBankAccount.id}`
+        : `/api/admin/owner-earnings/bank-accounts`;
+      const method = editingBankAccount ? "PUT" : "POST";
+
+      const res = await apiFetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bankName: bankNameInput,
+          accountNumber: bankAccountNumberInput,
+          accountName: bankAccountNameInput,
+          isDefault: bankIsDefaultInput
+        })
+      });
+
+      if (res && !res.error) {
+        setBankFormSuccess(editingBankAccount ? "Bank account modified successfully." : "Bank account added successfully.");
+        setBankNameInput("");
+        setBankAccountNumberInput("");
+        setBankAccountNameInput("");
+        setBankIsDefaultInput(false);
+        setEditingBankAccount(null);
+        setShowBankForm(false);
+        fetchOwnerBankAccounts();
+      } else {
+        setBankFormError(res?.error || "An error occurred while saving the bank account.");
+      }
+    } catch (e) {
+      setBankFormError("Failed to synchronize bank account.");
+    }
+  };
+
+  const handleEditBankClick = (account: any) => {
+    setEditingBankAccount(account);
+    setBankNameInput(account.bankName);
+    setBankAccountNumberInput(account.accountNumber);
+    setBankAccountNameInput(account.accountName);
+    setBankIsDefaultInput(account.isDefault);
+    setShowBankForm(true);
+    setBankFormError("");
+    setBankFormSuccess("");
+  };
+
+  const handleDeleteBankAccount = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this bank account?")) return;
+    try {
+      const res = await apiFetch(`/api/admin/owner-earnings/bank-accounts/${id}`, {
+        method: "DELETE"
+      });
+      if (res && res.success) {
+        fetchOwnerBankAccounts();
+      }
+    } catch (e) {}
+  };
+
+  const handleSetDefaultBank = async (id: string) => {
+    try {
+      const res = await apiFetch(`/api/admin/owner-earnings/bank-accounts/${id}/default`, {
+        method: "POST"
+      });
+      if (res && !res.error) {
+        fetchOwnerBankAccounts();
+      }
+    } catch (e) {}
+  };
+
+  const handleWithdrawEarnings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setWithdrawError("");
+    setWithdrawSuccess("");
+
+    if (!withdrawAmountInput) {
+      setWithdrawError("Please provide an amount.");
+      return;
+    }
+
+    if (!withdrawBankName || !withdrawAccountNumber || !withdrawAccountName || !isBankVerified) {
+      setWithdrawError("Please complete bank verification first.");
+      return;
+    }
+
+    const amount = parseFloat(withdrawAmountInput);
+    if (isNaN(amount) || amount <= 0) {
+      setWithdrawError("Please enter a valid positive withdrawal amount.");
+      return;
+    }
+
+    try {
+      // 1. Register/save the verified bank account to get a bankAccountId
+      const bankRes = await apiFetch("/api/admin/owner-earnings/bank-accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bankName: withdrawBankName,
+          accountNumber: withdrawAccountNumber,
+          accountName: withdrawAccountName,
+          isDefault: false
+        })
+      });
+
+      if (bankRes && bankRes.error) {
+        setWithdrawError(bankRes.error);
+        return;
+      }
+
+      const bankAccountId = bankRes.id;
+
+      // 2. Complete the withdrawal using the registered bankAccountId
+      const res = await apiFetch("/api/admin/owner-earnings/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount,
+          bankAccountId: bankAccountId
+        })
+      });
+
+      if (res && !res.error) {
+        setWithdrawSuccess("Withdrawal request created successfully!");
+        setWithdrawAmountInput("");
+        setWithdrawAccountNumber("");
+        setWithdrawAccountName("");
+        setWithdrawBankCode("");
+        setWithdrawBankName("");
+        setIsBankVerified(false);
+        fetchPlatformStats();
+        fetchOwnerWithdrawals();
+        fetchOwnerBankAccounts(); // Refresh list on UI
+        setShowWithdrawForm(false);
+      } else {
+        setWithdrawError(res?.error || "Insufficient platform balance or invalid request.");
+      }
+    } catch (err) {
+      setWithdrawError("Failed to record withdrawal.");
+    }
+  };
+
+  const handleUpdateOwnerWithdrawalStatus = async (id: string, status: string) => {
+    if (!window.confirm(`Are you sure you want to mark this withdrawal as ${status}?`)) return;
+    try {
+      const res = await apiFetch(`/api/admin/owner-earnings/withdrawals/${id}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status })
+      });
+      if (res && !res.error) {
+        fetchPlatformStats();
+        fetchOwnerWithdrawals();
       }
     } catch (e) {}
   };
@@ -779,6 +1072,16 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
           <Coins className="h-4 w-4 text-slate-400" /> 
           <span>Task Pricing</span>
         </button>
+
+        <button 
+          onClick={() => setActiveTab("platform-earnings")}
+          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
+            activeTab === "platform-earnings" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+          }`}
+        >
+          <TrendingUp className="h-4 w-4 text-slate-400" /> 
+          <span>Platform Earnings</span>
+        </button>
       </div>
 
       {/* Main Content Pane */}
@@ -813,6 +1116,15 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Advertisers Deposits</span>
                 <span className="block font-mono text-2xl font-black text-indigo-600 mt-1">₦{stats.totalDeposited.toLocaleString()}</span>
+              </div>
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/5 p-5 shadow-sm hover:bg-emerald-50/20 transition-all cursor-pointer flex flex-col justify-between" onClick={() => setActiveTab("platform-earnings")}>
+                <div>
+                  <span className="block text-[10px] font-bold text-emerald-600 uppercase flex items-center gap-1">
+                    <Coins className="h-3.5 w-3.5" /> Available Platform Earnings
+                  </span>
+                  <span className="block font-mono text-2xl font-black text-emerald-600 mt-1">₦{platformStats.availableBalance.toLocaleString()}</span>
+                </div>
+                <span className="text-[10px] text-emerald-600 font-bold hover:underline mt-2 block">Withdraw Wallet ➔</span>
               </div>
             </div>
 
@@ -972,7 +1284,10 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                 {campaignsList.map((task, idx) => (
                   <div key={idx} className="rounded-xl border border-gray-50 bg-white p-4 text-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
-                      <span className="rounded bg-red-50 text-[9px] font-bold text-red-700 px-2 py-0.5 uppercase">{task.category}</span>
+                      <span className="rounded bg-red-50 text-[9px] font-bold text-red-700 px-2 py-1 uppercase inline-flex items-center gap-1.5">
+                        <PlatformIcon category={task.category} size={11} />
+                        <span>{task.category}</span>
+                      </span>
                       <h4 className="font-display font-bold text-gray-800 mt-1">{task.title}</h4>
                       <p className="text-[10px] text-gray-400 mt-1">Publisher: {task.advertiserName} • Budget: ₦{(task.costPerSlot * task.totalSlots).toLocaleString()}</p>
                     </div>
@@ -1141,8 +1456,9 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                           {/* Top Row: General Metadata */}
                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-gray-50 pb-3">
                             <div>
-                              <span className="inline-block rounded-md bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700 uppercase tracking-wider mb-1.5">
-                                {sub.category}
+                              <span className="inline-flex rounded-md bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-700 uppercase tracking-wider mb-1.5 items-center gap-1.5">
+                                <PlatformIcon category={sub.category} size={11} />
+                                <span>{sub.category}</span>
                               </span>
                               <h4 className="font-display font-bold text-gray-900 text-sm">{sub.taskTitle}</h4>
                               <p className="text-gray-400 text-[10px] mt-0.5">
@@ -1526,6 +1842,400 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         {activeTab === "pricing" && (
           <div className="space-y-6 animate-fadeIn">
             <AdminTaskPricing apiFetch={apiFetch} />
+          </div>
+        )}
+
+        {activeTab === "platform-earnings" && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h2 className="font-display text-lg font-black text-slate-900 flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-emerald-500" /> Platform Earnings & Wallet
+                </h2>
+                <p className="text-xs text-slate-500">Manage owner withdrawal settings, view platform revenues, and transfer commissions.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowWithdrawForm(true);
+                  setWithdrawError("");
+                  setWithdrawSuccess("");
+                }}
+                className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white px-5 py-2.5 shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <CreditCard className="h-4 w-4" /> Withdraw Earnings
+              </button>
+            </div>
+
+            {/* Withdrawal form inline card */}
+            {showWithdrawForm && (
+              <form onSubmit={handleWithdrawEarnings} className="rounded-2xl border border-emerald-100 bg-emerald-50/10 p-5 shadow-sm space-y-4 border-2">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-display text-sm font-bold text-emerald-900">Owner Wallet Withdrawal</h4>
+                    <p className="text-xs text-emerald-600">Withdraw platform commission and service fees directly to your bank account.</p>
+                  </div>
+                  <button type="button" onClick={() => setShowWithdrawForm(false)} className="rounded-full bg-gray-200 p-1 text-gray-700">✕</button>
+                </div>
+
+                {withdrawError && (
+                  <p className="text-xs font-bold text-red-600 bg-red-50 p-2.5 rounded-lg">{withdrawError}</p>
+                )}
+                {withdrawSuccess && (
+                  <p className="text-xs font-bold text-emerald-600 bg-emerald-50 p-2.5 rounded-lg">{withdrawSuccess}</p>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase">Select Bank</label>
+                    <select
+                      value={withdrawBankCode}
+                      onChange={(e) => {
+                        const code = e.target.value;
+                        setWithdrawBankCode(code);
+                        const found = banksList.find(b => b.code === code);
+                        setWithdrawBankName(found ? found.name : "");
+                        setIsBankVerified(false);
+                        setWithdrawAccountName("");
+                        setBankVerificationError("");
+                      }}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none"
+                      required
+                    >
+                      <option value="">-- Choose Nigerian Bank --</option>
+                      {banksList.map((b) => (
+                        <option key={b.code} value={b.code}>{b.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase">Account Number</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        maxLength={10}
+                        value={withdrawAccountNumber}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "");
+                          setWithdrawAccountNumber(val);
+                          setIsBankVerified(false);
+                          setWithdrawAccountName("");
+                          setBankVerificationError("");
+                        }}
+                        placeholder="10-digit NUBAN"
+                        className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-mono focus:outline-none"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={handleVerifyBankAccount}
+                        disabled={isVerifyingBank || withdrawAccountNumber.length !== 10 || !withdrawBankCode}
+                        className="rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold px-4 py-2 disabled:bg-gray-200 disabled:text-gray-400 transition-colors cursor-pointer"
+                      >
+                        {isVerifyingBank ? "Verifying..." : "Verify"}
+                      </button>
+                    </div>
+                    {bankVerificationError && (
+                      <p className="text-[10px] text-red-600 font-semibold">{bankVerificationError}</p>
+                    )}
+                  </div>
+
+                  {withdrawAccountName && (
+                    <div className="col-span-1 md:col-span-2 bg-emerald-500/5 border border-emerald-100 rounded-xl p-3 flex items-center justify-between animate-fadeIn">
+                      <div>
+                        <span className="block text-[9px] font-bold text-emerald-600 uppercase">Verified Account Holder</span>
+                        <span className="font-bold text-xs text-emerald-800 uppercase tracking-wide">{withdrawAccountName}</span>
+                      </div>
+                      <span className="bg-emerald-500 text-white text-[9px] font-bold uppercase px-2 py-0.5 rounded-full flex items-center gap-1">
+                        ✓ Verified
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase">Withdrawal Amount (₦)</label>
+                    <input
+                      type="number"
+                      required
+                      value={withdrawAmountInput}
+                      onChange={(e) => setWithdrawAmountInput(e.target.value)}
+                      placeholder="e.g. 10000"
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-mono focus:outline-none"
+                    />
+                    <p className="text-[10px] text-gray-400">Available Balance: ₦{platformStats.availableBalance.toLocaleString()}</p>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowWithdrawForm(false);
+                      setWithdrawAccountNumber("");
+                      setWithdrawAccountName("");
+                      setWithdrawBankCode("");
+                      setWithdrawBankName("");
+                      setIsBankVerified(false);
+                      setBankVerificationError("");
+                    }}
+                    className="rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-bold text-gray-600 px-4 py-2 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white px-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    disabled={!isBankVerified || !withdrawAmountInput || isVerifyingBank}
+                  >
+                    Confirm & Record Withdrawal
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Metric grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase">Available Balance</span>
+                <span className="block font-mono text-2xl font-black text-emerald-600 mt-1">₦{platformStats.availableBalance.toLocaleString()}</span>
+                <p className="text-[10px] text-gray-400 mt-1">Ready for withdrawal</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Platform Revenue</span>
+                <span className="block font-mono text-2xl font-black text-gray-800 mt-1">₦{platformStats.totalPlatformRevenue.toLocaleString()}</span>
+                <p className="text-[10px] text-gray-400 mt-1">All commission + service fees</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Withdrawn</span>
+                <span className="block font-mono text-2xl font-black text-blue-600 mt-1">₦{platformStats.totalWithdrawn.toLocaleString()}</span>
+                <p className="text-[10px] text-gray-400 mt-1">Disbursed to bank accounts</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase">Pending Withdrawals</span>
+                <span className="block font-mono text-2xl font-black text-amber-500 mt-1">₦{platformStats.pendingWithdrawalAmount.toLocaleString()}</span>
+                <p className="text-[10px] text-gray-400 mt-1">Awaiting bank settlement</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase">Lifetime Revenue</span>
+                <span className="block font-mono text-xl font-bold text-slate-700 mt-1">₦{platformStats.lifetimeRevenue.toLocaleString()}</span>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase">Today's Revenue</span>
+                <span className="block font-mono text-xl font-bold text-slate-700 mt-1">₦{platformStats.todayRevenue.toLocaleString()}</span>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase">This Month's Revenue</span>
+                <span className="block font-mono text-xl font-bold text-slate-700 mt-1">₦{platformStats.thisMonthRevenue.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Split screen for Bank accounts and Withdrawal history */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Withdrawal history - 2 cols on lg screens */}
+              <div className="lg:col-span-2 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-4">
+                <h3 className="font-display text-sm font-bold text-slate-900">Owner Withdrawal History</h3>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-gray-400 uppercase text-[9px] font-bold">
+                        <th className="py-2.5 px-1">Withdrawal ID</th>
+                        <th className="py-2.5 px-1">Bank Info</th>
+                        <th className="py-2.5 px-1">Ref</th>
+                        <th className="py-2.5 px-1">Date</th>
+                        <th className="py-2.5 px-1">Amount</th>
+                        <th className="py-2.5 px-1">Status</th>
+                        <th className="py-2.5 px-1 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {ownerWithdrawals.map((wd) => (
+                        <tr key={wd.id} className="hover:bg-slate-50/50">
+                          <td className="py-3 px-1 font-mono font-bold text-[10px]">{wd.id}</td>
+                          <td className="py-3 px-1">
+                            <p className="font-semibold text-slate-800">{wd.bankName}</p>
+                            <p className="text-[10px] text-gray-400">{wd.accountNumber} ({wd.accountName})</p>
+                          </td>
+                          <td className="py-3 px-1 font-mono text-[10px] text-gray-500">{wd.reference}</td>
+                          <td className="py-3 px-1 text-gray-400">{new Date(wd.submittedAt).toLocaleDateString()}</td>
+                          <td className="py-3 px-1 font-mono font-bold text-gray-900">₦{wd.amount.toLocaleString()}</td>
+                          <td className="py-3 px-1">
+                            <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              wd.status === "Success" || wd.status === "Approved" 
+                                ? "bg-emerald-50 text-emerald-600" 
+                                : wd.status === "Pending" 
+                                ? "bg-amber-50 text-amber-600" 
+                                : "bg-red-50 text-red-600"
+                            }`}>
+                              {wd.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-1 text-right">
+                            {wd.status === "Pending" && (
+                              <div className="flex gap-1 justify-end">
+                                <button
+                                  onClick={() => handleUpdateOwnerWithdrawalStatus(wd.id, "Success")}
+                                  className="rounded bg-emerald-50 hover:bg-emerald-100 text-[10px] text-emerald-700 font-bold px-1.5 py-0.5 cursor-pointer"
+                                >
+                                  Mark Sent
+                                </button>
+                                <button
+                                  onClick={() => handleUpdateOwnerWithdrawalStatus(wd.id, "Rejected")}
+                                  className="rounded bg-red-50 hover:bg-red-100 text-[10px] text-red-700 font-bold px-1.5 py-0.5 cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {ownerWithdrawals.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="text-center py-6 text-gray-400">No withdrawal records.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Bank Settings - 1 col on lg screens */}
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-display text-sm font-bold text-slate-900">Bank Accounts</h3>
+                  <button
+                    onClick={() => {
+                      setShowBankForm(!showBankForm);
+                      setEditingBankAccount(null);
+                      setBankNameInput("");
+                      setBankAccountNumberInput("");
+                      setBankAccountNameInput("");
+                      setBankIsDefaultInput(false);
+                      setBankFormError("");
+                      setBankFormSuccess("");
+                    }}
+                    className="text-xs text-emerald-600 font-bold hover:underline cursor-pointer"
+                  >
+                    {showBankForm ? "Close Form" : "+ Add Account"}
+                  </button>
+                </div>
+
+                {showBankForm && (
+                  <form onSubmit={handleAddOrEditBankAccount} className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3 animate-fadeIn">
+                    <h4 className="text-xs font-bold text-slate-800">{editingBankAccount ? "Modify Account" : "Add Bank Account"}</h4>
+                    
+                    {bankFormError && (
+                      <p className="text-[10px] font-semibold text-red-600">{bankFormError}</p>
+                    )}
+                    {bankFormSuccess && (
+                      <p className="text-[10px] font-semibold text-emerald-600">{bankFormSuccess}</p>
+                    )}
+
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Bank Name (e.g. GTBank)"
+                        value={bankNameInput}
+                        onChange={(e) => setBankNameInput(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        required
+                        placeholder="Account Number (10 digits)"
+                        value={bankAccountNumberInput}
+                        onChange={(e) => setBankAccountNumberInput(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-mono focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        required
+                        placeholder="Account Name"
+                        value={bankAccountNameInput}
+                        onChange={(e) => setBankAccountNameInput(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:outline-none"
+                      />
+                      <label className="flex items-center gap-2 text-xs text-gray-600 font-medium cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={bankIsDefaultInput}
+                          onChange={(e) => setBankIsDefaultInput(e.target.checked)}
+                          className="rounded text-emerald-500 cursor-pointer"
+                        />
+                        <span>Set as Default account</span>
+                      </label>
+                    </div>
+
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setShowBankForm(false)}
+                        className="rounded-lg bg-gray-200 text-gray-600 px-3 py-1 text-xs font-bold cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1 text-xs font-bold cursor-pointer"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                <div className="space-y-3 max-h-[30rem] overflow-y-auto">
+                  {ownerBankAccounts.map((ba) => (
+                    <div key={ba.id} className="border border-gray-100 rounded-xl p-3 bg-slate-50/50 space-y-2 relative">
+                      <div className="flex justify-between items-start pr-12">
+                        <div>
+                          <p className="font-bold text-xs text-slate-800">{ba.bankName}</p>
+                          <p className="font-mono text-xs text-slate-500">{ba.accountNumber}</p>
+                          <p className="text-[10px] text-slate-400">{ba.accountName}</p>
+                        </div>
+                        {ba.isDefault && (
+                          <span className="bg-emerald-50 text-emerald-700 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded absolute top-3 right-3">Default</span>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2 text-[10px] font-bold">
+                        {!ba.isDefault && (
+                          <button
+                            onClick={() => handleSetDefaultBank(ba.id)}
+                            className="text-emerald-600 hover:underline cursor-pointer"
+                          >
+                            Set Default
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleEditBankClick(ba)}
+                          className="text-slate-500 hover:underline cursor-pointer"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteBankAccount(ba.id)}
+                          className="text-red-600 hover:underline cursor-pointer"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {ownerBankAccounts.length === 0 && (
+                    <p className="text-center text-xs text-gray-400 py-6">No saved bank accounts.</p>
+                  )}
+                </div>
+              </div>
+
+            </div>
+
           </div>
         )}
 

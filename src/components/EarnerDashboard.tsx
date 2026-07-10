@@ -9,6 +9,7 @@ import {
   SubmissionStatus, 
   TransactionStatus 
 } from "../types";
+import PlatformIcon from "./PlatformIcon";
 import { 
   Briefcase, 
   DollarSign, 
@@ -672,12 +673,15 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {metrics.recentSubmissions.map((sub, idx) => (
-                    <div key={idx} className="flex items-center justify-between border-b border-gray-50 pb-3 last:border-b-0 last:pb-0">
-                      <div>
-                        <p className="text-xs font-bold text-gray-800 line-clamp-1">{sub.taskTitle}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{new Date(sub.submittedAt).toLocaleDateString()} • {sub.category}</p>
-                      </div>
+                   {metrics.recentSubmissions.map((sub, idx) => (
+                     <div key={idx} className="flex items-center justify-between border-b border-gray-50 pb-3 last:border-b-0 last:pb-0">
+                       <div className="flex items-center gap-2.5 min-w-0">
+                         <PlatformIcon category={sub.category} size={14} showBg className="shrink-0" />
+                         <div className="min-w-0">
+                           <p className="text-xs font-bold text-gray-800 line-clamp-1">{sub.taskTitle}</p>
+                           <p className="text-[10px] text-gray-400 mt-0.5">{new Date(sub.submittedAt).toLocaleDateString()} • {sub.category}</p>
+                         </div>
+                       </div>
                       <div className="text-right">
                         <span className="font-mono text-xs font-bold text-gray-700">₦{sub.reward}</span>
                         <div className="mt-1">
@@ -719,18 +723,29 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
 
               {/* Category selector */}
               <div className="flex gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 no-scrollbar">
-                {["All", "Facebook", "Instagram", "TikTok", "YouTube", "Telegram", "WhatsApp", "Twitter", "Website", "App", "Survey"].map((cat, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCategoryFilter(cat === "All" ? "All" : cat)}
-                    className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold cursor-pointer ${
-                      (cat === "All" && categoryFilter === "All") || (categoryFilter !== "All" && cat.toLowerCase() === categoryFilter.toLowerCase() || (cat === "Twitter" && categoryFilter === "X (Twitter) Follow"))
-                        ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
+                {["All", "Facebook", "Instagram", "TikTok", "YouTube", "Telegram", "WhatsApp", "Twitter", "Website", "App", "Survey"].map((cat, idx) => {
+                  const isSelected = (cat === "All" && categoryFilter === "All") || 
+                    (categoryFilter !== "All" && cat.toLowerCase() === categoryFilter.toLowerCase()) || 
+                    (cat === "Twitter" && categoryFilter === "X (Twitter) Follow");
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setCategoryFilter(cat === "All" ? "All" : cat)}
+                      className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold cursor-pointer flex items-center gap-1.5 transition-colors ${
+                        isSelected ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      {cat !== "All" && (
+                        <PlatformIcon 
+                          platform={cat} 
+                          size={12} 
+                          className={isSelected ? "text-white" : ""} 
+                        />
+                      )}
+                      <span>{cat}</span>
+                    </button>
+                  );
+                })}
               </div>
 
             </div>
@@ -740,8 +755,9 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
               <div className="rounded-2xl border border-emerald-100 bg-emerald-50/20 p-5 shadow-sm space-y-4 animate-fadeIn border-2">
                 <div className="flex justify-between items-start">
                   <div>
-                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[9px] font-black uppercase text-emerald-800">
-                      {selectedTask.category}
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[9px] font-black uppercase text-emerald-800 inline-flex items-center gap-1.5">
+                      <PlatformIcon category={selectedTask.category} size={11} />
+                      <span>{selectedTask.category}</span>
                     </span>
                     <h4 className="font-display text-base font-bold text-gray-900 mt-1.5">{selectedTask.title}</h4>
                     <p className="text-xs text-gray-400 mt-0.5">Offered by: {selectedTask.advertiserName}</p>
@@ -958,8 +974,9 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                   <div key={idx} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
                     <div>
                       <div className="flex justify-between items-start gap-2">
-                        <span className="rounded-lg bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700">
-                          {task.category}
+                        <span className="rounded-lg bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-700 flex items-center gap-1.5">
+                          <PlatformIcon category={task.category} size={11} />
+                          <span>{task.category}</span>
                         </span>
                         <span className="font-mono text-sm font-black text-emerald-600">₦{task.earningPerSlot}</span>
                       </div>
@@ -1025,7 +1042,12 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                     <tbody>
                       {submissions.map((sub, idx) => (
                         <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                          <td className="py-3.5 px-2 font-bold text-gray-800 max-w-xs truncate">{sub.taskTitle}</td>
+                          <td className="py-3.5 px-2 font-bold text-gray-800 max-w-xs truncate">
+                            <div className="flex items-center gap-1.5">
+                              <PlatformIcon category={sub.category} size={13} className="shrink-0" />
+                              <span className="truncate">{sub.taskTitle}</span>
+                            </div>
+                          </td>
                           <td className="py-3.5 px-2 font-mono text-emerald-600 font-bold">₦{sub.reward}</td>
                           <td className="py-3.5 px-2 text-gray-400 whitespace-nowrap">{new Date(sub.submittedAt).toLocaleDateString()}</td>
                           <td className="py-3.5 px-2 max-w-xs truncate font-mono text-gray-500 text-[10px]">{sub.proofText}</td>

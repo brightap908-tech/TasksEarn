@@ -16,31 +16,33 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   const navLinkClass = (view: string) => 
-    `text-sm font-medium transition-all hover:text-emerald-500 cursor-pointer ${
-      currentView === view ? "text-emerald-500 font-semibold" : "text-slate-500"
+    `text-sm font-medium transition-all cursor-pointer ${
+      currentView === view 
+        ? "text-[#10B981] font-semibold" 
+        : "text-gray-400 hover:text-white"
     }`;
 
   const isActive = (view: string) => currentView === view;
 
   return (
-    <header id="app-header" className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white/95 backdrop-blur-md">
+    <header id="app-header" className="sticky top-0 z-50 w-full border-b border-white/[0.06] bg-[#0b1220]/90 backdrop-blur-md shadow-lg shadow-black/10">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         
         {/* Logo */}
         <div 
           id="brand-logo" 
           onClick={() => onNavigate("home")} 
-          className="flex items-center gap-2 cursor-pointer transition-transform hover:scale-102"
+          className="flex items-center gap-3 cursor-pointer transition-transform duration-200 active:scale-95"
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-sm">
-            <span className="font-display text-xl font-bold">₦</span>
+          <div className="flex h-9.5 w-9.5 items-center justify-center rounded-lg bg-[#10B981] text-white shrink-0">
+            <span className="font-display text-lg font-bold">₦</span>
           </div>
-          <div>
-            <span className="font-display text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
-              Tasks<span className="text-emerald-500">Earn</span>
+          <div className="flex flex-col justify-center select-none">
+            <span className="font-display text-base font-bold tracking-tight text-white leading-none">
+              Tasks<span className="text-[#10B981]">Earn</span>
             </span>
-            <span className="block text-[9px] font-mono tracking-widest text-emerald-500 uppercase leading-none">
-              Micro-Exchange
+            <span className="block text-[8px] font-mono tracking-[0.15em] text-[#10B981]/80 font-bold uppercase mt-1 leading-none">
+              MICRO-EXCHANGE
             </span>
           </div>
         </div>
@@ -76,27 +78,27 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
           {/* Theme Toggle Button */}
           <button 
             onClick={onToggleDarkMode}
-            className="rounded-full p-2 text-slate-500 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+            className="rounded-full p-2 text-gray-400 hover:bg-white/5 hover:text-white transition-colors cursor-pointer flex items-center justify-center shrink-0"
             aria-label="Toggle Theme"
             title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
           >
-            {isDarkMode ? <Sun className="h-4.5 w-4.5 text-amber-500 animate-pulse" /> : <Moon className="h-4.5 w-4.5 text-slate-600" />}
+            {isDarkMode ? <Sun className="h-4.5 w-4.5 text-amber-500 animate-pulse" /> : <Moon className="h-4.5 w-4.5 text-gray-400" />}
           </button>
 
           {user ? (
             <div className="flex items-center gap-3">
               
               {/* Wallet Info */}
-              <div className="flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-2 text-white shadow-sm">
-                <Wallet className="h-4 w-4" />
-                <span className="text-xs font-medium opacity-90">Balance:</span>
-                <span className="font-mono text-sm font-bold">
+              <div className="flex items-center gap-2 rounded-full bg-[#10B981]/10 border border-[#10B981]/20 px-3.5 py-1.5 text-[#10B981] shadow-sm">
+                <Wallet className="h-4 w-4 shrink-0 text-[#10B981]/80" />
+                <span className="text-xs font-semibold opacity-90 text-[#10B981]/90">Balance:</span>
+                <span className="font-mono text-sm font-bold text-emerald-300">
                   ₦{user.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
                 {user.role === UserRole.ADVERTISER && (
                   <button 
                     onClick={onOpenDeposit}
-                    className="ml-1.5 rounded-full bg-white hover:bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600 uppercase transition-all"
+                    className="ml-2 rounded-full bg-[#10B981] text-white hover:bg-emerald-600 px-3 py-0.5 text-[10px] font-bold uppercase transition-all shadow-sm"
                   >
                     + Fund
                   </button>
@@ -104,16 +106,16 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
               </div>
 
               {/* User Profile Info */}
-              <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
+              <div className="flex items-center gap-3 border-l border-white/[0.08] pl-3.5">
                 <div className="text-right">
-                  <p className="text-xs font-semibold text-slate-800 leading-none">{user.name}</p>
-                  <p className="text-[10px] font-medium text-slate-400 flex items-center gap-0.5 justify-end uppercase tracking-wider">
+                  <p className="text-xs font-bold text-white leading-none">{user.name}</p>
+                  <p className="text-[9px] font-bold text-gray-400 flex items-center gap-1 justify-end uppercase tracking-wider mt-1.5">
                     {user.role === UserRole.ADMIN ? (
-                      <Shield className="h-2.5 w-2.5 text-rose-500" />
+                      <Shield className="h-2.5 w-2.5 text-rose-400" />
                     ) : (
-                      <UserIcon className="h-2.5 w-2.5 text-emerald-500" />
+                      <UserIcon className="h-2.5 w-2.5 text-[#10B981]" />
                     )}
-                    {user.role}
+                    <span>{user.role}</span>
                   </p>
                 </div>
                 
@@ -124,15 +126,15 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                     if (user.role === UserRole.ADVERTISER) onNavigate("advertiser-dashboard");
                     if (user.role === UserRole.ADMIN) onNavigate("admin-dashboard");
                   }}
-                  className="rounded-full bg-slate-100 p-2 hover:bg-emerald-50 hover:text-emerald-500 transition-colors"
+                  className="rounded-full bg-white/5 text-gray-400 p-2 hover:bg-[#10B981]/10 hover:text-[#10B981] transition-all cursor-pointer"
                   title="Dashboard"
                 >
-                  <Coins className="h-4 w-4 text-slate-600" />
+                  <Coins className="h-4 w-4" />
                 </button>
 
                 <button 
                   onClick={onLogout}
-                  className="rounded-full bg-rose-50 p-2 text-rose-500 hover:bg-rose-100 transition-colors"
+                  className="rounded-full bg-rose-500/10 p-2 text-rose-400 hover:bg-rose-500/20 transition-all cursor-pointer"
                   title="Logout"
                 >
                   <LogOut className="h-4 w-4" />
@@ -141,16 +143,16 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
 
             </div>
           ) : (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               <button 
                 onClick={() => onNavigate("login")}
-                className="text-sm font-semibold text-slate-600 hover:text-emerald-500 cursor-pointer transition-colors"
+                className="text-sm font-semibold text-gray-300 hover:text-white cursor-pointer transition-colors"
               >
                 Sign In
               </button>
               <button 
                 onClick={() => onNavigate("register")}
-                className="rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-600 transition-all cursor-pointer"
+                className="rounded-full bg-[#10B981] px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-600 transition-all cursor-pointer shadow-emerald-950/25 active:scale-95"
               >
                 Get Started
               </button>
@@ -159,27 +161,27 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
         </div>
 
         {/* Mobile menu button */}
-        <div className="flex items-center md:hidden gap-2">
+        <div className="flex items-center md:hidden gap-3">
           {/* Mobile Theme Toggle Button */}
           <button 
             onClick={onToggleDarkMode}
-            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+            className="rounded-full p-2 text-gray-400 hover:bg-white/5 transition-colors cursor-pointer flex items-center justify-center shrink-0"
             aria-label="Toggle Theme"
             title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
           >
-            {isDarkMode ? <Sun className="h-4.5 w-4.5 text-amber-500" /> : <Moon className="h-4.5 w-4.5 text-slate-600" />}
+            {isDarkMode ? <Sun className="h-4.5 w-4.5 text-amber-500" /> : <Moon className="h-4.5 w-4.5 text-gray-400" />}
           </button>
 
           {user && (
-            <div className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-emerald-800">
-              <span className="font-mono text-xs font-bold">
+            <div className="flex items-center gap-1.5 rounded-full bg-[#10B981]/10 border border-[#10B981]/20 px-3 py-1 text-[#10B981]">
+              <span className="font-mono text-xs font-bold text-emerald-300">
                 ₦{user.walletBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </span>
             </div>
           )}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 focus:outline-none"
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-white/5 hover:text-white focus:outline-none transition-colors"
           >
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -189,35 +191,43 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div id="mobile-nav-drawer" className="md:hidden border-t border-gray-100 bg-white px-4 py-3 space-y-2 animate-fadeIn">
+        <div id="mobile-nav-drawer" className="md:hidden border-t border-white/5 bg-[#0b1220]/95 backdrop-blur-md px-4 py-4 space-y-2 animate-fadeIn shadow-xl shadow-black/25">
           <span 
             onClick={() => { onNavigate("home"); setMobileMenuOpen(false); }} 
-            className="block py-2 text-base font-medium text-gray-700 hover:bg-gray-50 rounded-lg px-2 cursor-pointer"
+            className={`block py-2 text-base font-semibold rounded-lg px-3 cursor-pointer transition-colors ${
+              isActive("home") ? "bg-[#10B981]/10 text-[#10B981]" : "text-gray-300 hover:bg-white/5 hover:text-white"
+            }`}
           >
             Home
           </span>
           <span 
             onClick={() => { onNavigate("about"); setMobileMenuOpen(false); }} 
-            className="block py-2 text-base font-medium text-gray-700 hover:bg-gray-50 rounded-lg px-2 cursor-pointer"
+            className={`block py-2 text-base font-semibold rounded-lg px-3 cursor-pointer transition-colors ${
+              isActive("about") ? "bg-[#10B981]/10 text-[#10B981]" : "text-gray-300 hover:bg-white/5 hover:text-white"
+            }`}
           >
             About
           </span>
           <span 
             onClick={() => { onNavigate("faq"); setMobileMenuOpen(false); }} 
-            className="block py-2 text-base font-medium text-gray-700 hover:bg-gray-50 rounded-lg px-2 cursor-pointer"
+            className={`block py-2 text-base font-semibold rounded-lg px-3 cursor-pointer transition-colors ${
+              isActive("faq") ? "bg-[#10B981]/10 text-[#10B981]" : "text-gray-300 hover:bg-white/5 hover:text-white"
+            }`}
           >
             FAQ
           </span>
           <span 
             onClick={() => { onNavigate("contact"); setMobileMenuOpen(false); }} 
-            className="block py-2 text-base font-medium text-gray-700 hover:bg-gray-50 rounded-lg px-2 cursor-pointer"
+            className={`block py-2 text-base font-semibold rounded-lg px-3 cursor-pointer transition-colors ${
+              isActive("contact") ? "bg-[#10B981]/10 text-[#10B981]" : "text-gray-300 hover:bg-white/5 hover:text-white"
+            }`}
           >
             Contact
           </span>
 
           {user && (
-            <div className="border-t border-gray-100 pt-2 mt-2 space-y-1">
-              <p className="px-2 text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">
+            <div className="border-t border-white/5 pt-3 mt-3 space-y-1">
+              <p className="px-3 text-[10px] font-bold text-[#10B981] uppercase tracking-[0.12em] mb-2">
                 My Dashboard Menu
               </p>
               
@@ -225,25 +235,25 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                 <>
                   <span 
                     onClick={() => { onNavigate("earner-dashboard"); setMobileMenuOpen(false); }} 
-                    className="block py-2 text-sm font-medium text-gray-600 hover:bg-emerald-50 hover:text-emerald-700 rounded-lg px-2 cursor-pointer"
+                    className="block py-2 text-sm font-medium text-gray-300 hover:bg-[#10B981]/10 hover:text-[#10B981] rounded-lg px-3 cursor-pointer transition-colors"
                   >
                     My Stats
                   </span>
                   <span 
                     onClick={() => { onNavigate("earner-tasks"); setMobileMenuOpen(false); }} 
-                    className="block py-2 text-sm font-medium text-gray-600 hover:bg-emerald-50 hover:text-emerald-700 rounded-lg px-2 cursor-pointer"
+                    className="block py-2 text-sm font-medium text-gray-300 hover:bg-[#10B981]/10 hover:text-[#10B981] rounded-lg px-3 cursor-pointer transition-colors"
                   >
                     Browse available tasks
                   </span>
                   <span 
                     onClick={() => { onNavigate("earner-submissions"); setMobileMenuOpen(false); }} 
-                    className="block py-2 text-sm font-medium text-gray-600 hover:bg-emerald-50 hover:text-emerald-700 rounded-lg px-2 cursor-pointer"
+                    className="block py-2 text-sm font-medium text-gray-300 hover:bg-[#10B981]/10 hover:text-[#10B981] rounded-lg px-3 cursor-pointer transition-colors"
                   >
                     My Submissions History
                   </span>
                   <span 
                     onClick={() => { onNavigate("earner-referrals"); setMobileMenuOpen(false); }} 
-                    className="block py-2 text-sm font-medium text-gray-600 hover:bg-emerald-50 hover:text-emerald-700 rounded-lg px-2 cursor-pointer"
+                    className="block py-2 text-sm font-medium text-gray-300 hover:bg-[#10B981]/10 hover:text-[#10B981] rounded-lg px-3 cursor-pointer transition-colors"
                   >
                     Referrals Network
                   </span>
@@ -254,27 +264,27 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                 <>
                   <span 
                     onClick={() => { onNavigate("advertiser-dashboard"); setMobileMenuOpen(false); }} 
-                    className="block py-2 text-sm font-medium text-gray-600 hover:bg-emerald-50 hover:text-emerald-700 rounded-lg px-2 cursor-pointer"
+                    className="block py-2 text-sm font-medium text-gray-300 hover:bg-[#10B981]/10 hover:text-[#10B981] rounded-lg px-3 cursor-pointer transition-colors"
                   >
                     Campaign Stats
                   </span>
                   <span 
                     onClick={() => { onNavigate("advertiser-tasks"); setMobileMenuOpen(false); }} 
-                    className="block py-2 text-sm font-medium text-gray-600 hover:bg-emerald-50 hover:text-emerald-700 rounded-lg px-2 cursor-pointer"
+                    className="block py-2 text-sm font-medium text-gray-300 hover:bg-[#10B981]/10 hover:text-[#10B981] rounded-lg px-3 cursor-pointer transition-colors"
                   >
                     My Campaigns (Pause/Edit)
                   </span>
                   <span 
                     onClick={() => { onNavigate("advertiser-submissions"); setMobileMenuOpen(false); }} 
-                    className="block py-2 text-sm font-medium text-gray-600 hover:bg-emerald-50 hover:text-emerald-700 rounded-lg px-2 cursor-pointer"
+                    className="block py-2 text-sm font-medium text-gray-300 hover:bg-[#10B981]/10 hover:text-[#10B981] rounded-lg px-3 cursor-pointer transition-colors"
                   >
                     Review proof submissions
                   </span>
                   <button 
                     onClick={() => { onOpenDeposit(); setMobileMenuOpen(false); }}
-                    className="w-full text-left block py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 rounded-lg px-2"
+                    className="w-full text-left block py-2 text-sm font-semibold text-[#10B981] hover:bg-[#10B981]/10 rounded-lg px-3 transition-colors"
                   >
-                    💳 Fund Wallet (₦)
+                    Fund Wallet (₦)
                   </button>
                 </>
               )}
@@ -283,7 +293,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                 <>
                   <span 
                     onClick={() => { onNavigate("admin-dashboard"); setMobileMenuOpen(false); }} 
-                    className="block py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 rounded-lg px-2 cursor-pointer"
+                    className="block py-2 text-sm font-semibold text-indigo-400 hover:bg-indigo-500/10 rounded-lg px-3 cursor-pointer transition-colors"
                   >
                     Super Admin controls
                   </span>
@@ -292,7 +302,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
 
               <button 
                 onClick={() => { onLogout(); setMobileMenuOpen(false); }}
-                className="w-full text-left block py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg px-2 mt-4"
+                className="w-full text-left block py-2 text-sm font-semibold text-rose-400 hover:bg-rose-500/10 rounded-lg px-3 mt-4 transition-colors"
               >
                 Logout Account
               </button>
@@ -300,16 +310,16 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
           )}
 
           {!user && (
-            <div className="border-t border-gray-100 pt-3 flex flex-col gap-2">
+            <div className="border-t border-white/5 pt-4 flex flex-col gap-2">
               <button 
                 onClick={() => { onNavigate("login"); setMobileMenuOpen(false); }}
-                className="w-full py-2 text-center text-sm font-semibold text-gray-700 border border-gray-200 rounded-lg"
+                className="w-full py-2.5 text-center text-sm font-semibold text-gray-300 border border-white/10 rounded-lg hover:bg-white/5 transition-all"
               >
                 Sign In
               </button>
               <button 
                 onClick={() => { onNavigate("register"); setMobileMenuOpen(false); }}
-                className="w-full py-2 text-center text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg"
+                className="w-full py-2.5 text-center text-sm font-semibold text-white bg-[#10B981] hover:bg-emerald-600 rounded-lg transition-all"
               >
                 Sign Up
               </button>

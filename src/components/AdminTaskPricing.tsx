@@ -1,6 +1,7 @@
 import React from "react";
 import { Platform, TaskPricing } from "../types";
 import { Save, RefreshCw, CheckCircle, AlertTriangle, Coins, ShieldCheck, Search } from "lucide-react";
+import PlatformIcon from "./PlatformIcon";
 
 interface AdminTaskPricingProps {
   apiFetch: (endpoint: string, options?: RequestInit) => Promise<any>;
@@ -280,8 +281,8 @@ export default function AdminTaskPricing({ apiFetch }: AdminTaskPricingProps) {
                       
                       {/* Platform Identity */}
                       <td className="px-5 py-4.5">
-                        <div className="flex items-center gap-2.5">
-                          <div className="h-2 w-2 rounded-full bg-indigo-500 shrink-0" />
+                        <div className="flex items-center gap-3">
+                          <PlatformIcon platform={item.platform} size={15} showBg className="shrink-0" />
                           <div>
                             <span className="font-bold text-slate-800 text-sm block">{item.platform}</span>
                             <span className="text-[10px] text-slate-400 font-mono uppercase mt-0.5 block">Standard Engagement Rate</span>

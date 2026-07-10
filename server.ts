@@ -53,6 +53,10 @@ let db: {
     whatsappGroup?: string;
   };
   taskPricing: TaskPricing[];
+  ownerEarnings?: {
+    bankAccounts: any[];
+    withdrawals: any[];
+  };
 } = {
   users: [],
   tasks: [],
@@ -63,6 +67,10 @@ let db: {
   banners: [],
   notifications: [],
   pages: {},
+  ownerEarnings: {
+    bankAccounts: [],
+    withdrawals: []
+  },
 
   settings: {
     platformName: "TasksEarn",
@@ -125,6 +133,12 @@ function loadDB() {
       if (!db.notifications) db.notifications = [];
       if (!db.pages) db.pages = {};
       if (!db.taskPricing || db.taskPricing.length === 0) db.taskPricing = getInitialPricing();
+      if (!db.ownerEarnings) {
+        db.ownerEarnings = {
+          bankAccounts: [],
+          withdrawals: []
+        };
+      }
       if (!db.settings) {
         db.settings = {
           platformName: "TasksEarn",
@@ -1334,6 +1348,7 @@ app.post("/api/advertiser/submissions/:id/review", (req, res) => {
   submission.feedback = feedback || "";
 
   if (status === SubmissionStatus.APPROVED) {
+    submission.approvedAt = new Date().toISOString();
     // 1. Credit the earner
     const earner = db.users.find(u => u.id === submission.earnerId);
     if (earner) {
@@ -1653,6 +1668,7 @@ app.post("/api/admin/submissions/:id/review", (req, res) => {
   submission.feedback = feedback || "";
 
   if (status === SubmissionStatus.APPROVED) {
+    submission.approvedAt = new Date().toISOString();
     const earner = db.users.find(u => u.id === submission.earnerId);
     if (earner) {
       earner.walletBalance += submission.reward;
@@ -1679,6 +1695,415 @@ app.post("/api/admin/submissions/:id/review", (req, res) => {
 
   saveDB();
   res.json({ success: true, submission });
+});
+
+// Helper to calculate platform revenue stats
+function getPlatformRevenueStats() {
+  let totalCommission = 0;
+  let todayCommission = 0;
+  let monthCommission = 0;
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+  const submissions = db.submissions || [];
+  submissions.forEach(s => {
+    if (s.status === SubmissionStatus.APPROVED || s.status === "Approved") {
+      const task = (db.tasks || []).find(t => t.id === s.taskId);
+      const cost = task ? task.costPerSlot : (s.reward * 1.35); // fallback estimate
+      const commission = cost - s.reward;
+
+      totalCommission += commission;
+
+      // Check date
+      const approvedTime = s.approvedAt ? new Date(s.approvedAt).getTime() : new Date(s.submittedAt).getTime();
+      if (approvedTime >= startOfToday) {
+        todayCommission += commission;
+      }
+      if (approvedTime >= startOfThisMonth) {
+        monthCommission += commission;
+      }
+    }
+  });
+
+  let totalWithdrawalFees = 0;
+  let todayWithdrawalFees = 0;
+  let monthWithdrawalFees = 0;
+
+  const userWithdrawals = (db.transactions || []).filter(
+    t => t.type === TransactionType.WITHDRAWAL && (t.status === TransactionStatus.SUCCESS || t.status === "Success" || t.status === "Approved")
+  );
+
+  userWithdrawals.forEach(t => {
+    const fee = db.settings?.withdrawalFee || 100;
+    totalWithdrawalFees += fee;
+
+    const time = new Date(t.createdAt).getTime();
+    if (time >= startOfToday) {
+      todayWithdrawalFees += fee;
+    }
+    if (time >= startOfThisMonth) {
+      monthWithdrawalFees += fee;
+    }
+  });
+
+  const lifetimeRevenue = totalCommission + totalWithdrawalFees;
+  const todayRevenue = todayCommission + todayWithdrawalFees;
+  const monthRevenue = monthCommission + monthWithdrawalFees;
+
+  const ownerWithdrawals = db.ownerEarnings?.withdrawals || [];
+  const totalWithdrawn = ownerWithdrawals
+    .filter(w => w.status === "Approved" || w.status === "Success")
+    .reduce((sum, w) => sum + w.amount, 0);
+
+  const pendingWithdrawalAmount = ownerWithdrawals
+    .filter(w => w.status === "Pending")
+    .reduce((sum, w) => sum + w.amount, 0);
+
+  const availableBalance = Math.max(0, lifetimeRevenue - totalWithdrawn - pendingWithdrawalAmount);
+
+  return {
+    lifetimeRevenue,
+    totalPlatformRevenue: lifetimeRevenue,
+    todayRevenue,
+    thisMonthRevenue: monthRevenue,
+    totalWithdrawn,
+    pendingWithdrawalAmount,
+    availableBalance
+  };
+}
+
+// Platform Owner (Admin) Earnings Endpoints
+app.get("/api/admin/owner-earnings/stats", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+  if (!db.ownerEarnings) {
+    db.ownerEarnings = { bankAccounts: [], withdrawals: [] };
+  }
+
+  const stats = getPlatformRevenueStats();
+  res.json(stats);
+});
+
+app.get("/api/admin/owner-earnings/bank-accounts", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+  if (!db.ownerEarnings) {
+    db.ownerEarnings = { bankAccounts: [], withdrawals: [] };
+  }
+  if (!db.ownerEarnings.bankAccounts) {
+    db.ownerEarnings.bankAccounts = [];
+    saveDB();
+  }
+
+  res.json(db.ownerEarnings.bankAccounts);
+});
+
+app.post("/api/admin/owner-earnings/bank-accounts", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+  const { bankName, accountNumber, accountName, isDefault } = req.body;
+  if (!bankName || !accountNumber || !accountName) {
+    return res.status(400).json({ error: "All bank account details are required" });
+  }
+
+  if (!db.ownerEarnings) {
+    db.ownerEarnings = { bankAccounts: [], withdrawals: [] };
+  }
+  if (!db.ownerEarnings.bankAccounts) {
+    db.ownerEarnings.bankAccounts = [];
+  }
+
+  // If set to default, unset other defaults
+  if (isDefault) {
+    db.ownerEarnings.bankAccounts.forEach(ba => ba.isDefault = false);
+  }
+
+  const newAccount = {
+    id: "ba-" + Math.random().toString(36).substr(2, 9),
+    bankName,
+    accountNumber,
+    accountName,
+    isDefault: isDefault || db.ownerEarnings.bankAccounts.length === 0
+  };
+
+  db.ownerEarnings.bankAccounts.push(newAccount);
+  saveDB();
+  res.json(newAccount);
+});
+
+app.put("/api/admin/owner-earnings/bank-accounts/:id", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+  const { id } = req.params;
+  const { bankName, accountNumber, accountName, isDefault } = req.body;
+
+  if (!db.ownerEarnings || !db.ownerEarnings.bankAccounts) {
+    return res.status(404).json({ error: "Bank account database not found" });
+  }
+
+  const account = db.ownerEarnings.bankAccounts.find(ba => ba.id === id);
+  if (!account) return res.status(404).json({ error: "Bank account not found" });
+
+  if (bankName) account.bankName = bankName;
+  if (accountNumber) account.accountNumber = accountNumber;
+  if (accountName) account.accountName = accountName;
+  
+  if (isDefault !== undefined) {
+    account.isDefault = isDefault;
+    if (isDefault) {
+      db.ownerEarnings.bankAccounts.forEach(ba => {
+        if (ba.id !== id) ba.isDefault = false;
+      });
+    }
+  }
+
+  saveDB();
+  res.json(account);
+});
+
+app.delete("/api/admin/owner-earnings/bank-accounts/:id", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+  const { id } = req.params;
+  if (!db.ownerEarnings || !db.ownerEarnings.bankAccounts) {
+    return res.status(404).json({ error: "Bank account database not found" });
+  }
+
+  const index = db.ownerEarnings.bankAccounts.findIndex(ba => ba.id === id);
+  if (index === -1) return res.status(404).json({ error: "Bank account not found" });
+
+  const wasDefault = db.ownerEarnings.bankAccounts[index].isDefault;
+  db.ownerEarnings.bankAccounts.splice(index, 1);
+
+  // If we deleted the default account, make the first remaining one default
+  if (wasDefault && db.ownerEarnings.bankAccounts.length > 0) {
+    db.ownerEarnings.bankAccounts[0].isDefault = true;
+  }
+
+  saveDB();
+  res.json({ success: true });
+});
+
+app.post("/api/admin/owner-earnings/bank-accounts/:id/default", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+  const { id } = req.params;
+  if (!db.ownerEarnings || !db.ownerEarnings.bankAccounts) {
+    return res.status(404).json({ error: "Bank account database not found" });
+  }
+
+  const account = db.ownerEarnings.bankAccounts.find(ba => ba.id === id);
+  if (!account) return res.status(404).json({ error: "Bank account not found" });
+
+  db.ownerEarnings.bankAccounts.forEach(ba => ba.isDefault = false);
+  account.isDefault = true;
+
+  saveDB();
+  res.json({ success: true, account });
+});
+
+app.get("/api/admin/owner-earnings/banks", async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+  const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+  if (paystackKey) {
+    try {
+      const response = await fetch("https://api.paystack.co/bank?country=nigeria", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${paystackKey}`
+        }
+      });
+      const data: any = await response.json();
+      if (data && data.status && data.data) {
+        const banks = data.data.map((b: any) => ({
+          name: b.name,
+          code: b.code
+        })).sort((a: any, b: any) => a.name.localeCompare(b.name));
+        return res.json(banks);
+      }
+    } catch (err) {
+      console.error("Failed to fetch banks from Paystack, falling back to static list.", err);
+    }
+  }
+
+  const staticBanks = [
+    { name: "Access Bank", code: "044" },
+    { name: "Accion Microfinance Bank", code: "090134" },
+    { name: "Carbon", code: "565" },
+    { name: "Ecobank Nigeria", code: "050" },
+    { name: "Fidelity Bank", code: "070" },
+    { name: "First Bank of Nigeria", code: "011" },
+    { name: "First City Monument Bank (FCMB)", code: "214" },
+    { name: "Globus Bank", code: "00103" },
+    { name: "Guaranty Trust Bank (GTB)", code: "058" },
+    { name: "Heritage Bank", code: "030" },
+    { name: "Jaiz Bank", code: "301" },
+    { name: "Keystone Bank", code: "082" },
+    { name: "Kuda Bank", code: "50211" },
+    { name: "Moniepoint Microfinance Bank", code: "50515" },
+    { name: "OPay Microfinance Bank", code: "999992" },
+    { name: "Optimus Bank", code: "107" },
+    { name: "PalmPay Microfinance Bank", code: "999991" },
+    { name: "Parallex Bank", code: "502" },
+    { name: "Polaris Bank", code: "076" },
+    { name: "PremiumTrust Bank", code: "105" },
+    { name: "Providus Bank", code: "101" },
+    { name: "Rubies MFB", code: "125" },
+    { name: "Stanbic IBTC Bank", code: "221" },
+    { name: "Standard Chartered Bank", code: "023" },
+    { name: "Sterling Bank", code: "232" },
+    { name: "Taj Bank", code: "302" },
+    { name: "Titan Trust Bank", code: "102" },
+    { name: "Union Bank of Nigeria", code: "032" },
+    { name: "United Bank for Africa (UBA)", code: "033" },
+    { name: "Unity Bank", code: "215" },
+    { name: "VFD Microfinance Bank", code: "566" },
+    { name: "Wema Bank", code: "035" },
+    { name: "Zenith Bank", code: "057" }
+  ];
+
+  res.json(staticBanks);
+});
+
+app.post("/api/admin/owner-earnings/resolve-bank", async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+  const { accountNumber, bankCode, bankName } = req.body;
+  if (!accountNumber || !bankCode) {
+    return res.status(400).json({ error: "Account number and bank are required" });
+  }
+
+  if (accountNumber.length !== 10 || !/^\d+$/.test(accountNumber)) {
+    return res.status(400).json({ error: "Account number must be exactly 10 digits" });
+  }
+
+  const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+  if (!paystackKey) {
+    return res.json({
+      success: true,
+      accountName: `Verified Owner Account (${bankName || "Commercial Bank"})`,
+      isSimulated: true
+    });
+  }
+
+  try {
+    const response = await fetch(`https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${paystackKey}`
+      }
+    });
+
+    const data: any = await response.json();
+    if (data && data.status && data.data) {
+      return res.json({
+        success: true,
+        accountName: data.data.account_name,
+        accountNumber: data.data.account_number,
+        bankCode
+      });
+    } else {
+      return res.status(400).json({ error: data.message || "Could not resolve bank account. Please check details." });
+    }
+  } catch (err) {
+    console.error("Paystack resolve-bank error: ", err);
+    return res.status(500).json({ error: "Failed to connect to bank verification service." });
+  }
+});
+
+app.get("/api/admin/owner-earnings/withdrawals", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+  if (!db.ownerEarnings) {
+    db.ownerEarnings = { bankAccounts: [], withdrawals: [] };
+  }
+  if (!db.ownerEarnings.withdrawals) {
+    db.ownerEarnings.withdrawals = [];
+  }
+
+  res.json(db.ownerEarnings.withdrawals.reverse());
+});
+
+app.post("/api/admin/owner-earnings/withdraw", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+  const { amount, bankAccountId } = req.body;
+  if (!amount || !bankAccountId) {
+    return res.status(400).json({ error: "Amount and bank account selection are required" });
+  }
+
+  const withdrawAmount = parseFloat(amount);
+  if (isNaN(withdrawAmount) || withdrawAmount <= 0) {
+    return res.status(400).json({ error: "Please enter a valid positive withdrawal amount" });
+  }
+
+  if (!db.ownerEarnings || !db.ownerEarnings.bankAccounts) {
+    return res.status(400).json({ error: "No bank accounts set up" });
+  }
+
+  const account = db.ownerEarnings.bankAccounts.find(ba => ba.id === bankAccountId);
+  if (!account) {
+    return res.status(400).json({ error: "Selected bank account is invalid" });
+  }
+
+  // Check if owner has sufficient balance
+  const stats = getPlatformRevenueStats();
+  if (stats.availableBalance < withdrawAmount) {
+    return res.status(400).json({ error: `Insufficient platform available balance. Maximum you can withdraw is ₦${stats.availableBalance.toLocaleString()}` });
+  }
+
+  if (!db.ownerEarnings.withdrawals) {
+    db.ownerEarnings.withdrawals = [];
+  }
+
+  const newWithdrawal = {
+    id: "own-wd-" + Math.random().toString(36).substr(2, 9),
+    amount: withdrawAmount,
+    submittedAt: new Date().toISOString(),
+    status: "Pending", // Owner can complete it to record actual disbursement
+    bankName: account.bankName,
+    accountNumber: account.accountNumber,
+    accountName: account.accountName,
+    reference: "OWN-PAY-" + Math.floor(10000000 + Math.random() * 90000000)
+  };
+
+  db.ownerEarnings.withdrawals.push(newWithdrawal);
+  saveDB();
+
+  res.json({ success: true, withdrawal: newWithdrawal });
+});
+
+// Update status of an owner withdrawal (e.g. mark as Success or Rejected)
+app.post("/api/admin/owner-earnings/withdrawals/:id/status", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+  const { id } = req.params;
+  const { status } = req.body; // "Success" or "Rejected"
+
+  if (!db.ownerEarnings || !db.ownerEarnings.withdrawals) {
+    return res.status(404).json({ error: "Withdrawal not found" });
+  }
+
+  const withdrawal = db.ownerEarnings.withdrawals.find(w => w.id === id);
+  if (!withdrawal) return res.status(404).json({ error: "Withdrawal not found" });
+
+  withdrawal.status = status;
+  saveDB();
+  res.json({ success: true, withdrawal });
 });
 
 app.get("/api/admin/withdrawals", (req, res) => {

@@ -1,5 +1,6 @@
 import React from "react";
 import { Mail, Phone, MapPin, Send, HelpCircle, ArrowRight, Shield, FileText } from "lucide-react";
+import PlatformIcon from "./PlatformIcon";
 
 interface PublicPagesProps {
   view: string; // "about" | "faq" | "contact" | "terms" | "privacy"
@@ -220,7 +221,10 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
                     rel="noreferrer"
                     className="flex items-center justify-between rounded-xl bg-blue-50 hover:bg-blue-100 px-3.5 py-2.5 text-xs text-blue-800 transition-colors"
                   >
-                    <span>Join Official Telegram Channel</span>
+                    <span className="flex items-center gap-2">
+                      <PlatformIcon platform="Telegram" size={14} />
+                      <span>Join Official Telegram Channel</span>
+                    </span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </a>
                 )}
@@ -231,7 +235,10 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
                     rel="noreferrer"
                     className="flex items-center justify-between rounded-xl bg-green-50 hover:bg-green-100 px-3.5 py-2.5 text-xs text-green-800 transition-colors"
                   >
-                    <span>Join WhatsApp Helpdesk</span>
+                    <span className="flex items-center gap-2">
+                      <PlatformIcon platform="WhatsApp" size={14} />
+                      <span>Join WhatsApp Helpdesk</span>
+                    </span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </a>
                 )}

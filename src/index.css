@@ -1,166 +1,391 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Space Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
-  --color-brand-50: #f0fdf4;
-  --color-brand-100: #dcfce7;
+  --color-brand-50: rgba(16, 185, 129, 0.05);
+  --color-brand-100: rgba(16, 185, 129, 0.1);
   --color-brand-500: #10b981;
   --color-brand-600: #059669;
   --color-brand-700: #047857;
   --color-brand-900: #064e3b;
 }
 
+/* Base Body Design styling */
 body {
   font-family: var(--font-sans);
-  background-color: #f8fafc;
-  color: #1e293b;
+  background-color: #0b1220 !important;
+  color: #f9fafb !important;
   overflow-x: hidden;
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
-/* Custom modern scrollbar */
+/* Force dark theme layout consistently across light state too */
+html, :root {
+  background-color: #0b1220 !important;
+  color-scheme: dark !important;
+}
+
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #0b1220;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+  background: #1f2937;
+  border-radius: 9999px;
+  border: 2px solid #0b1220;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #374151;
 }
 
-/* ==========================================
-   ELEGANT DARK THEME OVERLAY SYSTEM RULES
-   ========================================== */
+/* ==========================================================================
+   PREMIUM FINTECH DARK DESIGN SYSTEM (GLOBAL COMPONENT OVERRIDES)
+   ========================================================================== */
 
-.dark {
-  color-scheme: dark;
-}
-
-.dark body {
-  background-color: #0b0f19 !important;
-  color: #f1f5f9 !important;
-}
-
-/* Card & Surface Overrides */
-.dark .bg-white {
+/* Cards, Sections, and Modals */
+.bg-white, 
+[class*="bg-white"],
+.bg-slate-50, 
+.bg-gray-50, 
+.bg-slate-100\/50, 
+.bg-gray-50\/50,
+.rounded-2xl.border.bg-white,
+.rounded-3xl.border.bg-white {
   background-color: #111827 !important;
-  color: #f3f4f6 !important;
+  color: #f9fafb !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
-.dark .bg-slate-50,
-.dark .bg-gray-50,
-.dark .bg-slate-100/50,
-.dark .bg-gray-50/50 {
-  background-color: #1a2234 !important;
+/* Cards Elevation and Subtle Borders */
+.rounded-2xl, .rounded-3xl, .rounded-xl {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+.shadow-sm, .shadow-xs, .shadow-md, .shadow-lg, .shadow {
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5) !important;
 }
 
-/* Text Adaptations */
-.dark .text-slate-900,
-.dark .text-gray-900,
-.dark .text-slate-800,
-.dark .text-gray-800 {
-  color: #f3f4f6 !important;
+/* Accent Containers (Deep Surfaces) */
+.bg-slate-100,
+.bg-gray-100,
+.bg-slate-200,
+.bg-gray-200,
+.bg-slate-100\/80,
+.bg-slate-50\/50,
+.bg-gray-50\/50,
+.hover\:bg-slate-50\/50:hover,
+.hover\:bg-slate-50:hover,
+.hover\:bg-gray-50:hover,
+.hover\:bg-slate-100:hover,
+.hover\:bg-gray-100:hover {
+  background-color: #1f2937 !important;
+  color: #f9fafb !important;
 }
 
-.dark .text-slate-700,
-.dark .text-gray-700,
-.dark .text-slate-600,
-.dark .text-gray-600 {
-  color: #e5e7eb !important;
+/* Primary text headings & labels */
+.text-slate-900,
+.text-gray-900,
+.text-slate-800,
+.text-gray-800,
+.text-slate-700,
+.text-gray-700 {
+  color: #f9fafb !important;
 }
 
-.dark .text-slate-500,
-.dark .text-gray-500,
-.dark .text-slate-400,
-.dark .text-gray-400 {
+/* Secondary & caption texts */
+.text-slate-500,
+.text-gray-500,
+.text-slate-400,
+.text-gray-400 {
   color: #9ca3af !important;
 }
 
-/* Border Adaptations */
-.dark .border-slate-200,
-.dark .border-gray-200,
-.dark .border-slate-100,
-.dark .border-gray-100,
-.dark .border-slate-100\/50 {
-  border-color: #1f2937 !important;
+/* Tertiary & body text */
+.text-slate-600,
+.text-gray-600 {
+  color: #e5e7eb !important;
 }
 
-/* Input Fields */
-.dark input, 
-.dark textarea, 
-.dark select {
+/* Universal Borders */
+.border-slate-200,
+.border-gray-200,
+.border-slate-100,
+.border-gray-100,
+.border-slate-300,
+.border-gray-300,
+.border-slate-100\/50,
+.border-slate-100/50,
+.border-slate-200\/80 {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Inputs, Textareas, Select fields styling */
+input, 
+textarea, 
+select {
   background-color: #1f2937 !important;
-  color: #f3f4f6 !important;
-  border-color: #374151 !important;
+  color: #f9fafb !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 0.75rem !important;
+  padding: 0.625rem 1rem !important;
+  font-size: 0.875rem !important;
+  outline: none !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-.dark input:focus, 
-.dark textarea:focus, 
-.dark select:focus {
+input:focus, 
+textarea:focus, 
+select:focus {
   border-color: #10b981 !important;
-}
-
-/* Header & Navigation Overrides */
-.dark #app-header {
-  background-color: rgba(17, 24, 39, 0.95) !important;
-  border-color: #1f2937 !important;
-}
-
-.dark #app-header span.text-slate-900 {
-  color: #f3f4f6 !important;
-}
-
-.dark #mobile-nav-drawer {
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15) !important;
   background-color: #111827 !important;
-  border-color: #1f2937 !important;
 }
 
-.dark #mobile-nav-drawer span {
+/* Modern Headers & Navigation Overrides */
+#app-header {
+  background-color: rgba(17, 24, 39, 0.8) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+#app-header span.text-slate-900 {
+  color: #f9fafb !important;
+}
+
+#brand-logo div {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
+}
+
+/* Navigation link enhancements */
+#app-header nav span {
+  font-weight: 500 !important;
+  transition: color 0.15s ease-in-out !important;
+}
+
+#mobile-nav-drawer {
+  background-color: #111827 !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+#mobile-nav-drawer span {
   color: #e5e7eb !important;
+  border-radius: 0.5rem !important;
 }
 
-.dark #mobile-nav-drawer span:hover {
+#mobile-nav-drawer span:hover {
   background-color: #1f2937 !important;
+  color: #10b981 !important;
 }
 
-/* Sidebar and Menu Buttons */
-.dark .hover\:bg-slate-50\/50:hover,
-.dark .hover\:bg-slate-50:hover,
-.dark .hover\:bg-gray-50:hover {
-  background-color: #1f2937 !important;
-}
-
-/* Table formatting */
-.dark th {
+/* Sidebar Tab buttons styling (e.g. in Earner, Advertiser, Admin Dashboards) */
+button[class*="text-slate-500 hover:bg-slate-50"] {
   color: #9ca3af !important;
+  border-radius: 0.75rem !important;
 }
 
-.dark tr {
-  border-color: #1f2937 !important;
+button[class*="text-slate-500 hover:bg-slate-50"]:hover {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  color: #f9fafb !important;
 }
 
-.dark tr:hover {
-  background-color: rgba(31, 41, 55, 0.4) !important;
+/* Active tabs inside menus */
+.bg-emerald-50, 
+.bg-emerald-50\/50, 
+.bg-emerald-50/50, 
+[class*="bg-emerald-50"] {
+  background-color: rgba(16, 185, 129, 0.08) !important;
+  color: #10b981 !important;
+  border-right-color: #10b981 !important;
 }
 
-/* Footer Adaptation */
-.dark #app-footer {
-  background-color: #030712 !important;
-  border-color: #111827 !important;
+/* Dropdown menus & popovers */
+[class*="absolute right-0 mt-2 w-"], 
+[class*="dropdown-menu"] {
+  background-color: #111827 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6) !important;
+  border-radius: 0.75rem !important;
 }
 
-/* Toast override inside dark */
-.dark .fixed.bottom-6.right-6 {
+/* Tables Formatting */
+table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+}
+
+th {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+  color: #9ca3af !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  font-size: 0.75rem !important;
+  letter-spacing: 0.05em !important;
+  padding: 0.875rem 1rem !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+td {
+  padding: 1rem !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  color: #f9fafb !important;
+  font-size: 0.875rem !important;
+}
+
+tr:hover td {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+}
+
+/* Badges / Pill styling overrides */
+.bg-emerald-50, .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  color: #10b981 !important;
+  border: 1px solid rgba(16, 185, 129, 0.15) !important;
+}
+
+.bg-amber-50, .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.1) !important;
+  color: #f59e0b !important;
+  border: 1px solid rgba(245, 158, 11, 0.15) !important;
+}
+
+.bg-indigo-50, .bg-indigo-100 {
+  background-color: rgba(99, 102, 241, 0.1) !important;
+  color: #818cf8 !important;
+  border: 1px solid rgba(99, 102, 241, 0.15) !important;
+}
+
+.bg-rose-50, .bg-rose-100 {
+  background-color: rgba(244, 63, 94, 0.1) !important;
+  color: #f43f5e !important;
+  border: 1px solid rgba(244, 63, 94, 0.15) !important;
+}
+
+.bg-blue-50, .bg-blue-100 {
+  background-color: rgba(59, 130, 246, 0.1) !important;
+  color: #60a5fa !important;
+  border: 1px solid rgba(59, 130, 246, 0.15) !important;
+}
+
+/* Buttons Enhancement */
+button.bg-emerald-500,
+button.bg-brand-500,
+.bg-emerald-500,
+.bg-emerald-600 {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.2) !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+button.bg-emerald-500:hover,
+button.bg-brand-500:hover,
+.bg-emerald-500:hover {
+  opacity: 0.95 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35) !important;
+}
+
+button.bg-emerald-500:active,
+button.bg-brand-500:active {
+  transform: translateY(0px) !important;
+}
+
+/* Secondary / Dark Buttons */
+button.bg-slate-100,
+button.bg-gray-100,
+button.bg-slate-200 {
   background-color: #1f2937 !important;
-  border-color: #374151 !important;
+  color: #f9fafb !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  transition: all 0.2s ease !important;
+}
+
+button.bg-slate-100:hover,
+button.bg-gray-100:hover {
+  background-color: #374151 !important;
+}
+
+/* App Footer styles */
+#app-footer {
+  background-color: #070c16 !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+#app-footer h4 {
+  color: #f9fafb !important;
+  font-family: var(--font-display) !important;
+  letter-spacing: 0.05em !important;
+}
+
+#app-footer a, 
+#app-footer span {
+  color: #9ca3af !important;
+  transition: color 0.15s ease !important;
+}
+
+#app-footer a:hover, 
+#app-footer span:hover {
+  color: #10b981 !important;
+}
+
+/* Search bar and Filters container */
+.bg-slate-50\/80, .bg-gray-50\/80 {
+  background-color: #111827 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Modal Dialog overlay background */
+.fixed.inset-0.bg-slate-900\/50 {
+  background-color: rgba(7, 12, 22, 0.75) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+/* Toast alert notification box */
+.fixed.bottom-6.right-6 {
+  background-color: #111827 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 1rem !important;
+}
+
+/* Admin panel input settings rows */
+.divide-y > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Verification Code Inputs */
+input[maxlength="1"] {
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+  border-radius: 0.5rem !important;
+}
+
+/* Interactive hover scales */
+.hover\:scale-102:hover {
+  transform: scale(1.02) !important;
+}
+
+/* Alert Boxes and Info Banners */
+.bg-amber-500\/10 {
+  background-color: rgba(245, 158, 11, 0.06) !important;
+  border-color: rgba(245, 158, 11, 0.2) !important;
+  color: #f59e0b !important;
+}
+
+.bg-emerald-500\/10 {
+  background-color: rgba(16, 185, 129, 0.06) !important;
+  border-color: rgba(16, 185, 129, 0.2) !important;
+  color: #10b981 !important;
 }
