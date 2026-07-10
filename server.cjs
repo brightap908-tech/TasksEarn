@@ -105,13 +105,14 @@ function getPlatformForCategory(category) {
 import_dotenv.default.config();
 var { Pool } = import_pg.default;
 var PORT = Number(process.env.PORT) || 5e3;
-if (!process.env.DATABASE_URL) {
-  console.error("FATAL: DATABASE_URL environment variable is not set.");
+var DB_CONNECTION_STRING = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
+if (!DB_CONNECTION_STRING) {
+  console.error("FATAL: No database connection string configured. Set NEON_DATABASE_URL (or DATABASE_URL).");
   process.exit(1);
 }
 var pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL.includes("localhost") || process.env.DATABASE_URL.includes("127.0.0.1") ? false : { rejectUnauthorized: false }
+  connectionString: DB_CONNECTION_STRING,
+  ssl: DB_CONNECTION_STRING.includes("localhost") || DB_CONNECTION_STRING.includes("127.0.0.1") ? false : { rejectUnauthorized: false }
 });
 function hashPassword(password) {
   return import_crypto.default.createHash("sha256").update(password).digest("hex");
