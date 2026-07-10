@@ -216,8 +216,8 @@ export default function AdminTaskPricing({ apiFetch }: AdminTaskPricingProps) {
 
       {/* Message banners */}
       {successMsg && (
-        <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-xs font-semibold text-emerald-800 flex items-center gap-2 animate-fadeIn">
-          <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0" />
+        <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 text-xs font-semibold text-blue-800 flex items-center gap-2 animate-fadeIn">
+          <CheckCircle className="h-4 w-4 text-blue-500 shrink-0" />
           {successMsg}
         </div>
       )}
@@ -331,7 +331,7 @@ export default function AdminTaskPricing({ apiFetch }: AdminTaskPricingProps) {
                       {/* Platform markup */}
                       <td className="px-5 py-4.5 font-mono">
                         <span className={`inline-flex items-center gap-1.5 font-bold rounded-lg px-2.5 py-1 text-xs ${
-                          markup > 0 ? "bg-emerald-50 text-emerald-700" : markup === 0 ? "bg-slate-50 text-slate-600" : "bg-red-50 text-red-700"
+                          markup > 0 ? "bg-blue-50 text-blue-700" : markup === 0 ? "bg-slate-50 text-slate-600" : "bg-red-50 text-red-700"
                         }`}>
                           ₦{markup.toLocaleString()} 
                           <span className="text-[10px] font-normal text-slate-400 font-sans">
@@ -347,7 +347,7 @@ export default function AdminTaskPricing({ apiFetch }: AdminTaskPricingProps) {
                             <button
                               onClick={() => handleSaveRow(item.id)}
                               disabled={saving}
-                              className="rounded-lg bg-emerald-500 hover:bg-emerald-600 px-2.5 py-1.5 text-[10px] font-bold text-white transition-all cursor-pointer shadow-xs"
+                              className="rounded-lg bg-blue-500 hover:bg-blue-600 px-2.5 py-1.5 text-[10px] font-bold text-white transition-all cursor-pointer shadow-xs"
                             >
                               Apply
                             </button>

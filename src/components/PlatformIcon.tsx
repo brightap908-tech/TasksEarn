@@ -172,8 +172,8 @@ export function getPlatformInfo(platformStr: string) {
   if (norm.includes("website") || norm.includes("web") || norm.includes("blog") || norm.includes("visit")) {
     return {
       Icon: Globe,
-      colorClass: "text-teal-400",
-      bgClass: "bg-teal-400/10 border-teal-400/20",
+      colorClass: "text-blue-400",
+      bgClass: "bg-blue-400/10 border-blue-400/20",
       name: "Website",
     };
   }
@@ -181,8 +181,8 @@ export function getPlatformInfo(platformStr: string) {
   // Fallback
   return {
     Icon: Sparkles,
-    colorClass: "text-emerald-400",
-    bgClass: "bg-emerald-400/10 border-emerald-400/20",
+    colorClass: "text-blue-400",
+    bgClass: "bg-blue-400/10 border-blue-400/20",
     name: platformStr,
   };
 }

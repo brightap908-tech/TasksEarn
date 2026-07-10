@@ -6,12 +6,12 @@
   --font-display: "Space Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
-  --color-brand-50: rgba(16, 185, 129, 0.05);
-  --color-brand-100: rgba(16, 185, 129, 0.1);
-  --color-brand-500: #10b981;
-  --color-brand-600: #059669;
-  --color-brand-700: #047857;
-  --color-brand-900: #064e3b;
+  --color-brand-50: rgba(59, 130, 246, 0.05);
+  --color-brand-100: rgba(59, 130, 246, 0.1);
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+  --color-brand-900: #1e3a8a;
 }
 
 /* Base Body Design styling */
@@ -143,8 +143,8 @@ select {
 input:focus, 
 textarea:focus, 
 select:focus {
-  border-color: #10b981 !important;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15) !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15) !important;
   background-color: #111827 !important;
 }
 
@@ -161,8 +161,8 @@ select:focus {
 }
 
 #brand-logo div {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
 }
 
 /* Navigation link enhancements */
@@ -183,7 +183,7 @@ select:focus {
 
 #mobile-nav-drawer span:hover {
   background-color: #1f2937 !important;
-  color: #10b981 !important;
+  color: #3b82f6 !important;
 }
 
 /* Sidebar Tab buttons styling (e.g. in Earner, Advertiser, Admin Dashboards) */
@@ -198,13 +198,13 @@ button[class*="text-slate-500 hover:bg-slate-50"]:hover {
 }
 
 /* Active tabs inside menus */
-.bg-emerald-50, 
-.bg-emerald-50\/50, 
-.bg-emerald-50/50, 
-[class*="bg-emerald-50"] {
-  background-color: rgba(16, 185, 129, 0.08) !important;
-  color: #10b981 !important;
-  border-right-color: #10b981 !important;
+.bg-blue-50, 
+.bg-blue-50\/50, 
+.bg-blue-50/50, 
+[class*="bg-blue-50"] {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+  color: #3b82f6 !important;
+  border-right-color: #3b82f6 !important;
 }
 
 /* Dropdown menus & popovers */
@@ -245,10 +245,10 @@ tr:hover td {
 }
 
 /* Badges / Pill styling overrides */
-.bg-emerald-50, .bg-emerald-100 {
-  background-color: rgba(16, 185, 129, 0.1) !important;
-  color: #10b981 !important;
-  border: 1px solid rgba(16, 185, 129, 0.15) !important;
+.bg-blue-50, .bg-blue-100 {
+  background-color: rgba(59, 130, 246, 0.1) !important;
+  color: #3b82f6 !important;
+  border: 1px solid rgba(59, 130, 246, 0.15) !important;
 }
 
 .bg-amber-50, .bg-amber-100 {
@@ -276,27 +276,27 @@ tr:hover td {
 }
 
 /* Buttons Enhancement */
-button.bg-emerald-500,
+button.bg-blue-500,
 button.bg-brand-500,
-.bg-emerald-500,
-.bg-emerald-600 {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+.bg-blue-500,
+.bg-blue-600 {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
   color: #ffffff !important;
   border: none !important;
   font-weight: 600 !important;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.2) !important;
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.2) !important;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-button.bg-emerald-500:hover,
+button.bg-blue-500:hover,
 button.bg-brand-500:hover,
-.bg-emerald-500:hover {
+.bg-blue-500:hover {
   opacity: 0.95 !important;
   transform: translateY(-1px) !important;
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35) !important;
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.35) !important;
 }
 
-button.bg-emerald-500:active,
+button.bg-blue-500:active,
 button.bg-brand-500:active {
   transform: translateY(0px) !important;
 }
@@ -336,7 +336,7 @@ button.bg-gray-100:hover {
 
 #app-footer a:hover, 
 #app-footer span:hover {
-  color: #10b981 !important;
+  color: #3b82f6 !important;
 }
 
 /* Search bar and Filters container */
@@ -384,8 +384,8 @@ input[maxlength="1"] {
   color: #f59e0b !important;
 }
 
-.bg-emerald-500\/10 {
-  background-color: rgba(16, 185, 129, 0.06) !important;
-  border-color: rgba(16, 185, 129, 0.2) !important;
-  color: #10b981 !important;
+.bg-blue-500\/10 {
+  background-color: rgba(59, 130, 246, 0.06) !important;
+  border-color: rgba(59, 130, 246, 0.2) !important;
+  color: #3b82f6 !important;
 }

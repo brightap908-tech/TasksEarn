@@ -856,14 +856,14 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
       {activeToast && (
         <div 
           onClick={() => handleNotificationClick(activeToast)}
-          className="fixed top-4 right-4 z-50 max-w-sm w-full bg-white rounded-2xl border-l-4 border-emerald-500 shadow-2xl p-4 flex gap-3.5 items-start animate-bounce hover:shadow-emerald-100/50 transition-all cursor-pointer"
+          className="fixed top-4 right-4 z-50 max-w-sm w-full bg-white rounded-2xl border-l-4 border-blue-500 shadow-2xl p-4 flex gap-3.5 items-start animate-bounce hover:shadow-blue-100/50 transition-all cursor-pointer"
         >
-          <div className="rounded-full bg-emerald-50 p-2 text-emerald-600 shrink-0">
+          <div className="rounded-full bg-blue-50 p-2 text-blue-600 shrink-0">
             {activeToast.type === "submission" ? <ShieldAlert className="h-5 w-5" /> : <CreditCard className="h-5 w-5" />}
           </div>
           <div className="flex-1 space-y-1">
             <div className="flex justify-between items-center">
-              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
                 {activeToast.type === "submission" ? "Submission Pending" : "Withdrawal Requested"}
               </span>
               <button 
@@ -886,8 +886,8 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         <div>
           <h1 className="font-display text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             Admin Control Center
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-100">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live WebSocket
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-[10px] font-bold text-blue-700 border border-blue-100">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" /> Live WebSocket
             </span>
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-1">
@@ -906,7 +906,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
           >
             {unreadCount > 0 ? (
               <>
-                <BellRing className="h-5 w-5 text-emerald-500 animate-bounce" />
+                <BellRing className="h-5 w-5 text-blue-500 animate-bounce" />
                 <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white ring-2 ring-white">
                   {unreadCount}
                 </span>
@@ -927,7 +927,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                 {unreadCount > 0 && (
                   <button 
                     onClick={handleMarkAllRead}
-                    className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-700 hover:bg-emerald-100 transition-all cursor-pointer"
+                    className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-[9px] font-bold text-blue-700 hover:bg-blue-100 transition-all cursor-pointer"
                   >
                     <CheckCheck className="h-3 w-3" /> Mark all read
                   </button>
@@ -948,11 +948,11 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                       key={notif.id}
                       onClick={() => handleNotificationClick(notif)}
                       className={`py-2.5 px-2 rounded-xl transition-all flex gap-2.5 cursor-pointer text-left items-start ${
-                        notif.read ? "hover:bg-slate-50/50" : "bg-emerald-50/40 hover:bg-emerald-50"
+                        notif.read ? "hover:bg-slate-50/50" : "bg-blue-50/40 hover:bg-blue-50"
                       }`}
                     >
                       <div className={`rounded-full p-1.5 shrink-0 ${
-                        notif.type === "submission" ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"
+                        notif.type === "submission" ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600"
                       }`}>
                         {notif.type === "submission" ? <ShieldAlert className="h-3.5 w-3.5" /> : <CreditCard className="h-3.5 w-3.5" />}
                       </div>
@@ -966,7 +966,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                         </p>
                       </div>
                       {!notif.read && (
-                        <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0 mt-2" />
+                        <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0 mt-2" />
                       )}
                     </div>
                   ))
@@ -986,7 +986,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         <button 
           onClick={() => setActiveTab("stats")}
           className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "stats" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+            activeTab === "stats" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
           }`}
         >
           <LayoutGrid className="h-4 w-4 text-slate-400" /> 
@@ -996,7 +996,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         <button 
           onClick={() => setActiveTab("users")}
           className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "users" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+            activeTab === "users" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
           }`}
         >
           <Users className="h-4 w-4 text-slate-400" /> 
@@ -1006,7 +1006,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         <button 
           onClick={() => setActiveTab("campaigns")}
           className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "campaigns" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+            activeTab === "campaigns" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
           }`}
         >
           <Briefcase className="h-4 w-4 text-slate-400" /> 
@@ -1016,7 +1016,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         <button 
           onClick={() => setActiveTab("withdrawals")}
           className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "withdrawals" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+            activeTab === "withdrawals" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
           }`}
         >
           <CreditCard className="h-4 w-4 text-slate-400" /> 
@@ -1026,7 +1026,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         <button 
           onClick={() => setActiveTab("audits")}
           className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "audits" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+            activeTab === "audits" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
           }`}
         >
           <ShieldAlert className="h-4 w-4 text-slate-400" /> 
@@ -1036,7 +1036,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         <button 
           onClick={() => setActiveTab("announcements")}
           className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "announcements" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+            activeTab === "announcements" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
           }`}
         >
           <Megaphone className="h-4 w-4 text-slate-400" /> 
@@ -1046,7 +1046,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         <button 
           onClick={() => setActiveTab("cms")}
           className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "cms" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+            activeTab === "cms" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
           }`}
         >
           <FileEdit className="h-4 w-4 text-slate-400" /> 
@@ -1056,7 +1056,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         <button 
           onClick={() => setActiveTab("settings")}
           className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "settings" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+            activeTab === "settings" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
           }`}
         >
           <Settings className="h-4 w-4 text-slate-400" /> 
@@ -1066,7 +1066,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         <button 
           onClick={() => setActiveTab("pricing")}
           className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "pricing" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+            activeTab === "pricing" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
           }`}
         >
           <Coins className="h-4 w-4 text-slate-400" /> 
@@ -1076,7 +1076,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         <button 
           onClick={() => setActiveTab("platform-earnings")}
           className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "platform-earnings" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+            activeTab === "platform-earnings" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
           }`}
         >
           <TrendingUp className="h-4 w-4 text-slate-400" /> 
@@ -1107,7 +1107,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Earner Earnings</span>
-                <span className="block font-mono text-2xl font-black text-emerald-600 mt-1">₦{stats.totalEarned.toLocaleString()}</span>
+                <span className="block font-mono text-2xl font-black text-blue-600 mt-1">₦{stats.totalEarned.toLocaleString()}</span>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Pending Withdrawals Queue</span>
@@ -1117,14 +1117,14 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Advertisers Deposits</span>
                 <span className="block font-mono text-2xl font-black text-indigo-600 mt-1">₦{stats.totalDeposited.toLocaleString()}</span>
               </div>
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/5 p-5 shadow-sm hover:bg-emerald-50/20 transition-all cursor-pointer flex flex-col justify-between" onClick={() => setActiveTab("platform-earnings")}>
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/5 p-5 shadow-sm hover:bg-blue-50/20 transition-all cursor-pointer flex flex-col justify-between" onClick={() => setActiveTab("platform-earnings")}>
                 <div>
-                  <span className="block text-[10px] font-bold text-emerald-600 uppercase flex items-center gap-1">
+                  <span className="block text-[10px] font-bold text-blue-600 uppercase flex items-center gap-1">
                     <Coins className="h-3.5 w-3.5" /> Available Platform Earnings
                   </span>
-                  <span className="block font-mono text-2xl font-black text-emerald-600 mt-1">₦{platformStats.availableBalance.toLocaleString()}</span>
+                  <span className="block font-mono text-2xl font-black text-blue-600 mt-1">₦{platformStats.availableBalance.toLocaleString()}</span>
                 </div>
-                <span className="text-[10px] text-emerald-600 font-bold hover:underline mt-2 block">Withdraw Wallet ➔</span>
+                <span className="text-[10px] text-blue-600 font-bold hover:underline mt-2 block">Withdraw Wallet ➔</span>
               </div>
             </div>
 
@@ -1134,7 +1134,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
               {/* Deposits ledger */}
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-3">
                 <h3 className="font-display text-xs font-bold text-gray-900 flex items-center gap-1.5 uppercase tracking-wider">
-                  <ArrowDownCircle className="h-4 w-4 text-emerald-500" /> Recent Cash Deposits (₦)
+                  <ArrowDownCircle className="h-4 w-4 text-blue-500" /> Recent Cash Deposits (₦)
                 </h3>
                 {depositsList.length === 0 ? (
                   <p className="text-center py-4 text-xs text-gray-400">No deposits registered.</p>
@@ -1146,7 +1146,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                           <p className="font-bold text-gray-800">{dep.userName}</p>
                           <p className="text-[10px] text-gray-400">{dep.reference} • {new Date(dep.createdAt).toLocaleDateString()}</p>
                         </div>
-                        <span className="font-mono font-bold text-emerald-600">+₦{dep.amount.toLocaleString()}</span>
+                        <span className="font-mono font-bold text-blue-600">+₦{dep.amount.toLocaleString()}</span>
                       </div>
                     ))}
                   </div>
@@ -1169,7 +1169,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                           <p className="text-[10px] text-gray-400">{ref.refereeEmail}</p>
                         </div>
                         <div className="text-right">
-                          <span className="font-mono font-bold text-emerald-600">+₦{ref.rewardEarned}</span>
+                          <span className="font-mono font-bold text-blue-600">+₦{ref.rewardEarned}</span>
                           <span className="block text-[9px] text-gray-400 mt-0.5">Credited to Referrer</span>
                         </div>
                       </div>
@@ -1236,7 +1236,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                         <td className="py-3 px-1 text-gray-500">{usr.email}</td>
                         <td className="py-3 px-1">
                           <span className={`inline-block rounded px-2 py-0.5 text-[9px] font-bold ${
-                            usr.role === UserRole.ADVERTISER ? "bg-indigo-50 text-indigo-700" : "bg-emerald-50 text-emerald-700"
+                            usr.role === UserRole.ADVERTISER ? "bg-indigo-50 text-indigo-700" : "bg-blue-50 text-blue-700"
                           }`}>{usr.role}</span>
                         </td>
                         <td className="py-3 px-1 font-mono font-bold text-gray-800">₦{usr.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
@@ -1244,7 +1244,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                           <button 
                             onClick={() => handleToggleVerification(usr)}
                             className={`rounded-full px-2.5 py-0.5 text-[9px] font-black cursor-pointer uppercase ${
-                              usr.isVerified ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                              usr.isVerified ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
                             }`}
                           >
                             {usr.isVerified ? "Verified" : "Unverified"}
@@ -1299,7 +1299,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                       </div>
                       
                       <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${
-                        task.status === TaskStatus.ACTIVE ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                        task.status === TaskStatus.ACTIVE ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
                       }`}>{task.status}</span>
 
                       {task.status !== TaskStatus.COMPLETED && (
@@ -1343,7 +1343,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                         <div className="flex gap-1.5">
                           <button
                             onClick={() => handleReviewWithdrawal(tx.id, TransactionStatus.SUCCESS)}
-                            className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-[10px] font-bold text-white px-2.5 py-1.5 flex items-center gap-1"
+                            className="rounded-lg bg-blue-600 hover:bg-blue-700 text-[10px] font-bold text-white px-2.5 py-1.5 flex items-center gap-1"
                           >
                             <Check className="h-3.5 w-3.5" /> Confirm Bank Sent
                           </button>
@@ -1373,7 +1373,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                     </div>
                     <div className="text-right">
                       <span className="font-mono font-bold block text-gray-700">₦{tx.amount.toLocaleString()}</span>
-                      <span className={`text-[9px] font-bold uppercase ${tx.status === TransactionStatus.SUCCESS ? "text-emerald-600" : "text-red-500"}`}>{tx.status}</span>
+                      <span className={`text-[9px] font-bold uppercase ${tx.status === TransactionStatus.SUCCESS ? "text-blue-600" : "text-red-500"}`}>{tx.status}</span>
                     </div>
                   </div>
                 ))}
@@ -1426,7 +1426,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                           onClick={() => setAuditFilter(f)}
                           className={`rounded-lg px-3 py-1 transition-all cursor-pointer ${
                             auditFilter === f 
-                              ? "bg-white text-emerald-600 shadow-sm" 
+                              ? "bg-white text-blue-600 shadow-sm" 
                               : "text-gray-400 hover:text-gray-600"
                           }`}
                         >
@@ -1456,7 +1456,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                           {/* Top Row: General Metadata */}
                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-gray-50 pb-3">
                             <div>
-                              <span className="inline-flex rounded-md bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-700 uppercase tracking-wider mb-1.5 items-center gap-1.5">
+                              <span className="inline-flex rounded-md bg-blue-50 px-2 py-1 text-[9px] font-bold text-blue-700 uppercase tracking-wider mb-1.5 items-center gap-1.5">
                                 <PlatformIcon category={sub.category} size={11} />
                                 <span>{sub.category}</span>
                               </span>
@@ -1466,12 +1466,12 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                               </p>
                             </div>
                             <div className="text-right sm:self-start">
-                              <span className="font-mono font-bold text-base text-emerald-600 block">₦{sub.reward}</span>
+                              <span className="font-mono font-bold text-base text-blue-600 block">₦{sub.reward}</span>
                               <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase mt-1 ${
                                 sub.status === SubmissionStatus.PENDING 
                                   ? "bg-amber-50 text-amber-600 border border-amber-100" 
                                   : sub.status === SubmissionStatus.APPROVED 
-                                  ? "bg-emerald-50 text-emerald-600 border border-emerald-100" 
+                                  ? "bg-blue-50 text-blue-600 border border-blue-100" 
                                   : "bg-red-50 text-red-600 border border-red-100"
                               }`}>
                                 {sub.status}
@@ -1526,7 +1526,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                                 <div className="flex justify-end gap-2">
                                   <button
                                     onClick={() => handleReviewSubmission(sub.id, SubmissionStatus.APPROVED)}
-                                    className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 flex items-center gap-1.5 cursor-pointer transition-all shadow-xs"
+                                    className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 flex items-center gap-1.5 cursor-pointer transition-all shadow-xs"
                                   >
                                     <Check className="h-4 w-4" /> Approve & Credit Earner
                                   </button>
@@ -1601,7 +1601,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
               <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Post Global Notice Announcement</h3>
               
-              {annSuccess && <p className="rounded-lg bg-emerald-50 border border-emerald-100 p-3 text-xs font-bold text-emerald-800 mb-4">{annSuccess}</p>}
+              {annSuccess && <p className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs font-bold text-blue-800 mb-4">{annSuccess}</p>}
 
               <form onSubmit={handlePostAnnouncement} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1694,7 +1694,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                 ))}
               </div>
 
-              {cmsSuccess && <p className="rounded-lg bg-emerald-50 border border-emerald-100 p-3 text-xs font-bold text-emerald-800 mb-4">{cmsSuccess}</p>}
+              {cmsSuccess && <p className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs font-bold text-blue-800 mb-4">{cmsSuccess}</p>}
 
               <form onSubmit={handleUpdateCMS} className="space-y-4">
                 <div>
@@ -1733,7 +1733,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
               <h3 className="font-display text-sm font-bold text-gray-900 mb-6">Global Wallet & Fee Configuration Settings</h3>
 
-              {settingsSuccess && <p className="rounded-lg bg-emerald-50 border border-emerald-100 p-3 text-xs font-bold text-emerald-800 mb-4">{settingsSuccess}</p>}
+              {settingsSuccess && <p className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs font-bold text-blue-800 mb-4">{settingsSuccess}</p>}
 
               <form onSubmit={handleUpdateSettings} className="space-y-4 max-w-lg">
                 <div className="grid grid-cols-2 gap-4">
@@ -1850,7 +1850,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
                 <h2 className="font-display text-lg font-black text-slate-900 flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-emerald-500" /> Platform Earnings & Wallet
+                  <TrendingUp className="h-5 w-5 text-blue-500" /> Platform Earnings & Wallet
                 </h2>
                 <p className="text-xs text-slate-500">Manage owner withdrawal settings, view platform revenues, and transfer commissions.</p>
               </div>
@@ -1860,7 +1860,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                   setWithdrawError("");
                   setWithdrawSuccess("");
                 }}
-                className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white px-5 py-2.5 shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+                className="rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white px-5 py-2.5 shadow-sm transition-all flex items-center gap-2 cursor-pointer"
               >
                 <CreditCard className="h-4 w-4" /> Withdraw Earnings
               </button>
@@ -1868,11 +1868,11 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
 
             {/* Withdrawal form inline card */}
             {showWithdrawForm && (
-              <form onSubmit={handleWithdrawEarnings} className="rounded-2xl border border-emerald-100 bg-emerald-50/10 p-5 shadow-sm space-y-4 border-2">
+              <form onSubmit={handleWithdrawEarnings} className="rounded-2xl border border-blue-100 bg-blue-50/10 p-5 shadow-sm space-y-4 border-2">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h4 className="font-display text-sm font-bold text-emerald-900">Owner Wallet Withdrawal</h4>
-                    <p className="text-xs text-emerald-600">Withdraw platform commission and service fees directly to your bank account.</p>
+                    <h4 className="font-display text-sm font-bold text-blue-900">Owner Wallet Withdrawal</h4>
+                    <p className="text-xs text-blue-600">Withdraw platform commission and service fees directly to your bank account.</p>
                   </div>
                   <button type="button" onClick={() => setShowWithdrawForm(false)} className="rounded-full bg-gray-200 p-1 text-gray-700">✕</button>
                 </div>
@@ -1881,7 +1881,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                   <p className="text-xs font-bold text-red-600 bg-red-50 p-2.5 rounded-lg">{withdrawError}</p>
                 )}
                 {withdrawSuccess && (
-                  <p className="text-xs font-bold text-emerald-600 bg-emerald-50 p-2.5 rounded-lg">{withdrawSuccess}</p>
+                  <p className="text-xs font-bold text-blue-600 bg-blue-50 p-2.5 rounded-lg">{withdrawSuccess}</p>
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1941,12 +1941,12 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                   </div>
 
                   {withdrawAccountName && (
-                    <div className="col-span-1 md:col-span-2 bg-emerald-500/5 border border-emerald-100 rounded-xl p-3 flex items-center justify-between animate-fadeIn">
+                    <div className="col-span-1 md:col-span-2 bg-blue-500/5 border border-blue-100 rounded-xl p-3 flex items-center justify-between animate-fadeIn">
                       <div>
-                        <span className="block text-[9px] font-bold text-emerald-600 uppercase">Verified Account Holder</span>
-                        <span className="font-bold text-xs text-emerald-800 uppercase tracking-wide">{withdrawAccountName}</span>
+                        <span className="block text-[9px] font-bold text-blue-600 uppercase">Verified Account Holder</span>
+                        <span className="font-bold text-xs text-blue-800 uppercase tracking-wide">{withdrawAccountName}</span>
                       </div>
-                      <span className="bg-emerald-500 text-white text-[9px] font-bold uppercase px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="bg-blue-500 text-white text-[9px] font-bold uppercase px-2 py-0.5 rounded-full flex items-center gap-1">
                         ✓ Verified
                       </span>
                     </div>
@@ -1984,7 +1984,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                   </button>
                   <button
                     type="submit"
-                    className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white px-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    className="rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white px-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     disabled={!isBankVerified || !withdrawAmountInput || isVerifyingBank}
                   >
                     Confirm & Record Withdrawal
@@ -1997,7 +1997,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Available Balance</span>
-                <span className="block font-mono text-2xl font-black text-emerald-600 mt-1">₦{platformStats.availableBalance.toLocaleString()}</span>
+                <span className="block font-mono text-2xl font-black text-blue-600 mt-1">₦{platformStats.availableBalance.toLocaleString()}</span>
                 <p className="text-[10px] text-gray-400 mt-1">Ready for withdrawal</p>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -2066,7 +2066,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                           <td className="py-3 px-1">
                             <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
                               wd.status === "Success" || wd.status === "Approved" 
-                                ? "bg-emerald-50 text-emerald-600" 
+                                ? "bg-blue-50 text-blue-600" 
                                 : wd.status === "Pending" 
                                 ? "bg-amber-50 text-amber-600" 
                                 : "bg-red-50 text-red-600"
@@ -2079,7 +2079,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                               <div className="flex gap-1 justify-end">
                                 <button
                                   onClick={() => handleUpdateOwnerWithdrawalStatus(wd.id, "Success")}
-                                  className="rounded bg-emerald-50 hover:bg-emerald-100 text-[10px] text-emerald-700 font-bold px-1.5 py-0.5 cursor-pointer"
+                                  className="rounded bg-blue-50 hover:bg-blue-100 text-[10px] text-blue-700 font-bold px-1.5 py-0.5 cursor-pointer"
                                 >
                                   Mark Sent
                                 </button>
@@ -2119,7 +2119,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                       setBankFormError("");
                       setBankFormSuccess("");
                     }}
-                    className="text-xs text-emerald-600 font-bold hover:underline cursor-pointer"
+                    className="text-xs text-blue-600 font-bold hover:underline cursor-pointer"
                   >
                     {showBankForm ? "Close Form" : "+ Add Account"}
                   </button>
@@ -2133,7 +2133,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                       <p className="text-[10px] font-semibold text-red-600">{bankFormError}</p>
                     )}
                     {bankFormSuccess && (
-                      <p className="text-[10px] font-semibold text-emerald-600">{bankFormSuccess}</p>
+                      <p className="text-[10px] font-semibold text-blue-600">{bankFormSuccess}</p>
                     )}
 
                     <div className="space-y-2">
@@ -2166,7 +2166,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                           type="checkbox"
                           checked={bankIsDefaultInput}
                           onChange={(e) => setBankIsDefaultInput(e.target.checked)}
-                          className="rounded text-emerald-500 cursor-pointer"
+                          className="rounded text-blue-500 cursor-pointer"
                         />
                         <span>Set as Default account</span>
                       </label>
@@ -2182,7 +2182,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                       </button>
                       <button
                         type="submit"
-                        className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1 text-xs font-bold cursor-pointer"
+                        className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 text-xs font-bold cursor-pointer"
                       >
                         Save
                       </button>
@@ -2200,7 +2200,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                           <p className="text-[10px] text-slate-400">{ba.accountName}</p>
                         </div>
                         {ba.isDefault && (
-                          <span className="bg-emerald-50 text-emerald-700 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded absolute top-3 right-3">Default</span>
+                          <span className="bg-blue-50 text-blue-700 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded absolute top-3 right-3">Default</span>
                         )}
                       </div>
 
@@ -2208,7 +2208,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                         {!ba.isDefault && (
                           <button
                             onClick={() => handleSetDefaultBank(ba.id)}
-                            className="text-emerald-600 hover:underline cursor-pointer"
+                            className="text-blue-600 hover:underline cursor-pointer"
                           >
                             Set Default
                           </button>

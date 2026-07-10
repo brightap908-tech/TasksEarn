@@ -634,17 +634,17 @@ export default function App() {
       case "Telegram Join":
         return <MessageSquare className="h-5 w-5 text-sky-500" />;
       case "WhatsApp Join":
-        return <MessageSquare className="h-5 w-5 text-green-500" />;
+        return <MessageSquare className="h-5 w-5 text-blue-500" />;
       case "X (Twitter) Follow":
         return <Twitter className="h-5 w-5 text-gray-900" />;
       case "Website Visit":
         return <Globe className="h-5 w-5 text-indigo-600" />;
       case "App Download":
-        return <Download className="h-5 w-5 text-emerald-600" />;
+        return <Download className="h-5 w-5 text-blue-600" />;
       case "Survey":
         return <ClipboardCheck className="h-5 w-5 text-amber-500" />;
       default:
-        return <Sparkles className="h-5 w-5 text-teal-600" />;
+        return <Sparkles className="h-5 w-5 text-blue-600" />;
     }
   };
 
@@ -687,12 +687,12 @@ export default function App() {
                 
                 {/* Left Pitch */}
                 <div className="space-y-6 max-w-xl">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-100">
-                    <Zap className="h-3.5 w-3.5 text-emerald-500" /> Nigeria's Most Trusted Micro-Job Exchange
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3.5 py-1 text-xs font-bold text-blue-700 border border-blue-100">
+                    <Zap className="h-3.5 w-3.5 text-blue-500" /> Nigeria's Most Trusted Micro-Job Exchange
                   </span>
                   
                   <h1 className="font-display text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl leading-tight">
-                    Get Paid Weekly for <span className="text-emerald-500">Simple Tasks</span>
+                    Get Paid Weekly for <span className="text-blue-500">Simple Tasks</span>
                   </h1>
 
                   <p className="text-sm text-slate-500 leading-relaxed">
@@ -702,7 +702,7 @@ export default function App() {
                   <div className="flex flex-col sm:flex-row gap-3 pt-2">
                     <button 
                       onClick={() => setCurrentView("register")}
-                      className="rounded-full bg-emerald-500 px-6 py-3.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-600 transition-all text-center cursor-pointer"
+                      className="rounded-full bg-blue-500 px-6 py-3.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-600 transition-all text-center cursor-pointer"
                     >
                       Sign Up & Start Earning
                     </button>
@@ -722,18 +722,18 @@ export default function App() {
                 <div className="relative rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
                   <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Active Live Ticker</span>
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping inline-block"></span>
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-ping inline-block"></span>
                   </div>
 
                   <div className="space-y-3.5 text-xs">
-                    <div className="rounded-xl bg-emerald-50/50 border border-emerald-50 p-3.5 flex justify-between items-center">
+                    <div className="rounded-xl bg-blue-50/50 border border-blue-50 p-3.5 flex justify-between items-center">
                       <div>
                         <p className="font-bold text-gray-800">
                           {publicStats.latestWithdrawal ? `${publicStats.latestWithdrawal.userName} (${publicStats.latestWithdrawal.bankName})` : "Tunde B. (Guaranty Trust Bank)"}
                         </p>
                         <p className="text-[10px] text-gray-400 mt-0.5">Withdrawal requested successfully</p>
                       </div>
-                      <span className="font-mono font-black text-emerald-700">
+                      <span className="font-mono font-black text-blue-700">
                         ₦{publicStats.latestWithdrawal ? publicStats.latestWithdrawal.amount.toLocaleString() : "7,450.00"}
                       </span>
                     </div>
@@ -781,7 +781,7 @@ export default function App() {
               <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div className="rounded-3xl overflow-hidden shadow-xl border border-gray-100 bg-white grid grid-cols-1 md:grid-cols-2">
                   <div className="p-8 sm:p-12 flex flex-col justify-center space-y-6 bg-gradient-to-br from-gray-900 to-indigo-950 text-white">
-                    <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Active Promotion</span>
+                    <span className="text-xs font-bold text-blue-400 uppercase tracking-widest">Active Promotion</span>
                     <h2 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">
                       {banners[0].title}
                     </h2>
@@ -790,7 +790,7 @@ export default function App() {
                     </p>
                     <button 
                       onClick={() => setCurrentView("register")}
-                      className="rounded-xl bg-emerald-500 hover:bg-emerald-600 px-5 py-3 text-xs font-bold text-white uppercase self-start shadow-lg shadow-emerald-950/50"
+                      className="rounded-xl bg-blue-500 hover:bg-blue-600 px-5 py-3 text-xs font-bold text-white uppercase self-start shadow-lg shadow-blue-950/50"
                     >
                       Start Earning
                     </button>
@@ -818,16 +818,16 @@ export default function App() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {getPublicCategories().map((cat, idx) => (
-                  <div key={idx} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md hover:border-emerald-500/20 transition-all group cursor-pointer" onClick={() => setCurrentView("register")}>
+                  <div key={idx} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md hover:border-blue-500/20 transition-all group cursor-pointer" onClick={() => setCurrentView("register")}>
                     <div className="flex justify-between items-start">
-                      <div className="rounded-xl bg-gray-50 group-hover:bg-emerald-50 p-2.5 transition-colors">
+                      <div className="rounded-xl bg-gray-50 group-hover:bg-blue-50 p-2.5 transition-colors">
                         {getCategoryIcon(cat.title.substring(0, cat.title.length - 1))}
                       </div>
                       <span className="text-[10px] text-gray-400 font-mono">{cat.count}</span>
                     </div>
                     <h3 className="font-display text-xs font-bold text-gray-800 mt-4">{cat.title}</h3>
-                    <p className="text-[11px] font-mono text-emerald-600 mt-1 font-bold">{cat.payout}</p>
-                    <div className="mt-3 text-[10px] text-gray-400 font-semibold group-hover:text-emerald-600 flex items-center gap-1 transition-colors justify-end">
+                    <p className="text-[11px] font-mono text-blue-600 mt-1 font-bold">{cat.payout}</p>
+                    <div className="mt-3 text-[10px] text-gray-400 font-semibold group-hover:text-blue-600 flex items-center gap-1 transition-colors justify-end">
                       Claim Task <ArrowRight className="h-3 w-3" />
                     </div>
                   </div>
@@ -845,17 +845,17 @@ export default function App() {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                   <div className="text-center space-y-4">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 font-bold text-lg border border-emerald-100">1</div>
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 font-bold text-lg border border-blue-100">1</div>
                     <h3 className="font-display text-sm font-bold text-gray-800">Register Secure Account</h3>
                     <p className="text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">Sign up as an Earner or Advertiser. Complete email validation inside 1 minute to lock verification code logs.</p>
                   </div>
                   <div className="text-center space-y-4">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 font-bold text-lg border border-emerald-100">2</div>
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 font-bold text-lg border border-blue-100">2</div>
                     <h3 className="font-display text-sm font-bold text-gray-800">Perform Social Actions</h3>
                     <p className="text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">Follow accounts, subscribe channels, join groups, or download apps. Take a snapshot proving your action.</p>
                   </div>
                   <div className="text-center space-y-4">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 font-bold text-lg border border-emerald-100">3</div>
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 font-bold text-lg border border-blue-100">3</div>
                     <h3 className="font-display text-sm font-bold text-gray-800">Withdraw Naira (₦)</h3>
                     <p className="text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">Get accredited. Withdraw immediately to OPay, PalmPay, GTBank, Zenith, or any local Nigerian bank instantly!</p>
                   </div>
@@ -865,15 +865,15 @@ export default function App() {
 
             {/* Bottom Call To Action Banner */}
             <section className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-              <div className="rounded-3xl bg-gradient-to-tr from-emerald-600 to-teal-800 p-8 sm:p-12 text-white text-center space-y-6 shadow-xl shadow-emerald-50">
+              <div className="rounded-3xl bg-gradient-to-tr from-blue-600 to-blue-800 p-8 sm:p-12 text-white text-center space-y-6 shadow-xl shadow-blue-50">
                 <h2 className="font-display text-3xl font-black tracking-tight sm:text-4xl">Ready to Monetize Your Spare Time?</h2>
-                <p className="text-xs text-emerald-100 max-w-lg mx-auto leading-relaxed">
+                <p className="text-xs text-blue-100 max-w-lg mx-auto leading-relaxed">
                   Join our verified ecosystem of online earners. Advertisers can build custom campaign budgets starting at ₦1,000 only. Let's grow together!
                 </p>
                 <div className="pt-2 flex justify-center">
                   <button 
                     onClick={() => setCurrentView("register")}
-                    className="rounded-xl bg-white text-emerald-800 hover:bg-emerald-50 px-8 py-4 text-sm font-bold shadow-lg transition-all cursor-pointer"
+                    className="rounded-xl bg-white text-blue-800 hover:bg-blue-50 px-8 py-4 text-sm font-bold shadow-lg transition-all cursor-pointer"
                   >
                     Create Free TasksEarn Account
                   </button>
@@ -905,7 +905,7 @@ export default function App() {
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     placeholder="e.g. earner@tasksearn.com"
-                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
 
@@ -918,7 +918,7 @@ export default function App() {
                         setAuthError("");
                         setCurrentView("forgot-password");
                       }}
-                      className="text-xs text-emerald-500 hover:text-emerald-600 hover:underline font-semibold"
+                      className="text-xs text-blue-500 hover:text-blue-600 hover:underline font-semibold"
                     >
                       Forgot Password?
                     </button>
@@ -929,14 +929,14 @@ export default function App() {
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
 
                 <button 
                   type="submit"
                   disabled={authLoading}
-                  className="w-full rounded-full bg-emerald-500 hover:bg-emerald-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
+                  className="w-full rounded-full bg-blue-500 hover:bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
                 >
                   {authLoading ? "Decrypting Session..." : "Secure Sign In"}
                 </button>
@@ -947,7 +947,7 @@ export default function App() {
                   Don't have an account?{" "}
                   <button 
                     onClick={() => setCurrentView("register")}
-                    className="font-bold text-emerald-500 hover:text-emerald-600 hover:underline"
+                    className="font-bold text-blue-500 hover:text-blue-600 hover:underline"
                   >
                     Create one now
                   </button>
@@ -959,7 +959,7 @@ export default function App() {
                       setAuthError("");
                       setCurrentView("advertiser-login");
                     }}
-                    className="font-bold text-emerald-500 hover:text-emerald-600 hover:underline"
+                    className="font-bold text-blue-500 hover:text-blue-600 hover:underline"
                   >
                     Go to Advertiser Portal
                   </button>
@@ -976,22 +976,22 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setShowEarnerPasswordPrompt(true)}
-                      className="flex justify-between items-center bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 rounded-xl px-3 py-1.5 transition-all text-left cursor-pointer"
+                      className="flex justify-between items-center bg-white border border-slate-200 hover:border-blue-500 hover:bg-blue-50 rounded-xl px-3 py-1.5 transition-all text-left cursor-pointer"
                     >
                       <span>👥 Demo Earner</span>
-                      <span className="font-semibold text-emerald-600 font-mono text-[9px] bg-emerald-50 px-2 py-0.5 rounded-full">Enter Password</span>
+                      <span className="font-semibold text-blue-600 font-mono text-[9px] bg-blue-50 px-2 py-0.5 rounded-full">Enter Password</span>
                     </button>
                   ) : (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-3 space-y-2.5">
+                    <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-3 space-y-2.5">
                       <div className="flex justify-between items-center">
-                        <span className="font-semibold text-[10px] text-emerald-950 flex items-center gap-1">👥 Demo Earner Password Check</span>
+                        <span className="font-semibold text-[10px] text-blue-950 flex items-center gap-1">👥 Demo Earner Password Check</span>
                         <button 
                           type="button" 
                           onClick={() => {
                             setShowEarnerPasswordPrompt(false);
                             setEarnerPasswordPromptValue("");
                           }}
-                          className="text-[9px] text-gray-400 hover:text-emerald-600 font-semibold cursor-pointer"
+                          className="text-[9px] text-gray-400 hover:text-blue-600 font-semibold cursor-pointer"
                         >
                           Cancel
                         </button>
@@ -1011,7 +1011,7 @@ export default function App() {
                             if (!earnerPasswordPromptValue) return;
                             handleDemoLogin("earner@tasksearn.com", earnerPasswordPromptValue);
                           }}
-                          className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-[10px] transition-all cursor-pointer shrink-0"
+                          className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 text-[10px] transition-all cursor-pointer shrink-0"
                         >
                           Verify & Login
                         </button>
@@ -1079,7 +1079,7 @@ export default function App() {
             <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6">
               
               <div className="text-center">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 uppercase">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5 text-[10px] font-bold text-blue-800 uppercase">
                   Advertiser Portal
                 </span>
                 <h2 className="font-display text-xl font-bold text-slate-900 mt-2">Welcome Back, Advertiser!</h2>
@@ -1097,7 +1097,7 @@ export default function App() {
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     placeholder="e.g. advertiser@company.com"
-                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
 
@@ -1110,7 +1110,7 @@ export default function App() {
                         setAuthError("");
                         setCurrentView("forgot-password");
                       }}
-                      className="text-xs text-emerald-500 hover:text-emerald-600 hover:underline font-semibold"
+                      className="text-xs text-blue-500 hover:text-blue-600 hover:underline font-semibold"
                     >
                       Forgot Password?
                     </button>
@@ -1121,14 +1121,14 @@ export default function App() {
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
 
                 <button 
                   type="submit"
                   disabled={authLoading}
-                  className="w-full rounded-full bg-emerald-500 hover:bg-emerald-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
+                  className="w-full rounded-full bg-blue-500 hover:bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
                 >
                   {authLoading ? "Decrypting Session..." : "Secure Sign In to Portal"}
                 </button>
@@ -1142,7 +1142,7 @@ export default function App() {
                       setAuthRole(UserRole.ADVERTISER);
                       setCurrentView("register");
                     }}
-                    className="font-bold text-emerald-500 hover:text-emerald-600 hover:underline"
+                    className="font-bold text-blue-500 hover:text-blue-600 hover:underline"
                   >
                     Register here
                   </button>
@@ -1154,7 +1154,7 @@ export default function App() {
                       setAuthError("");
                       setCurrentView("login");
                     }}
-                    className="font-bold text-emerald-500 hover:text-emerald-600 hover:underline"
+                    className="font-bold text-blue-500 hover:text-blue-600 hover:underline"
                   >
                     Go to Earner Sign In
                   </button>
@@ -1171,22 +1171,22 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setShowAdvertiserPasswordPrompt(true)}
-                      className="flex justify-between items-center bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 rounded-xl px-3 py-1.5 transition-all text-left cursor-pointer"
+                      className="flex justify-between items-center bg-white border border-slate-200 hover:border-blue-500 hover:bg-blue-50 rounded-xl px-3 py-1.5 transition-all text-left cursor-pointer"
                     >
                       <span>📢 Demo Advertiser</span>
-                      <span className="font-semibold text-emerald-600 font-mono text-[9px] bg-emerald-50 px-2 py-0.5 rounded-full">Enter Password</span>
+                      <span className="font-semibold text-blue-600 font-mono text-[9px] bg-blue-50 px-2 py-0.5 rounded-full">Enter Password</span>
                     </button>
                   ) : (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-3 space-y-2.5">
+                    <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-3 space-y-2.5">
                       <div className="flex justify-between items-center">
-                        <span className="font-semibold text-[10px] text-emerald-950 flex items-center gap-1">📢 Demo Advertiser Password Check</span>
+                        <span className="font-semibold text-[10px] text-blue-950 flex items-center gap-1">📢 Demo Advertiser Password Check</span>
                         <button 
                           type="button" 
                           onClick={() => {
                             setShowAdvertiserPasswordPrompt(false);
                             setAdvertiserPasswordPromptValue("");
                           }}
-                          className="text-[9px] text-gray-400 hover:text-emerald-600 font-semibold cursor-pointer"
+                          className="text-[9px] text-gray-400 hover:text-blue-600 font-semibold cursor-pointer"
                         >
                           Cancel
                         </button>
@@ -1206,7 +1206,7 @@ export default function App() {
                             if (!advertiserPasswordPromptValue) return;
                             handleDemoLogin("advertiser@tasksearn.com", advertiserPasswordPromptValue);
                           }}
-                          className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-[10px] transition-all cursor-pointer shrink-0"
+                          className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 text-[10px] transition-all cursor-pointer shrink-0"
                         >
                           Verify & Login
                         </button>
@@ -1234,12 +1234,12 @@ export default function App() {
               {authError && <p className="rounded-2xl bg-rose-50 p-3 text-xs font-bold text-rose-600 border border-rose-100 text-center">{authError}</p>}
               
               {forgotSuccess ? (
-                <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-5 text-center space-y-3">
-                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                <div className="rounded-2xl bg-blue-50 border border-blue-100 p-5 text-center space-y-3">
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
                     <CheckCircle className="h-5 w-5" />
                   </div>
-                  <h3 className="font-display text-sm font-bold text-emerald-950">Instructions Sent</h3>
-                  <p className="text-xs text-emerald-700 leading-relaxed">
+                  <h3 className="font-display text-sm font-bold text-blue-950">Instructions Sent</h3>
+                  <p className="text-xs text-blue-700 leading-relaxed">
                     Check your email inbox for instructions to reset your secure credentials.
                   </p>
                   <div className="pt-2">
@@ -1248,7 +1248,7 @@ export default function App() {
                         setForgotSuccess(false);
                         setCurrentView("login");
                       }}
-                      className="text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
+                      className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline"
                     >
                       Return to Secure Sign In
                     </button>
@@ -1264,14 +1264,14 @@ export default function App() {
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
                       placeholder="e.g. yourname@example.com"
-                      className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                      className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                     />
                   </div>
 
                   <button 
                     type="submit"
                     disabled={authLoading}
-                    className="w-full rounded-full bg-emerald-500 hover:bg-emerald-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
+                    className="w-full rounded-full bg-blue-500 hover:bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
                   >
                     {authLoading ? "Verifying Registry..." : "Send Recovery Instructions"}
                   </button>
@@ -1286,7 +1286,7 @@ export default function App() {
                     setForgotSuccess(false);
                     setCurrentView("login");
                   }}
-                  className="font-bold text-emerald-500 hover:text-emerald-600 hover:underline"
+                  className="font-bold text-blue-500 hover:text-blue-600 hover:underline"
                 >
                   Sign In
                 </button>
@@ -1311,14 +1311,14 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setAuthRole(UserRole.EARNER)}
-                  className={`py-2 text-xs font-bold rounded-full cursor-pointer transition-all ${authRole === UserRole.EARNER ? "bg-emerald-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                  className={`py-2 text-xs font-bold rounded-full cursor-pointer transition-all ${authRole === UserRole.EARNER ? "bg-blue-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
                 >
                   Register as Earner
                 </button>
                 <button
                   type="button"
                   onClick={() => setAuthRole(UserRole.ADVERTISER)}
-                  className={`py-2 text-xs font-bold rounded-full cursor-pointer transition-all ${authRole === UserRole.ADVERTISER ? "bg-emerald-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                  className={`py-2 text-xs font-bold rounded-full cursor-pointer transition-all ${authRole === UserRole.ADVERTISER ? "bg-blue-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
                 >
                   Register as Advertiser
                 </button>
@@ -1335,7 +1335,7 @@ export default function App() {
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
                     placeholder="e.g. Sola Bakare"
-                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
 
@@ -1347,7 +1347,7 @@ export default function App() {
                     value={regEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
                     placeholder="e.g. sola@example.com"
-                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
 
@@ -1359,7 +1359,7 @@ export default function App() {
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
 
@@ -1371,7 +1371,7 @@ export default function App() {
                       value={regReferral}
                       onChange={(e) => setRegReferral(e.target.value)}
                       placeholder="e.g. TUNDE887"
-                      className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none font-mono text-center uppercase tracking-wider"
+                      className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono text-center uppercase tracking-wider"
                     />
                   </div>
                 )}
@@ -1379,7 +1379,7 @@ export default function App() {
                 <button 
                   type="submit"
                   disabled={authLoading}
-                  className="w-full rounded-full bg-emerald-500 hover:bg-emerald-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
+                  className="w-full rounded-full bg-blue-500 hover:bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
                 >
                   {authLoading ? "Initializing Encrypted Vault..." : "Create Account"}
                 </button>
@@ -1389,7 +1389,7 @@ export default function App() {
                 Already registered?{" "}
                 <button 
                   onClick={() => setCurrentView("login")}
-                  className="font-bold text-emerald-500 hover:text-emerald-600 hover:underline"
+                  className="font-bold text-blue-500 hover:text-blue-600 hover:underline"
                 >
                   Sign In
                 </button>
@@ -1405,7 +1405,7 @@ export default function App() {
             <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6">
               
               <div className="text-center space-y-2">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 border border-blue-100">
                   <ShieldCheck className="h-6 w-6" />
                 </div>
                 <h2 className="font-display text-xl font-bold text-slate-900">Email Verification Required</h2>
@@ -1430,14 +1430,14 @@ export default function App() {
                     value={verificationCode}
                     onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
                     placeholder="e.g. 123456"
-                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-center text-lg font-bold tracking-widest focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-center text-lg font-bold tracking-widest focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
 
                 <button 
                   type="submit"
                   disabled={authLoading}
-                  className="w-full rounded-full bg-emerald-500 hover:bg-emerald-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
+                  className="w-full rounded-full bg-blue-500 hover:bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
                 >
                   {authLoading ? "Validating Credentials..." : "Verify Code & Log In"}
                 </button>
@@ -1449,7 +1449,7 @@ export default function App() {
                   <button 
                     onClick={handleResendCode}
                     disabled={verificationResent}
-                    className={`font-bold text-emerald-500 hover:text-emerald-600 hover:underline ${verificationResent ? "opacity-50 cursor-not-allowed" : ""}`}
+                    className={`font-bold text-blue-500 hover:text-blue-600 hover:underline ${verificationResent ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
                     {verificationResent ? "Code Resent Successfully" : "Resend Verification Code"}
                   </button>
@@ -1528,7 +1528,7 @@ export default function App() {
             
             <div className="flex justify-between items-start">
               <div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-800">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-800">
                   Official Gateway
                 </span>
                 <h3 className="font-display text-base font-bold text-gray-900 mt-1">Fund Advertiser Wallet</h3>
@@ -1544,7 +1544,7 @@ export default function App() {
 
             {depositProcessing ? (
               <div className="text-center py-8 space-y-4">
-                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-emerald-100 border-t-emerald-600" />
+                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
                 <div>
                   <p className="text-xs font-bold text-gray-800 uppercase tracking-wider">Contacting Paystack...</p>
                   <p className="text-[10px] text-gray-400 mt-1 font-semibold">Opening secure Paystack checkout portal...</p>
@@ -1554,11 +1554,11 @@ export default function App() {
               <form onSubmit={triggerDepositPayment} className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Payment Method</label>
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/20 p-3 text-xs text-emerald-950 flex items-center gap-2">
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/20 p-3 text-xs text-blue-950 flex items-center gap-2">
                     <span className="text-lg">🇳🇬</span>
                     <div>
                       <p className="font-bold">Paystack Secure Checkout</p>
-                      <p className="text-[10px] text-emerald-700/80">Supports Cards, Bank Transfer, USSD & more</p>
+                      <p className="text-[10px] text-blue-700/80">Supports Cards, Bank Transfer, USSD & more</p>
                     </div>
                   </div>
                 </div>
@@ -1571,7 +1571,7 @@ export default function App() {
                     min={settings.minDeposit}
                     value={depositAmount}
                     onChange={(e) => setDepositAmount(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono focus:outline-none focus:border-emerald-500 bg-slate-50"
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500 bg-slate-50"
                     placeholder="Min: 1000"
                   />
                   <span className="block text-[10px] text-gray-400 mt-1">Min deposit: ₦{settings.minDeposit.toLocaleString()}</span>
@@ -1583,7 +1583,7 @@ export default function App() {
 
                 <button
                   type="submit"
-                  className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3 text-xs font-bold text-white shadow-md hover:shadow-lg transition-all cursor-pointer"
+                  className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 py-3 text-xs font-bold text-white shadow-md hover:shadow-lg transition-all cursor-pointer"
                 >
                   Pay ₦{parseFloat(depositAmount || "0").toLocaleString()} via Paystack
                 </button>
@@ -1601,23 +1601,23 @@ export default function App() {
           <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center space-y-6 shadow-2xl">
             {verificationStatus === "loading" ? (
               <div className="space-y-4">
-                <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-emerald-500/20 border-t-emerald-500" />
+                <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-blue-500/20 border-t-blue-500" />
                 <h3 className="font-display text-base font-bold text-slate-100">Verifying Deposit</h3>
                 <p className="text-xs text-slate-400">{verificationMessage}</p>
               </div>
             ) : verificationStatus === "success" ? (
               <div className="space-y-4">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-500/20 text-blue-400">
                   <CheckCircle className="h-6 w-6 animate-pulse" />
                 </div>
-                <h3 className="font-display text-base font-bold text-emerald-400">Verification Successful</h3>
+                <h3 className="font-display text-base font-bold text-blue-400">Verification Successful</h3>
                 <p className="text-xs text-slate-300 leading-relaxed font-semibold">{verificationMessage}</p>
                 <button
                   onClick={() => {
                     setVerifyingPayment(false);
                     setVerificationStatus("idle");
                   }}
-                  className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-2.5 text-xs font-bold transition-all cursor-pointer"
+                  className="w-full rounded-xl bg-blue-500 hover:bg-blue-600 text-slate-950 py-2.5 text-xs font-bold transition-all cursor-pointer"
                 >
                   Go to Dashboard
                 </button>
@@ -1643,7 +1643,7 @@ export default function App() {
                     onClick={() => {
                       checkPaymentCallback();
                     }}
-                    className="flex-1 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-2.5 text-xs font-bold transition-all cursor-pointer"
+                    className="flex-1 rounded-xl bg-blue-500 hover:bg-blue-600 text-slate-950 py-2.5 text-xs font-bold transition-all cursor-pointer"
                   >
                     Retry Verification
                   </button>
@@ -1657,7 +1657,7 @@ export default function App() {
       {/* Toast Notification popup */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 max-w-sm rounded-2xl bg-slate-900 text-white p-4 shadow-2xl border border-slate-800 flex items-center gap-3 animate-fadeIn">
-          <div className={`rounded-full p-1.5 ${toast.type === "success" ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"}`}>
+          <div className={`rounded-full p-1.5 ${toast.type === "success" ? "bg-blue-500/20 text-blue-400" : "bg-rose-500/20 text-rose-400"}`}>
             {toast.type === "success" ? (
               <CheckCircle className="h-5 w-5" />
             ) : (

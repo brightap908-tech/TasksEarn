@@ -276,11 +276,11 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
         
         {/* Simple Wallet Widget */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white font-bold font-display text-xl shadow-xs">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white font-bold font-display text-xl shadow-xs">
             {user.name.substring(0, 2).toUpperCase()}
           </div>
           <h3 className="mt-3 text-sm font-bold text-slate-800">{user.name}</h3>
-          <p className="text-[10px] text-emerald-600 font-semibold tracking-wider uppercase mt-1">Campaign Manager</p>
+          <p className="text-[10px] text-blue-600 font-semibold tracking-wider uppercase mt-1">Campaign Manager</p>
 
           <div className="mt-4 rounded-2xl bg-slate-50 border border-slate-200 p-4">
             <span className="block text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">My Ad Wallet Balance</span>
@@ -291,7 +291,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
 
           <button 
             onClick={onOpenDeposit}
-            className="w-full mt-4 rounded-full bg-emerald-500 hover:bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition-all shadow-xs cursor-pointer"
+            className="w-full mt-4 rounded-full bg-blue-500 hover:bg-blue-600 px-4 py-2.5 text-xs font-bold text-white transition-all shadow-xs cursor-pointer"
           >
             💳 Fund Wallet (Naira)
           </button>
@@ -302,7 +302,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
           <button 
             onClick={() => setActiveTab("overview")}
             className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "overview" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+              activeTab === "overview" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
             }`}
           >
             <span className="flex items-center gap-2"><LayoutDashboard className="h-4 w-4 text-slate-400" /> Overview & Stats</span>
@@ -311,7 +311,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
           <button 
             onClick={() => setActiveTab("create")}
             className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "create" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+              activeTab === "create" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
             }`}
           >
             <span className="flex items-center gap-2"><PlusCircle className="h-4 w-4 text-slate-400" /> Build Ad Campaign</span>
@@ -320,7 +320,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
           <button 
             onClick={() => setActiveTab("manage")}
             className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "manage" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+              activeTab === "manage" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
             }`}
           >
             <span className="flex items-center gap-2"><Briefcase className="h-4 w-4 text-slate-400" /> Manage Campaigns ({campaigns.length || stats.campaignsCount})</span>
@@ -329,7 +329,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
           <button 
             onClick={() => setActiveTab("audit")}
             className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "audit" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+              activeTab === "audit" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
             }`}
           >
             <span className="flex items-center gap-2"><CheckSquare className="h-4 w-4 text-slate-400" /> Auditing Desk ({stats.pendingSubmissionsCount})</span>
@@ -338,7 +338,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
           <button 
             onClick={() => setActiveTab("transactions")}
             className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "transactions" ? "bg-emerald-50 text-emerald-600 border-r-4 border-emerald-500" : "text-slate-500 hover:bg-slate-50/50"
+              activeTab === "transactions" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
             }`}
           >
             <span className="flex items-center gap-2"><History className="h-4 w-4 text-slate-400" /> Ad Payment Records</span>
@@ -363,7 +363,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Active Now</span>
-                <span className="block font-mono text-xl font-extrabold text-emerald-600 mt-1">{stats.activeCount}</span>
+                <span className="block font-mono text-xl font-extrabold text-blue-600 mt-1">{stats.activeCount}</span>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Ad Spent</span>
@@ -410,7 +410,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                         <span className="text-[10px] text-gray-400 font-mono">Slots: {task.filledSlots}/{task.totalSlots}</span>
                         <div className="mt-1">
                           <span className={`inline-block rounded-full px-2.5 py-0.5 text-[9px] font-black tracking-wider uppercase ${
-                            task.status === TaskStatus.ACTIVE ? "bg-emerald-50 text-emerald-700" :
+                            task.status === TaskStatus.ACTIVE ? "bg-blue-50 text-blue-700" :
                             task.status === TaskStatus.PAUSED ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-700"
                           }`}>
                             {task.status}
@@ -434,9 +434,9 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
               <p className="text-xs text-gray-400 mb-6">Create micro-engagement jobs targetting real Nigerian social media profiles.</p>
 
               {formSuccess ? (
-                <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-6 text-center animate-fadeIn space-y-2">
-                  <p className="text-sm font-bold text-emerald-800">🎉 Campaign Launched Successfully!</p>
-                  <p className="text-xs text-emerald-600">The total cost has been deducted from your wallet, and tasks are live on earners dashboards immediately.</p>
+                <div className="rounded-xl bg-blue-50 border border-blue-100 p-6 text-center animate-fadeIn space-y-2">
+                  <p className="text-sm font-bold text-blue-800">🎉 Campaign Launched Successfully!</p>
+                  <p className="text-xs text-blue-600">The total cost has been deducted from your wallet, and tasks are live on earners dashboards immediately.</p>
                 </div>
               ) : (
                 <form onSubmit={handleCreateCampaign} className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -621,7 +621,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
 
                         {/* Status badge */}
                         <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
-                          task.status === TaskStatus.ACTIVE ? "bg-emerald-50 text-emerald-700" :
+                          task.status === TaskStatus.ACTIVE ? "bg-blue-50 text-blue-700" :
                           task.status === TaskStatus.PAUSED ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-700"
                         }`}>
                           {task.status}
@@ -634,7 +634,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                             className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-700"
                             title={task.status === TaskStatus.ACTIVE ? "Pause Campaign" : "Resume Campaign"}
                           >
-                            {task.status === TaskStatus.ACTIVE ? <Pause className="h-4 w-4 text-amber-500" /> : <Play className="h-4 w-4 text-emerald-500" />}
+                            {task.status === TaskStatus.ACTIVE ? <Pause className="h-4 w-4 text-amber-500" /> : <Play className="h-4 w-4 text-blue-500" />}
                           </button>
                         )}
 
@@ -688,7 +688,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
 
                     <div>
                       <p className="text-gray-400 uppercase font-bold text-[9px]">Proof Actions Reward Payout:</p>
-                      <p className="font-mono text-sm font-bold text-emerald-600 mt-0.5">₦{auditingSub.reward}</p>
+                      <p className="font-mono text-sm font-bold text-blue-600 mt-0.5">₦{auditingSub.reward}</p>
                     </div>
 
                     <div className="space-y-1.5">
@@ -708,7 +708,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                       <button
                         onClick={() => handleReviewSubmission("Approved")}
                         disabled={auditSubmitting}
-                        className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 py-2.5 text-xs font-bold text-white shadow flex items-center justify-center gap-1.5 cursor-pointer"
+                        className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white shadow flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <Check className="h-4 w-4" /> Approve & Release Cash
                       </button>
@@ -817,7 +817,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                         </div>
                       </div>
                       <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                        sub.status === SubmissionStatus.APPROVED ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                        sub.status === SubmissionStatus.APPROVED ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-700"
                       }`}>
                         {sub.status}
                       </span>
@@ -863,7 +863,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                           <td className="py-3 px-1 text-gray-400">{new Date(tx.createdAt).toLocaleDateString()}</td>
                           <td className="py-3 px-1">
                             <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                              tx.status === TransactionStatus.SUCCESS || tx.status === TransactionStatus.APPROVED ? "bg-emerald-50 text-emerald-700" :
+                              tx.status === TransactionStatus.SUCCESS || tx.status === TransactionStatus.APPROVED ? "bg-blue-50 text-blue-700" :
                               tx.status === TransactionStatus.PENDING ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"
                             }`}>
                               {tx.status}

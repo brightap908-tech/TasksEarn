@@ -67,7 +67,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
         <h1 className="font-display text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
           {page.title}
         </h1>
-        <div className="mx-auto mt-2 h-1 w-16 rounded bg-emerald-500"></div>
+        <div className="mx-auto mt-2 h-1 w-16 rounded bg-blue-500"></div>
         <p className="mt-3 text-sm text-gray-500 max-w-xl mx-auto">
           Learn more about our social media task exchange regulations, contact details, and platforms guidelines.
         </p>
@@ -84,10 +84,10 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
               {getFaqs().map((faq, idx) => (
                 <div key={idx} className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
                   <h3 className="flex items-start gap-2.5 font-display text-base font-bold text-gray-900">
-                    <HelpCircle className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                    <HelpCircle className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
                     <span>{faq.q}</span>
                   </h3>
-                  <p className="mt-3 text-sm text-gray-600 leading-relaxed pl-7 border-l-2 border-emerald-50">
+                  <p className="mt-3 text-sm text-gray-600 leading-relaxed pl-7 border-l-2 border-blue-50">
                     {faq.a}
                   </p>
                 </div>
@@ -98,9 +98,9 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
               <h2 className="font-display text-xl font-bold text-gray-900 mb-6">Send Us a Direct Message</h2>
               
               {submitted ? (
-                <div className="rounded-xl bg-emerald-50 p-4 border border-emerald-100 text-center animate-fadeIn">
-                  <p className="text-sm font-bold text-emerald-800">✉ Message Received Successfully!</p>
-                  <p className="text-xs text-emerald-600 mt-1">Our support managers will audit your message and reply back within 12 hours via email.</p>
+                <div className="rounded-xl bg-blue-50 p-4 border border-blue-100 text-center animate-fadeIn">
+                  <p className="text-sm font-bold text-blue-800">✉ Message Received Successfully!</p>
+                  <p className="text-xs text-blue-600 mt-1">Our support managers will audit your message and reply back within 12 hours via email.</p>
                 </div>
               ) : (
                 <form onSubmit={handleContactSubmit} className="space-y-4">
@@ -112,7 +112,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
                         required
                         value={contactForm.name}
                         onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none" 
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none" 
                         placeholder="John Doe"
                       />
                     </div>
@@ -123,7 +123,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
                         required
                         value={contactForm.email}
                         onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none" 
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none" 
                         placeholder="john@example.com"
                       />
                     </div>
@@ -136,7 +136,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
                       required
                       value={contactForm.subject}
                       onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none" 
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none" 
                       placeholder="Dispute Task / Advertiser Query / General"
                     />
                   </div>
@@ -148,14 +148,14 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
                       rows={5}
                       value={contactForm.message}
                       onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none" 
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none" 
                       placeholder="Write your query in details..."
                     ></textarea>
                   </div>
 
                   <button 
                     type="submit"
-                    className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3 text-sm font-semibold text-white shadow-md hover:shadow-lg hover:shadow-emerald-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 py-3 text-sm font-semibold text-white shadow-md hover:shadow-lg hover:shadow-blue-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Send className="h-4 w-4" /> Send Message
                   </button>
@@ -164,7 +164,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
             </div>
           ) : (
             <div className="rounded-2xl border border-gray-100 bg-white p-6 sm:p-8 shadow-sm">
-              <div className="prose prose-emerald max-w-none text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+              <div className="prose prose-blue max-w-none text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
                 {page.content}
               </div>
             </div>
@@ -180,7 +180,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
             
             <div className="space-y-4 text-xs">
               <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700 shrink-0">
+                <div className="rounded-lg bg-blue-100 p-2 text-blue-700 shrink-0">
                   <Mail className="h-4 w-4" />
                 </div>
                 <div>
@@ -190,7 +190,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
               </div>
 
               <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700 shrink-0">
+                <div className="rounded-lg bg-blue-100 p-2 text-blue-700 shrink-0">
                   <Phone className="h-4 w-4" />
                 </div>
                 <div>
@@ -200,7 +200,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
               </div>
 
               <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700 shrink-0">
+                <div className="rounded-lg bg-blue-100 p-2 text-blue-700 shrink-0">
                   <MapPin className="h-4 w-4" />
                 </div>
                 <div>
@@ -233,7 +233,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
                     href={settings.whatsappGroup} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="flex items-center justify-between rounded-xl bg-green-50 hover:bg-green-100 px-3.5 py-2.5 text-xs text-green-800 transition-colors"
+                    className="flex items-center justify-between rounded-xl bg-blue-50 hover:bg-blue-100 px-3.5 py-2.5 text-xs text-blue-800 transition-colors"
                   >
                     <span className="flex items-center gap-2">
                       <PlatformIcon platform="WhatsApp" size={14} />
@@ -247,10 +247,10 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
           </div>
 
           {/* Quick Stats Banner */}
-          <div className="rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-700 p-6 text-white shadow-md">
-            <h4 className="font-display text-sm font-semibold text-emerald-100 uppercase tracking-widest">Platform Status</h4>
+          <div className="rounded-2xl bg-gradient-to-tr from-blue-600 to-blue-700 p-6 text-white shadow-md">
+            <h4 className="font-display text-sm font-semibold text-blue-100 uppercase tracking-widest">Platform Status</h4>
             <p className="font-display text-2xl font-black mt-2">Active & Secure</p>
-            <p className="text-xs text-emerald-100 mt-1 leading-relaxed">
+            <p className="text-xs text-blue-100 mt-1 leading-relaxed">
               We verify and audit all deposits, referral clicks, and payouts inside Nigerian Naira instantly.
             </p>
           </div>
