@@ -104,7 +104,7 @@ function getPlatformForCategory(category) {
 // server.ts
 import_dotenv.default.config();
 var { Pool } = import_pg.default;
-var PORT = Number(process.env.PORT) || 3e3;
+var PORT = Number(process.env.PORT) || 5e3;
 if (!process.env.DATABASE_URL) {
   console.error("FATAL: DATABASE_URL environment variable is not set.");
   process.exit(1);
