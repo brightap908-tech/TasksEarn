@@ -219,6 +219,19 @@ function mapPricing(row) {
     earningPerSlot: parseFloat(row.earning_per_slot) || 0
   };
 }
+function mapSocialPlatform(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    icon: row.icon || "",
+    logoUrl: row.logo_url || void 0,
+    description: row.description || void 0,
+    status: row.status,
+    sortOrder: parseInt(row.sort_order) || 0,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
+  };
+}
 function mapOwnerBankAccount(row) {
   if (!row) return null;
   return {
@@ -406,6 +419,18 @@ async function bootstrapTables() {
       )
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS social_platforms (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE,
+        icon VARCHAR(100) NOT NULL DEFAULT '',
+        logo_url TEXT NULL,
+        description TEXT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'Active',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS owner_bank_accounts (
         id VARCHAR(50) PRIMARY KEY,
         bank_name VARCHAR(150) NOT NULL,
@@ -474,6 +499,37 @@ function getInitialPricing() {
     costPerSlot: defaults[plat]?.cost || 15,
     earningPerSlot: defaults[plat]?.earn || 10
   }));
+}
+function slugifyPlatformId(name) {
+  return "plat-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+async function ensurePricingRowForPlatform(platformName) {
+  const existing = await pool.query("SELECT id FROM task_pricing WHERE platform = $1 LIMIT 1", [platformName]);
+  if (existing.rows.length === 0) {
+    const idRes = await pool.query("SELECT COUNT(*) FROM task_pricing");
+    const newId = `prc-${parseInt(idRes.rows[0].count) + 1}-${Date.now()}`;
+    await pool.query(
+      "INSERT INTO task_pricing (id, platform, cost_per_slot, earning_per_slot) VALUES ($1, $2, $3, $4)",
+      [newId, platformName, 0, 0]
+    );
+  }
+}
+async function ensurePlatformsSeeded() {
+  const countRes = await pool.query("SELECT COUNT(*) FROM social_platforms");
+  if (parseInt(countRes.rows[0].count) > 0) return;
+  const legacyPlatforms = Object.values(Platform);
+  let order = 0;
+  for (const name of legacyPlatforms) {
+    order += 1;
+    await pool.query(
+      `INSERT INTO social_platforms (id, name, icon, description, status, sort_order)
+       VALUES ($1, $2, $3, $4, 'Active', $5)
+       ON CONFLICT (name) DO NOTHING`,
+      [slugifyPlatformId(name), name, name, "Migrated automatically from default platform list.", order]
+    );
+    await ensurePricingRowForPlatform(name);
+  }
+  console.log(`[DB] Migrated ${legacyPlatforms.length} default social media platforms into social_platforms table.`);
 }
 async function seedDatabase() {
   const usersCount = await pool.query("SELECT COUNT(*) FROM users");
@@ -1027,6 +1083,111 @@ app.get("/api/pricing", async (_req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+app.get("/api/platforms", async (_req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM social_platforms WHERE status = 'Active' ORDER BY sort_order, name");
+    res.json(result.rows.map(mapSocialPlatform));
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.get("/api/admin/platforms", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const result = await pool.query("SELECT * FROM social_platforms ORDER BY sort_order, name");
+    res.json(result.rows.map(mapSocialPlatform));
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.post("/api/admin/platforms", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const { name, icon, logoUrl, description, status } = req.body;
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Platform name is required." });
+    }
+    const trimmedName = name.trim();
+    const existing = await pool.query("SELECT id FROM social_platforms WHERE LOWER(name) = LOWER($1)", [trimmedName]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: "A platform with this name already exists." });
+    }
+    const maxOrderRes = await pool.query("SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM social_platforms");
+    const nextOrder = parseInt(maxOrderRes.rows[0].max_order) + 1;
+    const id = slugifyPlatformId(trimmedName) + "-" + Date.now();
+    await pool.query(
+      `INSERT INTO social_platforms (id, name, icon, logo_url, description, status, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [id, trimmedName, icon || "", logoUrl || null, description || null, status === "Inactive" ? "Inactive" : "Active", nextOrder]
+    );
+    await ensurePricingRowForPlatform(trimmedName);
+    const result = await pool.query("SELECT * FROM social_platforms WHERE id = $1", [id]);
+    res.json({ success: true, platform: mapSocialPlatform(result.rows[0]) });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.put("/api/admin/platforms/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const { id } = req.params;
+    const { name, icon, logoUrl, description, status } = req.body;
+    const existingRes = await pool.query("SELECT * FROM social_platforms WHERE id = $1", [id]);
+    if (existingRes.rows.length === 0) {
+      return res.status(404).json({ error: "Platform not found." });
+    }
+    const existing = mapSocialPlatform(existingRes.rows[0]);
+    let newName = existing.name;
+    if (name && typeof name === "string" && name.trim()) {
+      newName = name.trim();
+      if (newName.toLowerCase() !== existing.name.toLowerCase()) {
+        const dupe = await pool.query("SELECT id FROM social_platforms WHERE LOWER(name) = LOWER($1) AND id != $2", [newName, id]);
+        if (dupe.rows.length > 0) {
+          return res.status(400).json({ error: "A platform with this name already exists." });
+        }
+      }
+    }
+    await pool.query(
+      `UPDATE social_platforms SET name=$1, icon=$2, logo_url=$3, description=$4, status=$5 WHERE id=$6`,
+      [
+        newName,
+        icon !== void 0 ? icon : existing.icon,
+        logoUrl !== void 0 ? logoUrl || null : existing.logoUrl || null,
+        description !== void 0 ? description || null : existing.description || null,
+        status === "Inactive" ? "Inactive" : "Active",
+        id
+      ]
+    );
+    if (newName !== existing.name) {
+      await pool.query("UPDATE task_pricing SET platform=$1 WHERE platform=$2", [newName, existing.name]);
+    }
+    await ensurePricingRowForPlatform(newName);
+    const result = await pool.query("SELECT * FROM social_platforms WHERE id = $1", [id]);
+    res.json({ success: true, platform: mapSocialPlatform(result.rows[0]) });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.delete("/api/admin/platforms/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const { id } = req.params;
+    const existingRes = await pool.query("SELECT * FROM social_platforms WHERE id = $1", [id]);
+    if (existingRes.rows.length === 0) {
+      return res.status(404).json({ error: "Platform not found." });
+    }
+    const existing = mapSocialPlatform(existingRes.rows[0]);
+    await pool.query("DELETE FROM social_platforms WHERE id = $1", [id]);
+    await pool.query("DELETE FROM task_pricing WHERE platform = $1", [existing.name]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
 app.get("/api/earner/dashboard", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
@@ -1361,8 +1522,12 @@ app.post("/api/advertiser/tasks", async (req, res) => {
       return res.status(400).json({ error: "Invalid slot count" });
     }
     const platform = getPlatformForCategory(category);
+    const platformRes = await pool.query("SELECT * FROM social_platforms WHERE LOWER(name) = LOWER($1) LIMIT 1", [platform]);
+    if (platformRes.rows.length === 0 || mapSocialPlatform(platformRes.rows[0]).status !== "Active") {
+      return res.status(400).json({ error: "This platform is not currently available for new campaigns. Please contact the administrator." });
+    }
     const pricingRes = await pool.query("SELECT * FROM task_pricing WHERE platform = $1 LIMIT 1", [platform]);
-    if (pricingRes.rows.length === 0) {
+    if (pricingRes.rows.length === 0 || parseFloat(pricingRes.rows[0].cost_per_slot) <= 0) {
       return res.status(400).json({ error: "No pricing has been configured for this platform yet. Please contact the administrator." });
     }
     const pricing = mapPricing(pricingRes.rows[0]);
@@ -2562,6 +2727,7 @@ async function startServer() {
   try {
     await bootstrapTables();
     await seedDatabase();
+    await ensurePlatformsSeeded();
     await startServer();
   } catch (err) {
     console.error("FATAL: Failed to start server:", err);
