@@ -201,8 +201,8 @@ function mapSettings(row) {
     platformName: row.platform_name,
     referralReward: parseFloat(row.referral_reward) || 200,
     withdrawalFee: parseFloat(row.withdrawal_fee) || 100,
-    minWithdrawal: parseFloat(row.min_withdrawal) || 2e3,
-    minDeposit: parseFloat(row.min_deposit) || 1e3,
+    minWithdrawal: parseFloat(row.min_withdrawal) || 200,
+    minDeposit: parseFloat(row.min_deposit) || 200,
     contactEmail: row.contact_email,
     contactPhone: row.contact_phone,
     telegramChannel: row.telegram_channel || void 0,
@@ -258,8 +258,8 @@ async function getSettings() {
     platformName: "TasksEarn",
     referralReward: 200,
     withdrawalFee: 100,
-    minWithdrawal: 2e3,
-    minDeposit: 1e3,
+    minWithdrawal: 200,
+    minDeposit: 200,
     contactEmail: "support@tasksearn.com",
     contactPhone: "09164444315",
     telegramChannel: "https://t.me/tasksearn_ng",
@@ -388,8 +388,8 @@ async function bootstrapTables() {
         platform_name VARCHAR(100) NOT NULL DEFAULT 'TasksEarn',
         referral_reward DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
         withdrawal_fee DECIMAL(10, 2) NOT NULL DEFAULT 100.00,
-        min_withdrawal DECIMAL(10, 2) NOT NULL DEFAULT 2000.00,
-        min_deposit DECIMAL(10, 2) NOT NULL DEFAULT 1000.00,
+        min_withdrawal DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
+        min_deposit DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
         contact_email VARCHAR(150) NOT NULL DEFAULT 'support@tasksearn.com',
         contact_phone VARCHAR(50) NOT NULL DEFAULT '09164444315',
         telegram_channel VARCHAR(255) NULL,
@@ -666,7 +666,7 @@ A submission is rejected if you did not follow the instructions, if you did not 
     ]);
     await client.query(`
       INSERT INTO settings (platform_name, referral_reward, withdrawal_fee, min_withdrawal, min_deposit, contact_email, contact_phone, telegram_channel, whatsapp_group)
-      VALUES ('TasksEarn', 200, 100, 2000, 1000, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
+      VALUES ('TasksEarn', 200, 100, 200, 200, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
     `);
     const pricing = getInitialPricing();
     for (const p of pricing) {
@@ -746,6 +746,36 @@ async function sendPasswordResetEmail(email, name, tempPassword) {
     </div>`;
   return sendEmail({ to: email, subject: "Your TasksEarn Password Recovery Credentials", html });
 }
+var NIGERIAN_BANK_LIST = [
+  { name: "Access Bank", code: "044" },
+  { name: "Ecobank Nigeria", code: "050" },
+  { name: "Fidelity Bank", code: "070" },
+  { name: "First Bank of Nigeria", code: "011" },
+  { name: "First City Monument Bank (FCMB)", code: "214" },
+  { name: "Guaranty Trust Bank (GTB)", code: "058" },
+  { name: "Keystone Bank", code: "082" },
+  { name: "Kuda Bank", code: "50211" },
+  { name: "Moniepoint Microfinance Bank", code: "50515" },
+  { name: "OPay Microfinance Bank", code: "999992" },
+  { name: "PalmPay Microfinance Bank", code: "999991" },
+  { name: "Polaris Bank", code: "076" },
+  { name: "Providus Bank", code: "101" },
+  { name: "Stanbic IBTC Bank", code: "221" },
+  { name: "Sterling Bank", code: "232" },
+  { name: "Union Bank of Nigeria", code: "032" },
+  { name: "United Bank for Africa (UBA)", code: "033" },
+  { name: "Unity Bank", code: "215" },
+  { name: "Wema Bank", code: "035" },
+  { name: "Zenith Bank", code: "057" },
+  { name: "Jaiz Bank", code: "301" },
+  { name: "Parallex Bank", code: "104" },
+  { name: "Titan Trust Bank", code: "102" },
+  { name: "Globus Bank", code: "00103" },
+  { name: "PremiumTrust Bank", code: "105" },
+  { name: "Lotus Bank", code: "303" },
+  { name: "Optimus Bank", code: "107" },
+  { name: "VFD Microfinance Bank", code: "566" }
+];
 var app = (0, import_express.default)();
 app.use(import_express.default.json({ limit: "50mb" }));
 app.use(import_express.default.urlencoded({ limit: "50mb", extended: true }));
@@ -1093,6 +1123,47 @@ app.get("/api/earner/submissions", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+app.delete("/api/earner/submissions/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const subRes = await client.query(
+        "SELECT * FROM submissions WHERE id=$1 AND earner_id=$2 FOR UPDATE",
+        [req.params.id, user.id]
+      );
+      if (subRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Submission not found" });
+      }
+      const submission = mapSubmission(subRes.rows[0]);
+      if (submission.status !== "Pending" /* PENDING */) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Only pending submissions can be deleted" });
+      }
+      const delRes = await client.query(
+        "DELETE FROM submissions WHERE id=$1 AND earner_id=$2 AND status='Pending' RETURNING id",
+        [submission.id, user.id]
+      );
+      if (delRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Only pending submissions can be deleted" });
+      }
+      await client.query("COMMIT");
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      throw txErr;
+    } finally {
+      client.release();
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Delete submission error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 app.get("/api/earner/referrals", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
@@ -1116,6 +1187,67 @@ app.get("/api/earner/referrals", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+app.get("/api/banks", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: "Authentication required" });
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (paystackKey) {
+      try {
+        const response = await fetch("https://api.paystack.co/bank?country=nigeria", {
+          headers: { "Authorization": `Bearer ${paystackKey}` }
+        });
+        const data = await response.json();
+        if (data?.status && data?.data) {
+          return res.json(data.data.map((b) => ({ name: b.name, code: b.code })).sort((a, b) => a.name.localeCompare(b.name)));
+        }
+      } catch {
+      }
+    }
+    res.json(NIGERIAN_BANK_LIST);
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+async function resolveBankAccount(accountNumber, bankName, bankCode) {
+  if (!accountNumber || !bankCode && !bankName) {
+    return { success: false, error: "Account number and bank are required" };
+  }
+  if (accountNumber.length !== 10 || !/^\d+$/.test(accountNumber)) {
+    return { success: false, error: "Account number must be exactly 10 digits" };
+  }
+  const resolvedCode = bankCode || NIGERIAN_BANK_LIST.find((b) => b.name === bankName)?.code;
+  const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+  if (!paystackKey) {
+    return { success: true, accountName: `Verified Account Holder (${bankName || "Nigerian Bank"})`, isSimulated: true };
+  }
+  if (!resolvedCode) return { success: false, error: "Could not determine bank code for the selected bank" };
+  try {
+    const response = await fetch(`https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${resolvedCode}`, {
+      headers: { "Authorization": `Bearer ${paystackKey}` }
+    });
+    const data = await response.json();
+    if (data?.status && data?.data) {
+      return { success: true, accountName: data.data.account_name };
+    }
+    return { success: false, error: data.message || "Could not resolve bank account. Please check the details and try again." };
+  } catch {
+    return { success: false, error: "Bank verification service is unavailable. Please try again." };
+  }
+}
+app.post("/api/verify-bank", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: "Authentication required" });
+    const { accountNumber, bankCode, bankName } = req.body;
+    const result = await resolveBankAccount(accountNumber, bankName, bankCode);
+    if ("error" in result) return res.status(400).json({ error: result.error });
+    res.json({ success: true, accountName: result.accountName, isSimulated: result.isSimulated });
+  } catch (err) {
+    console.error("Verify bank error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 app.post("/api/earner/withdraw", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
@@ -1124,9 +1256,26 @@ app.post("/api/earner/withdraw", async (req, res) => {
     if (!amount || !bankName || !accountNumber || !accountName) {
       return res.status(400).json({ error: "All bank transfer fields are required" });
     }
+    if (String(accountNumber).length !== 10 || !/^\d+$/.test(String(accountNumber))) {
+      return res.status(400).json({ error: "Account number must be exactly 10 digits" });
+    }
+    const verification = await resolveBankAccount(String(accountNumber), bankName);
+    if ("error" in verification) {
+      return res.status(400).json({ error: `Bank account verification failed: ${verification.error}` });
+    }
+    if (!verification.isSimulated) {
+      const tokenize = (s) => s.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).filter((t) => t.length >= 3);
+      const resolvedTokens = tokenize(verification.accountName);
+      const submittedTokens = tokenize(String(accountName));
+      const overlap = resolvedTokens.filter((t) => submittedTokens.includes(t));
+      const requiredMatches = Math.max(1, Math.min(2, resolvedTokens.length));
+      if (overlap.length < requiredMatches) {
+        return res.status(400).json({ error: `Account name does not match bank records. Verified name: ${verification.accountName}` });
+      }
+    }
     const settings = await getSettings();
     const withdrawAmount = parseFloat(amount);
-    if (isNaN(withdrawAmount) || withdrawAmount < (settings?.minWithdrawal || 2e3)) {
+    if (isNaN(withdrawAmount) || withdrawAmount < (settings?.minWithdrawal || 200)) {
       return res.status(400).json({ error: `Minimum withdrawal amount is \u20A6${settings?.minWithdrawal}` });
     }
     const pendingRes = await pool.query(
@@ -1421,7 +1570,7 @@ app.post("/api/advertiser/deposit/initialize", async (req, res) => {
     if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
     const settings = await getSettings();
     const depositAmount = parseFloat(req.body.amount);
-    if (isNaN(depositAmount) || depositAmount < (settings?.minDeposit || 1e3)) {
+    if (isNaN(depositAmount) || depositAmount < (settings?.minDeposit || 200)) {
       return res.status(400).json({ error: `Minimum deposit amount is \u20A6${settings?.minDeposit}` });
     }
     const txId = "tx-" + Math.random().toString(36).substr(2, 9);
@@ -1628,10 +1777,46 @@ app.delete("/api/admin/tasks/:id", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
-    const result = await pool.query("DELETE FROM tasks WHERE id=$1 RETURNING id", [req.params.id]);
-    if (result.rows.length === 0) return res.status(404).json({ error: "Task not found" });
-    res.json({ success: true });
+    const client = await pool.connect();
+    let refundAmount = 0;
+    try {
+      await client.query("BEGIN");
+      const taskRes = await client.query("SELECT * FROM tasks WHERE id=$1 FOR UPDATE", [req.params.id]);
+      if (taskRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Task not found" });
+      }
+      const task = mapTask(taskRes.rows[0]);
+      const remainingSlots = task.totalSlots - task.filledSlots;
+      refundAmount = remainingSlots * task.costPerSlot;
+      if (refundAmount > 0 && task.advertiserId) {
+        await client.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2", [refundAmount, task.advertiserId]);
+        await client.query(`
+          INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
+          VALUES ($1,$2,$3,$4,$5,'Deposit','Success',$6,$7,$8)
+        `, [
+          "tx-" + Math.random().toString(36).substr(2, 9),
+          task.advertiserId,
+          task.advertiserName,
+          "Advertiser" /* ADVERTISER */,
+          refundAmount,
+          `Refund for campaign deleted by admin: ${task.title} (${remainingSlots} slots)`,
+          "T-REFUND-ADM-" + Math.floor(1e7 + Math.random() * 9e7),
+          /* @__PURE__ */ new Date()
+        ]);
+      }
+      await client.query("DELETE FROM submissions WHERE task_id=$1 AND status='Pending'", [task.id]);
+      await client.query("DELETE FROM tasks WHERE id=$1", [task.id]);
+      await client.query("COMMIT");
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      throw txErr;
+    } finally {
+      client.release();
+    }
+    res.json({ success: true, refundedAmount: refundAmount });
   } catch (err) {
+    console.error("Admin delete task error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
