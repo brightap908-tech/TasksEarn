@@ -1352,20 +1352,22 @@ app.post("/api/advertiser/tasks", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
-    const { title, description, category, proofRequirements, link, earningPerSlot, totalSlots } = req.body;
-    if (!title || !description || !category || !proofRequirements || !link || !earningPerSlot || !totalSlots) {
+    const { title, description, category, proofRequirements, link, totalSlots } = req.body;
+    if (!title || !description || !category || !proofRequirements || !link || !totalSlots) {
       return res.status(400).json({ error: "All campaign fields are required" });
     }
-    const rewardPerSlot = parseFloat(earningPerSlot);
     const slots = parseInt(totalSlots);
-    if (isNaN(rewardPerSlot) || rewardPerSlot <= 0 || isNaN(slots) || slots <= 0) {
-      return res.status(400).json({ error: "Invalid earning value or slot count" });
+    if (isNaN(slots) || slots <= 0) {
+      return res.status(400).json({ error: "Invalid slot count" });
     }
     const platform = getPlatformForCategory(category);
     const pricingRes = await pool.query("SELECT * FROM task_pricing WHERE platform = $1 LIMIT 1", [platform]);
-    const pricing = pricingRes.rows.length > 0 ? mapPricing(pricingRes.rows[0]) : null;
-    const finalCostPerSlot = pricing ? pricing.costPerSlot : Math.ceil(rewardPerSlot * 1.35);
-    const finalEarningPerSlot = pricing ? pricing.earningPerSlot : rewardPerSlot;
+    if (pricingRes.rows.length === 0) {
+      return res.status(400).json({ error: "No pricing has been configured for this platform yet. Please contact the administrator." });
+    }
+    const pricing = mapPricing(pricingRes.rows[0]);
+    const finalCostPerSlot = pricing.costPerSlot;
+    const finalEarningPerSlot = pricing.earningPerSlot;
     const totalCost = finalCostPerSlot * slots;
     if (user.walletBalance < totalCost) {
       return res.status(400).json({ error: `Insufficient balance. Campaign costs \u20A6${totalCost.toLocaleString()} (\u20A6${finalCostPerSlot}/slot).` });
