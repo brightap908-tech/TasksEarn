@@ -50,13 +50,19 @@ function hashPassword(password: string): string {
 
 function mapUser(row: any) {
   if (!row) return null;
+  const role = row.role;
+  // Admins and Advertisers are always considered activated; only Earners require activation fee
+  const isActivated = role !== "Earner"
+    ? true
+    : (row.is_activated === true || row.is_activated === "true");
   return {
     id: row.id,
     name: row.name,
     email: row.email,
     password: row.password,
-    role: row.role,
+    role,
     isVerified: row.is_verified === true || row.is_verified === "true",
+    isActivated,
     walletBalance: parseFloat(row.wallet_balance) || 0,
     referralCode: row.referral_code || undefined,
     referredBy: row.referred_by || undefined,
@@ -210,6 +216,32 @@ function mapNotification(row: any): AdminNotification {
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     read: row.read === true || row.read === "true"
   };
+}
+
+// ─── Admin Commission Helper ─────────────────────────────────────────────────
+
+async function creditAdminCommission(opts: {
+  type: "activation_fee" | "task_commission" | "withdrawal_fee" | "deposit_fee";
+  amount: number;
+  description: string;
+  reference: string;
+  userId?: string;
+  userName?: string;
+  relatedRef?: string;
+}) {
+  if (!opts.amount || opts.amount <= 0) return;
+  const id = "com-" + Math.random().toString(36).substr(2, 9);
+  try {
+    await pool.query(
+      `INSERT INTO admin_commissions (id, type, amount, description, reference, user_id, user_name, related_transaction_ref, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ON CONFLICT (reference) DO NOTHING`,
+      [id, opts.type, opts.amount, opts.description, opts.reference,
+       opts.userId || null, opts.userName || null, opts.relatedRef || null, new Date()]
+    );
+  } catch (err) {
+    console.error("[Commission] Failed to credit admin commission:", err);
+  }
 }
 
 async function getSettings(): Promise<ReturnType<typeof mapSettings>> {
@@ -441,6 +473,31 @@ async function bootstrapTables() {
       )
     `);
 
+    // 14. Admin Commissions (persistent, never resets)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS admin_commissions (
+        id VARCHAR(50) PRIMARY KEY,
+        type VARCHAR(50) NOT NULL,
+        amount DECIMAL(15, 2) NOT NULL,
+        description VARCHAR(500) NOT NULL,
+        reference VARCHAR(150) NOT NULL UNIQUE,
+        user_id VARCHAR(50) NULL,
+        user_name VARCHAR(150) NULL,
+        related_transaction_ref VARCHAR(100) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 15. Migrate: add is_activated column to users if not present
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_activated BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+
+    // 16. Migrate: add updated_at to social_platforms if not present
+    await client.query(`
+      ALTER TABLE social_platforms ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL
+    `);
+
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
   } catch (err) {
@@ -542,11 +599,11 @@ async function seedDatabase() {
 
     // Users
     await client.query(`
-      INSERT INTO users (id, name, email, password, role, is_verified, wallet_balance, referral_code, created_at)
+      INSERT INTO users (id, name, email, password, role, is_verified, is_activated, wallet_balance, referral_code, created_at)
       VALUES
-        ($1, 'Super Admin', 'admin@tasksearn.com', $2, 'Admin', true, 0, NULL, $3),
-        ($4, 'Tunde Bakare', 'earner@tasksearn.com', $5, 'Earner', true, 2500, 'TUNDE887', $6),
-        ($7, 'Chinedu Okafor', 'advertiser@tasksearn.com', $8, 'Advertiser', true, 35000, NULL, $9)
+        ($1, 'Super Admin', 'admin@tasksearn.com', $2, 'Admin', true, true, 0, NULL, $3),
+        ($4, 'Tunde Bakare', 'earner@tasksearn.com', $5, 'Earner', true, true, 2500, 'TUNDE887', $6),
+        ($7, 'Chinedu Okafor', 'advertiser@tasksearn.com', $8, 'Advertiser', true, true, 35000, NULL, $9)
     `, [
       adminId, hashPassword("password123"), now,
       earnerId, hashPassword("password123"), tenDaysAgo,
@@ -893,10 +950,20 @@ app.get("/api/public/stats", async (_req, res) => {
     );
     const lw = latestWithdrawalTx.rows[0] ? mapTransaction(latestWithdrawalTx.rows[0]) : null;
     const lc = latestCampaign.rows[0] ? mapTask(latestCampaign.rows[0]) : null;
+
+    // Use demo minimum values until real data surpasses them
+    const DEMO_MIN_EARNERS   = 12485;
+    const DEMO_MIN_TASKS     = 346;
+    const DEMO_MIN_PAID_OUT  = 3875560;
+
+    const dbEarners  = parseInt(earnersCount.rows[0].count);
+    const dbTasks    = parseInt(tasksCount.rows[0].count);
+    const dbPaidOut  = parseFloat(totalPaidOut.rows[0].total);
+
     res.json({
-      earnersCount: parseInt(earnersCount.rows[0].count),
-      tasksCount: parseInt(tasksCount.rows[0].count),
-      totalPaidOut: parseFloat(totalPaidOut.rows[0].total),
+      earnersCount: Math.max(dbEarners, DEMO_MIN_EARNERS),
+      tasksCount:   Math.max(dbTasks, DEMO_MIN_TASKS),
+      totalPaidOut: Math.max(dbPaidOut, DEMO_MIN_PAID_OUT),
       latestWithdrawal: lw ? { userName: lw.userName, bankName: lw.bankDetails?.bankName || "Commercial Bank", amount: lw.amount } : null,
       latestCampaign: lc ? { title: lc.title, cost: lc.totalSlots * lc.costPerSlot } : null
     });
@@ -1297,6 +1364,10 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
 
+    if (!user.isActivated) {
+      return res.status(403).json({ error: "Account activation required. Please pay the ₦500 activation fee to start completing tasks." });
+    }
+
     const taskId = req.params.id;
     const { proofText, proofScreenshot } = req.body;
     if (!proofText) return res.status(400).json({ error: "Proof details are required" });
@@ -1406,6 +1477,159 @@ app.get("/api/earner/referrals", async (req, res) => {
       }))
     });
   } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// ─── Earner Activation via Paystack ──────────────────────────────────────────
+
+app.post("/api/earner/activation/initialize", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+    if (user.isActivated) {
+      return res.json({ alreadyActivated: true, message: "Account is already activated." });
+    }
+
+    const ACTIVATION_FEE = 500;
+
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackKey) {
+      return res.status(400).json({ error: "Payment gateway is not configured. Please contact support." });
+    }
+
+    const ref = "ACT-" + Date.now() + "-" + Math.floor(1000 + Math.random() * 9000);
+    const txId = "tx-" + Math.random().toString(36).substr(2, 9);
+
+    // Create a pending activation transaction record
+    await pool.query(`
+      INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, gateway, created_at)
+      VALUES ($1,$2,$3,$4,$5,'Activation Fee','Pending','Account Activation Fee — One-time ₦500 payment',$6,'Paystack',$7)
+      ON CONFLICT (reference) DO NOTHING
+    `, [txId, user.id, user.name, user.role, ACTIVATION_FEE, ref, new Date()]);
+
+    const origin = req.headers.referer || req.headers.origin || `http://localhost:${PORT}`;
+    const baseOrigin = origin.replace(/\/+$/, "").replace(/\?.*$/, "").replace(/#.*$/, "");
+    const callbackUrl = `${baseOrigin}/#paystack_activation_ref=${ref}`;
+
+    const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${paystackKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: user.email,
+        amount: Math.round(ACTIVATION_FEE * 100),
+        reference: ref,
+        callback_url: callbackUrl,
+        metadata: { user_id: user.id, type: "earner_activation" }
+      })
+    });
+    const paystackData: any = await paystackRes.json();
+
+    if (paystackData?.status && paystackData?.data) {
+      return res.json({ success: true, authorization_url: paystackData.data.authorization_url, reference: ref });
+    } else {
+      return res.status(500).json({ error: paystackData.message || "Failed to initialize activation payment" });
+    }
+  } catch (err) {
+    console.error("Activation initialize error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.post("/api/earner/activation/verify", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+    if (user.isActivated) {
+      const { password: _, verificationCode: __, verificationCodeExpires: ___, verificationCodeLastSent: ____, ...safe } = user;
+      return res.json({ success: true, activated: true, alreadyActivated: true, user: safe });
+    }
+
+    const { reference } = req.body;
+    if (!reference) return res.status(400).json({ error: "Payment reference is required" });
+
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackKey) return res.status(400).json({ error: "PAYSTACK_SECRET_KEY is not configured." });
+
+    // Verify with Paystack first (before any DB locks)
+    const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      method: "GET",
+      headers: { "Authorization": `Bearer ${paystackKey}` }
+    });
+    const paystackData: any = await paystackRes.json();
+
+    if (!paystackData?.status || !paystackData?.data) {
+      return res.status(500).json({ error: "Could not verify payment with Paystack. Please contact support." });
+    }
+
+    const pStatus = paystackData.data.status;
+    const pAmount = paystackData.data.amount / 100;
+
+    if (pStatus !== "success") {
+      return res.status(400).json({ error: `Payment not successful. Status: ${pStatus}. If you were charged, please contact support.` });
+    }
+
+    if (Math.abs(pAmount - 500) > 1) {
+      return res.status(400).json({ error: "Payment amount mismatch. Please contact support." });
+    }
+
+    const client = await pool.connect();
+    let alreadyDone = false;
+    try {
+      await client.query("BEGIN");
+
+      // Lock user row and check activation (prevents duplicate activation)
+      const userRes = await client.query("SELECT is_activated FROM users WHERE id=$1 FOR UPDATE", [user.id]);
+      if (userRes.rows[0]?.is_activated === true) {
+        await client.query("ROLLBACK");
+        alreadyDone = true;
+      } else {
+        // Activate the account permanently
+        await client.query("UPDATE users SET is_activated = true WHERE id=$1", [user.id]);
+
+        // Mark the pending transaction as Success
+        await client.query(
+          "UPDATE transactions SET status='Success' WHERE reference=$1 AND user_id=$2",
+          [reference, user.id]
+        );
+
+        await client.query("COMMIT");
+      }
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    // Credit admin commission (activation fee) - done AFTER commit to prevent rollback undoing it
+    if (!alreadyDone) {
+      await creditAdminCommission({
+        type: "activation_fee",
+        amount: 500,
+        description: `Earner activation fee — ${user.name} (${user.email})`,
+        reference: "COMM-ACT-" + reference,
+        userId: user.id,
+        userName: user.name,
+        relatedRef: reference
+      });
+    }
+
+    const freshUserRes = await pool.query("SELECT * FROM users WHERE id=$1", [user.id]);
+    const mappedUser = mapUser(freshUserRes.rows[0]);
+    const { password: _, verificationCode: __, verificationCodeExpires: ___, verificationCodeLastSent: ____, ...safeUser } = mappedUser;
+
+    res.json({
+      success: true,
+      activated: true,
+      alreadyActivated: alreadyDone,
+      user: safeUser,
+      message: "Account activated! You can now complete tasks and earn Naira."
+    });
+  } catch (err) {
+    console.error("Activation verify error:", err);
+    res.status(500).json({ error: "Server error during activation verification" });
+  }
 });
 
 app.get("/api/banks", async (req, res) => {
@@ -1790,6 +2014,7 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
 
     const client = await pool.connect();
     let updatedSubmission: any;
+    let commissionData: { amount: number; submissionId: string; taskTitle: string; earnerName: string } | null = null;
     try {
       await client.query("BEGIN");
 
@@ -1813,19 +2038,25 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
         const earnerName = earnerRes.rows[0]?.name || "";
         const earnerRole = earnerRes.rows[0]?.role || "Earner";
         await client.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2", [submission.reward, submission.earnerId]);
+        const txRef = "E-TASK-" + Math.floor(10000000 + Math.random() * 90000000);
         await client.query(`
           INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
           VALUES ($1,$2,$3,$4,$5,'Task Earnings','Success',$6,$7,$8)
         `, [
           "tx-" + Math.random().toString(36).substr(2, 9),
           submission.earnerId, earnerName, earnerRole, submission.reward,
-          `Earned from task: ${task.title}`,
-          "E-TASK-" + Math.floor(10000000 + Math.random() * 90000000), now
+          `Earned from task: ${task.title}`, txRef, now
         ]);
 
         const newFilled = task.filledSlots + 1;
         const newStatus = newFilled >= task.totalSlots ? TaskStatus.COMPLETED : task.status;
         await client.query("UPDATE tasks SET filled_slots=$1, status=$2 WHERE id=$3", [newFilled, newStatus, task.id]);
+
+        // Capture commission data for after commit
+        const commission = (task.costPerSlot || 0) - submission.reward;
+        if (commission > 0) {
+          commissionData = { amount: commission, submissionId: submission.id, taskTitle: task.title, earnerName };
+        }
       } else {
         await client.query("UPDATE submissions SET status=$1, feedback=$2 WHERE id=$3", [status, feedback || "", submission.id]);
       }
@@ -1838,6 +2069,19 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
       throw txErr;
     } finally {
       client.release();
+    }
+
+    // Credit admin platform commission after commit (prevents double-crediting via ON CONFLICT)
+    if (commissionData) {
+      await creditAdminCommission({
+        type: "task_commission",
+        amount: commissionData.amount,
+        description: `Task commission: "${commissionData.taskTitle}" — ${commissionData.earnerName}`,
+        reference: "COMM-TASK-" + commissionData.submissionId,
+        userId: updatedSubmission.earnerId,
+        userName: commissionData.earnerName,
+        relatedRef: commissionData.submissionId
+      });
     }
 
     res.json({ success: true, submission: updatedSubmission });
@@ -2144,6 +2388,7 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
     const { status, feedback } = req.body;
     const client = await pool.connect();
     let updatedSubmission: any;
+    let adminCommData: { amount: number; submissionId: string; taskTitle: string; earnerName: string } | null = null;
     try {
       await client.query("BEGIN");
 
@@ -2174,6 +2419,10 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
             `Earned from task (Admin Audited): ${task.title}`,
             "E-TASK-ADM-" + Math.floor(10000000 + Math.random() * 90000000), now
           ]);
+          const commission = (task.costPerSlot || 0) - submission.reward;
+          if (commission > 0) {
+            adminCommData = { amount: commission, submissionId: submission.id, taskTitle: task.title, earnerName: earnerRes.rows[0].name };
+          }
         }
         const newFilled = task.filledSlots + 1;
         const newStatus = newFilled >= task.totalSlots ? TaskStatus.COMPLETED : task.status;
@@ -2190,6 +2439,17 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
       throw txErr;
     } finally {
       client.release();
+    }
+
+    // Credit admin platform commission after commit
+    if (adminCommData) {
+      await creditAdminCommission({
+        type: "task_commission",
+        amount: adminCommData.amount,
+        description: `Task commission (Admin): "${adminCommData.taskTitle}" — ${adminCommData.earnerName}`,
+        reference: "COMM-ADMTASK-" + adminCommData.submissionId,
+        relatedRef: adminCommData.submissionId
+      });
     }
 
     res.json({ success: true, submission: updatedSubmission });
@@ -2219,6 +2479,7 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
 
     const client = await pool.connect();
     let updatedTx: any;
+    let wdCommData: { fee: number; txRef: string; userName: string; userId: string } | null = null;
     try {
       await client.query("BEGIN");
 
@@ -2227,6 +2488,7 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
 
       const transaction = mapTransaction(txRes.rows[0]);
       if (transaction.status !== TransactionStatus.PENDING) { await client.query("ROLLBACK"); return res.status(400).json({ error: "Withdrawal already reviewed" }); }
+
 
       if (isApproved) {
         const earnerRes = await client.query("SELECT wallet_balance FROM users WHERE id=$1 FOR UPDATE", [transaction.userId]);
@@ -2239,6 +2501,13 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
           await client.query("UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id=$2", [transaction.amount, transaction.userId]);
         }
         await client.query("UPDATE transactions SET status='Success' WHERE id=$1", [transaction.id]);
+
+        // Capture withdrawal fee commission data for crediting after commit
+        const settings = await getSettings();
+        const fee = settings?.withdrawalFee || 100;
+        if (fee > 0) {
+          wdCommData = { fee, txRef: transaction.reference || transaction.id, userName: transaction.userName || "", userId: transaction.userId };
+        }
       } else {
         await client.query("UPDATE transactions SET status='Rejected' WHERE id=$1", [transaction.id]);
       }
@@ -2251,6 +2520,19 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
       throw txErr;
     } finally {
       client.release();
+    }
+
+    // Credit admin withdrawal fee commission after commit
+    if (wdCommData) {
+      await creditAdminCommission({
+        type: "withdrawal_fee",
+        amount: wdCommData.fee,
+        description: `Withdrawal processing fee — ${wdCommData.userName}`,
+        reference: "COMM-WD-" + wdCommData.txRef,
+        userId: wdCommData.userId,
+        userName: wdCommData.userName,
+        relatedRef: wdCommData.txRef
+      });
     }
 
     res.json({ success: true, transaction: updatedTx });
@@ -2490,40 +2772,25 @@ async function getPlatformRevenueStats() {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
-  // Commission from approved submissions
-  const approvedSubs = await pool.query(`
-    SELECT s.reward, s.approved_at, s.submitted_at, t.cost_per_slot
-    FROM submissions s
-    LEFT JOIN tasks t ON t.id = s.task_id
-    WHERE s.status = 'Approved'
-  `);
+  // All commission data sourced from the persistent admin_commissions table
+  const commRes = await pool.query("SELECT type, amount, created_at FROM admin_commissions");
 
-  let totalCommission = 0, todayCommission = 0, monthCommission = 0;
-  for (const row of approvedSubs.rows) {
-    const cost = parseFloat(row.cost_per_slot) || (parseFloat(row.reward) * 1.35);
-    const commission = cost - parseFloat(row.reward);
-    totalCommission += commission;
-    const approvedTime = row.approved_at ? new Date(row.approved_at).getTime() : new Date(row.submitted_at).getTime();
-    if (approvedTime >= startOfToday) todayCommission += commission;
-    if (approvedTime >= startOfThisMonth) monthCommission += commission;
-  }
+  let lifetimeRevenue = 0, todayRevenue = 0, thisMonthRevenue = 0;
+  let totalActivationFees = 0, totalTaskCommission = 0, totalWithdrawalFees = 0, activatedEarnersCount = 0;
 
-  // Withdrawal fees from approved user withdrawals
-  const settings = await getSettings();
-  const feePerWd = settings?.withdrawalFee || 100;
-
-  const wdRes = await pool.query("SELECT created_at FROM transactions WHERE type='Withdrawal' AND status IN ('Success','Approved')");
-  let totalWdFees = 0, todayWdFees = 0, monthWdFees = 0;
-  for (const row of wdRes.rows) {
-    totalWdFees += feePerWd;
+  for (const row of commRes.rows) {
+    const amount = parseFloat(row.amount) || 0;
+    lifetimeRevenue += amount;
     const t = new Date(row.created_at).getTime();
-    if (t >= startOfToday) todayWdFees += feePerWd;
-    if (t >= startOfThisMonth) monthWdFees += feePerWd;
-  }
+    if (t >= startOfToday) todayRevenue += amount;
+    if (t >= startOfThisMonth) thisMonthRevenue += amount;
 
-  const lifetimeRevenue = totalCommission + totalWdFees;
-  const todayRevenue = todayCommission + todayWdFees;
-  const monthRevenue = monthCommission + monthWdFees;
+    switch (row.type) {
+      case "activation_fee":  totalActivationFees += amount; activatedEarnersCount++; break;
+      case "task_commission": totalTaskCommission += amount; break;
+      case "withdrawal_fee":  totalWithdrawalFees += amount; break;
+    }
+  }
 
   const ownerWds = await pool.query("SELECT amount, status FROM owner_withdrawals");
   let totalWithdrawn = 0, pendingWithdrawalAmount = 0;
@@ -2534,7 +2801,19 @@ async function getPlatformRevenueStats() {
 
   const availableBalance = Math.max(0, lifetimeRevenue - totalWithdrawn - pendingWithdrawalAmount);
 
-  return { lifetimeRevenue, totalPlatformRevenue: lifetimeRevenue, todayRevenue, thisMonthRevenue: monthRevenue, totalWithdrawn, pendingWithdrawalAmount, availableBalance };
+  return {
+    lifetimeRevenue,
+    totalPlatformRevenue: lifetimeRevenue,
+    todayRevenue,
+    thisMonthRevenue,
+    totalWithdrawn,
+    pendingWithdrawalAmount,
+    availableBalance,
+    totalActivationFees,
+    totalCommission: totalTaskCommission,
+    totalWithdrawalFees,
+    activatedEarnersCount
+  };
 }
 
 app.get("/api/admin/owner-earnings/stats", async (req, res) => {
@@ -2543,6 +2822,28 @@ app.get("/api/admin/owner-earnings/stats", async (req, res) => {
     if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
     res.json(await getPlatformRevenueStats());
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// ─── Admin Commission Ledger ──────────────────────────────────────────────────
+
+app.get("/api/admin/commissions", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query("SELECT * FROM admin_commissions ORDER BY created_at DESC LIMIT 500");
+    res.json(result.rows.map(row => ({
+      id: row.id,
+      type: row.type,
+      amount: parseFloat(row.amount),
+      description: row.description,
+      reference: row.reference,
+      userId: row.user_id,
+      userName: row.user_name,
+      relatedTransactionRef: row.related_transaction_ref,
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
+    })));
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 

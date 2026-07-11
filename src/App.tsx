@@ -49,9 +49,9 @@ export default function App() {
   const [announcements, setAnnouncements] = React.useState<Announcement[]>([]);
   const [pagesContent, setPagesContent] = React.useState<{ [key: string]: { title: string; content: string } }>({});
   const [publicStats, setPublicStats] = React.useState({
-    earnersCount: 45000,
-    tasksCount: 1200000,
-    totalPaidOut: 24000000,
+    earnersCount: 12485,
+    tasksCount: 346,
+    totalPaidOut: 3875560,
     latestWithdrawal: null as { userName: string; bankName: string; amount: number } | null,
     latestCampaign: null as { title: string; cost: number } | null
   });
@@ -228,9 +228,9 @@ export default function App() {
       const s = await apiFetch("/api/public/stats");
       if (s && !s.error) {
         setPublicStats({
-          earnersCount: s.earnersCount !== undefined ? s.earnersCount : 45000,
-          tasksCount: s.tasksCount !== undefined ? s.tasksCount : 1200000,
-          totalPaidOut: s.totalPaidOut !== undefined ? s.totalPaidOut : 24000000,
+          earnersCount: s.earnersCount !== undefined ? s.earnersCount : 12485,
+          tasksCount: s.tasksCount !== undefined ? s.tasksCount : 346,
+          totalPaidOut: s.totalPaidOut !== undefined ? s.totalPaidOut : 3875560,
           latestWithdrawal: s.latestWithdrawal,
           latestCampaign: s.latestCampaign
         });

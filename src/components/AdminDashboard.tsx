@@ -54,7 +54,7 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = React.useState<
-    "stats" | "users" | "campaigns" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings"
+    "stats" | "users" | "campaigns" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings" | "commissions"
   >("stats");
 
   // Admin states
@@ -168,12 +168,23 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   const [rejectingSubId, setRejectingSubId] = React.useState<string | null>(null);
   const [rejectionFeedback, setRejectionFeedback] = React.useState<string>("");
 
+  // Commission ledger state
+  const [commissionsList, setCommissionsList] = React.useState<any[]>([]);
+  const [commissionFilter, setCommissionFilter] = React.useState<string>("all");
+
   const fetchPlatformStats = async () => {
     try {
       const data = await apiFetch("/api/admin/owner-earnings/stats");
       if (data && !data.error) {
         setPlatformStats(data);
       }
+    } catch (e) {}
+  };
+
+  const fetchCommissions = async () => {
+    try {
+      const data = await apiFetch("/api/admin/commissions");
+      if (Array.isArray(data)) setCommissionsList(data);
     } catch (e) {}
   };
 
@@ -346,6 +357,10 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
       fetchOwnerBankAccounts();
       fetchOwnerWithdrawals();
       fetchBanksList();
+    }
+    if (activeTab === "commissions") {
+      fetchPlatformStats();
+      fetchCommissions();
     }
   }, [activeTab]);
 
@@ -1098,6 +1113,16 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         >
           <TrendingUp className="h-4 w-4 text-slate-400" /> 
           <span>Platform Earnings</span>
+        </button>
+
+        <button 
+          onClick={() => setActiveTab("commissions")}
+          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
+            activeTab === "commissions" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
+          }`}
+        >
+          <BadgePercent className="h-4 w-4 text-slate-400" /> 
+          <span>Commission Ledger</span>
         </button>
       </div>
 
@@ -2283,6 +2308,122 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
 
             </div>
 
+          </div>
+        )}
+
+        {/* COMMISSION LEDGER TAB */}
+        {activeTab === "commissions" && (
+          <div className="space-y-6 animate-fadeIn">
+            <div>
+              <h2 className="font-display text-lg font-black text-slate-900 flex items-center gap-2">
+                <BadgePercent className="h-5 w-5 text-blue-500" /> Admin Commission Ledger
+              </h2>
+              <p className="text-xs text-slate-500">All platform commissions auto-credited on every verified transaction. Permanently stored.</p>
+            </div>
+
+            {/* Summary Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Earned (Lifetime)</span>
+                <span className="block font-mono text-2xl font-black text-blue-600 mt-1">₦{platformStats.lifetimeRevenue.toLocaleString()}</span>
+              </div>
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/20 p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-emerald-600 uppercase">Available Balance</span>
+                <span className="block font-mono text-2xl font-black text-emerald-600 mt-1">₦{platformStats.availableBalance.toLocaleString()}</span>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Withdrawn</span>
+                <span className="block font-mono text-2xl font-black text-slate-700 mt-1">₦{platformStats.totalWithdrawn.toLocaleString()}</span>
+              </div>
+              <div className="rounded-2xl border border-orange-100 bg-orange-50/20 p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-orange-600 uppercase">Activation Fees</span>
+                <span className="block font-mono text-2xl font-black text-orange-600 mt-1">₦{platformStats.totalActivationFees.toLocaleString()}</span>
+                <span className="block text-[10px] text-orange-400 mt-0.5">{platformStats.activatedEarnersCount} earners activated</span>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase">Task Commissions</span>
+                <span className="block font-mono text-2xl font-black text-indigo-600 mt-1">₦{(platformStats.totalCommission || 0).toLocaleString()}</span>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase">Withdrawal Fees</span>
+                <span className="block font-mono text-2xl font-black text-purple-600 mt-1">₦{(platformStats.totalWithdrawalFees || 0).toLocaleString()}</span>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase">Today's Earnings</span>
+                <span className="block font-mono text-2xl font-black text-slate-700 mt-1">₦{platformStats.todayRevenue.toLocaleString()}</span>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase">This Month</span>
+                <span className="block font-mono text-2xl font-black text-slate-700 mt-1">₦{platformStats.thisMonthRevenue.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Commission Filter Tabs */}
+            <div className="flex flex-wrap gap-2">
+              {["all", "activation_fee", "task_commission", "withdrawal_fee"].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setCommissionFilter(f)}
+                  className={`rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                    commissionFilter === f ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                  }`}
+                >
+                  {f === "all" ? "All Entries" : f === "activation_fee" ? "Activation Fees" : f === "task_commission" ? "Task Commissions" : "Withdrawal Fees"}
+                </button>
+              ))}
+              <button
+                onClick={() => fetchCommissions()}
+                className="ml-auto rounded-full px-3 py-1.5 text-[10px] font-bold bg-slate-100 text-slate-500 hover:bg-slate-200 cursor-pointer transition-all"
+              >
+                ↻ Refresh
+              </button>
+            </div>
+
+            {/* Commission History Table */}
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+              {commissionsList.filter(c => commissionFilter === "all" || c.type === commissionFilter).length === 0 ? (
+                <div className="py-12 text-center">
+                  <BadgePercent className="h-10 w-10 text-slate-200 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-slate-400">No commission records yet.</p>
+                  <p className="text-xs text-slate-300 mt-1">Commissions are auto-credited when transactions are verified.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th className="text-left">Type</th>
+                        <th className="text-left">Description</th>
+                        <th className="text-left">User</th>
+                        <th className="text-right">Amount</th>
+                        <th className="text-left">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {commissionsList
+                        .filter(c => commissionFilter === "all" || c.type === commissionFilter)
+                        .map((c) => (
+                          <tr key={c.id}>
+                            <td>
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                                c.type === "activation_fee" ? "bg-orange-50 text-orange-700 border border-orange-100" :
+                                c.type === "task_commission" ? "bg-blue-50 text-blue-700 border border-blue-100" :
+                                "bg-purple-50 text-purple-700 border border-purple-100"
+                              }`}>
+                                {c.type === "activation_fee" ? "Activation" : c.type === "task_commission" ? "Task" : "Withdrawal"}
+                              </span>
+                            </td>
+                            <td className="max-w-xs truncate">{c.description}</td>
+                            <td>{c.userName || <span className="text-slate-300">—</span>}</td>
+                            <td className="text-right font-mono font-bold text-emerald-600">+₦{c.amount.toLocaleString()}</td>
+                            <td className="text-slate-400">{new Date(c.createdAt).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" })}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
