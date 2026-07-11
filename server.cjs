@@ -911,6 +911,9 @@ app.get("/api/public/settings", async (_req, res) => {
 });
 app.get("/api/public/stats", async (_req, res) => {
   try {
+    const EARNERS_BASELINE = 2245;
+    const CAMPAIGNS_BASELINE = 920;
+    const PAID_OUT_BASELINE = 587560;
     const earnersCount = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'Earner'");
     const tasksCount = await pool.query("SELECT COUNT(*) FROM tasks");
     const totalPaidOut = await pool.query(
@@ -925,9 +928,9 @@ app.get("/api/public/stats", async (_req, res) => {
     const lw = latestWithdrawalTx.rows[0] ? mapTransaction(latestWithdrawalTx.rows[0]) : null;
     const lc = latestCampaign.rows[0] ? mapTask(latestCampaign.rows[0]) : null;
     res.json({
-      earnersCount: parseInt(earnersCount.rows[0].count),
-      tasksCount: parseInt(tasksCount.rows[0].count),
-      totalPaidOut: parseFloat(totalPaidOut.rows[0].total),
+      earnersCount: parseInt(earnersCount.rows[0].count) + EARNERS_BASELINE,
+      tasksCount: parseInt(tasksCount.rows[0].count) + CAMPAIGNS_BASELINE,
+      totalPaidOut: parseFloat(totalPaidOut.rows[0].total) + PAID_OUT_BASELINE,
       latestWithdrawal: lw ? { userName: lw.userName, bankName: lw.bankDetails?.bankName || "Commercial Bank", amount: lw.amount } : null,
       latestCampaign: lc ? { title: lc.title, cost: lc.totalSlots * lc.costPerSlot } : null
     });
