@@ -5,8 +5,8 @@ A full-stack microtask platform where earners complete social media tasks for �
 ## Tech Stack
 
 - **Frontend**: React 19 + Vite + Tailwind CSS v4 + TypeScript
-- **Backend**: Node.js + Express (single unified server)
-- **Database**: PostgreSQL (Replit-managed, auto-injected as `DATABASE_URL`) with `db.json` fallback
+- **Backend**: Node.js + Express (single unified server in `server.ts`)
+- **Database**: PostgreSQL (Replit-managed, auto-injected as `DATABASE_URL`)
 - **Dev runtime**: `tsx` (TypeScript execution for the server in dev mode)
 
 ## How to Run
@@ -29,19 +29,23 @@ The server starts on port **5000** and serves both the Express API and the Vite 
 
 ## Database
 
-- In dev: Replit auto-injects `DATABASE_URL` for the built-in PostgreSQL database. Tables are auto-created on first boot via `bootstrapTables()` in `src/postgresDb.ts`.
-- Without `DATABASE_URL`, the app falls back to `db.json` (file-based persistence).
+- All data is stored in **PostgreSQL**. The server picks its connection string via `NEON_DATABASE_URL` (preferred, external Neon Postgres) and falls back to `DATABASE_URL` (Replit-managed) if `NEON_DATABASE_URL` is not set.
+- Tables are created automatically on first boot via `bootstrapTables()` in `server.ts` — this runs against whichever database is configured, so pointing at a fresh Neon database creates the full schema automatically.
+- Seed data (3 demo users, sample tasks, transactions, etc.) is inserted on first boot when the `users` table is empty.
+- **db.json is no longer used** — the file is kept as a reference artifact only.
+- To deploy against Neon (e.g. on Render), set `NEON_DATABASE_URL` to the Neon connection string (`postgresql://...sslmode=require`) as an environment variable/secret on the host — never commit it to source.
 
 ## Environment Variables
 
 | Key | Required | Notes |
 |---|---|---|
-| `DATABASE_URL` | Recommended | Auto-injected by Replit PostgreSQL |
+| `NEON_DATABASE_URL` | Preferred | External Neon PostgreSQL connection string; takes priority over `DATABASE_URL` when set |
+| `DATABASE_URL` | Fallback | Auto-injected by Replit PostgreSQL; used only if `NEON_DATABASE_URL` is absent |
 | `SESSION_SECRET` | Yes | Already set as Replit Secret |
 | `PORT` | Set to 5000 | Required for Replit webview |
-| `RESEND_API_KEY` + `RESEND_FROM` | Optional | Email via Resend |
-| `SMTP_*` | Optional | Email via SMTP |
-| `PAYSTACK_SECRET_KEY` / `PAYSTACK_PUBLIC_KEY` | Optional | Payment gateway |
+| `RESEND_API_KEY` + `RESEND_FROM` | Optional | Email via Resend (for email verification) |
+| `SMTP_HOST/PORT/USER/PASSWORD/FROM` | Optional | Email via SMTP (fallback to Resend) |
+| `PAYSTACK_SECRET_KEY` | Optional | Required to accept real deposits |
 | `GEMINI_API_KEY` | Optional | AI features |
 
 ## Demo Credentials
@@ -55,16 +59,21 @@ The server starts on port **5000** and serves both the Express API and the Vite 
 ## Project Structure
 
 ```
-server.ts          # Express API + Vite middleware integration
+server.ts          # Express API + Vite middleware + DB bootstrap/seed
 src/
   App.tsx          # Core routing & state
   components/      # Dashboard components (Earner, Advertiser, Admin)
-  postgresDb.ts    # PostgreSQL adapter (bootstrap, load, save)
-  mockDb.ts        # localStorage-based fallback (GitHub Pages)
-  types.ts         # TypeScript interfaces
-db.json            # Auto-generated file-based DB (fallback)
+  postgresDb.ts    # Legacy PostgreSQL adapter (no longer used by server.ts)
+  mockDb.ts        # localStorage-based fallback (GitHub Pages static mode)
+  types.ts         # TypeScript interfaces & enums
 database.sql       # MySQL schema reference (for external DB setup)
 ```
+
+## Architecture Notes
+
+- **Authentication**: Bearer token contains raw user ID (`Authorization: Bearer <userId>`). `getAuthenticatedUser()` in `server.ts` is async and queries the DB on every authenticated request.
+- **Financial operations** (campaign creation, submission approval, withdrawal approval, deposit verification) are wrapped in PostgreSQL transactions with `SELECT ... FOR UPDATE` row locking to prevent race conditions and partial writes.
+- **Notifications**: Stored in the `notifications` PostgreSQL table. Real-time broadcast to admin via WebSocket on `/ws`.
 
 ## User Preferences
 

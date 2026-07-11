@@ -1,92 +1,458 @@
 import express from "express";
 import path from "path";
-import fs from "fs";
 import crypto from "crypto";
 import dotenv from "dotenv";
 dotenv.config();
+import pg from "pg";
 import { Resend } from "resend";
 import nodemailer from "nodemailer";
 import { createServer as createViteServer } from "vite";
 import { createServer as createHttpServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { 
-  UserRole, 
-  TaskStatus, 
-  SubmissionStatus, 
-  TransactionType, 
-  TransactionStatus, 
+import {
+  UserRole,
+  TaskStatus,
+  SubmissionStatus,
+  TransactionType,
+  TransactionStatus,
   TaskCategory,
   AdminNotification,
   Platform,
   TaskPricing,
   getPlatformForCategory
 } from "./src/types.js";
-import { isPostgresEnabled, loadFromPostgres, saveToPostgres } from "./src/postgresDb.js";
 
-const PORT = Number(process.env.PORT) || 3000;
-const DB_FILE = path.join(process.cwd(), "db.json");
+const { Pool } = pg;
 
-// Helper for Sha256 hashing
+const PORT = Number(process.env.PORT) || 5000;
+
+// Prefer the externally-hosted Neon database when configured; falls back to
+// the platform-provisioned DATABASE_URL only if NEON_DATABASE_URL is absent.
+const DB_CONNECTION_STRING = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
+
+if (!DB_CONNECTION_STRING) {
+  console.error("FATAL: No database connection string configured. Set NEON_DATABASE_URL (or DATABASE_URL).");
+  process.exit(1);
+}
+
+const pool = new Pool({
+  connectionString: DB_CONNECTION_STRING,
+  ssl: DB_CONNECTION_STRING.includes("localhost") || DB_CONNECTION_STRING.includes("127.0.0.1")
+    ? false
+    : { rejectUnauthorized: false }
+});
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
 function hashPassword(password: string): string {
   return crypto.createHash("sha256").update(password).digest("hex");
 }
 
-// In-Memory DB state representing all database tables
-let db: {
-  users: any[];
-  tasks: any[];
-  submissions: any[];
-  transactions: any[];
-  referrals: any[];
-  announcements: any[];
-  banners: any[];
-  notifications: AdminNotification[];
-  pages: { [key: string]: { title: string; content: string } };
-  settings: {
-    platformName: string;
-    referralReward: number;
-    withdrawalFee: number;
-    minWithdrawal: number;
-    minDeposit: number;
-    contactEmail: string;
-    contactPhone: string;
-    telegramChannel?: string;
-    whatsappGroup?: string;
+function mapUser(row: any) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    password: row.password,
+    role: row.role,
+    isVerified: row.is_verified === true || row.is_verified === "true",
+    walletBalance: parseFloat(row.wallet_balance) || 0,
+    referralCode: row.referral_code || undefined,
+    referredBy: row.referred_by || undefined,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    verificationCode: row.verification_code || undefined,
+    verificationCodeExpires: row.verification_code_expires
+      ? (row.verification_code_expires instanceof Date
+          ? row.verification_code_expires.toISOString()
+          : row.verification_code_expires)
+      : undefined,
+    verificationCodeLastSent: row.verification_code_last_sent
+      ? (row.verification_code_last_sent instanceof Date
+          ? row.verification_code_last_sent.toISOString()
+          : row.verification_code_last_sent)
+      : undefined
   };
-  taskPricing: TaskPricing[];
-  ownerEarnings?: {
-    bankAccounts: any[];
-    withdrawals: any[];
-  };
-} = {
-  users: [],
-  tasks: [],
-  submissions: [],
-  transactions: [],
-  referrals: [],
-  announcements: [],
-  banners: [],
-  notifications: [],
-  pages: {},
-  ownerEarnings: {
-    bankAccounts: [],
-    withdrawals: []
-  },
+}
 
-  settings: {
+function mapTask(row: any) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    proofRequirements: row.proof_requirements,
+    link: row.link,
+    costPerSlot: parseFloat(row.cost_per_slot) || 0,
+    earningPerSlot: parseFloat(row.earning_per_slot) || 0,
+    totalSlots: parseInt(row.total_slots) || 0,
+    filledSlots: parseInt(row.filled_slots) || 0,
+    status: row.status,
+    advertiserId: row.advertiser_id,
+    advertiserName: row.advertiser_name,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
+  };
+}
+
+function mapSubmission(row: any) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    taskId: row.task_id,
+    taskTitle: row.task_title,
+    category: row.category,
+    earnerId: row.earner_id,
+    earnerName: row.earner_name,
+    proofText: row.proof_text,
+    proofScreenshot: row.proof_screenshot,
+    status: row.status,
+    feedback: row.feedback || undefined,
+    reward: parseFloat(row.reward) || 0,
+    submittedAt: row.submitted_at instanceof Date ? row.submitted_at.toISOString() : row.submitted_at,
+    approvedAt: row.approved_at ? (row.approved_at instanceof Date ? row.approved_at.toISOString() : row.approved_at) : undefined
+  };
+}
+
+function mapTransaction(row: any) {
+  if (!row) return null;
+  let bankDetails = row.bank_details;
+  if (typeof bankDetails === "string") {
+    try { bankDetails = JSON.parse(bankDetails); } catch (e) {}
+  }
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userName: row.user_name,
+    userRole: row.user_role,
+    amount: parseFloat(row.amount) || 0,
+    type: row.type,
+    status: row.status,
+    description: row.description,
+    reference: row.reference,
+    gateway: row.gateway || undefined,
+    bankDetails: bankDetails || undefined,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
+  };
+}
+
+function mapSettings(row: any) {
+  if (!row) return null;
+  return {
+    platformName: row.platform_name,
+    referralReward: parseFloat(row.referral_reward) || 200,
+    withdrawalFee: parseFloat(row.withdrawal_fee) || 100,
+    minWithdrawal: parseFloat(row.min_withdrawal) || 200,
+    minDeposit: parseFloat(row.min_deposit) || 200,
+    contactEmail: row.contact_email,
+    contactPhone: row.contact_phone,
+    telegramChannel: row.telegram_channel || undefined,
+    whatsappGroup: row.whatsapp_group || undefined
+  };
+}
+
+function mapPricing(row: any) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    platform: row.platform,
+    costPerSlot: parseFloat(row.cost_per_slot) || 0,
+    earningPerSlot: parseFloat(row.earning_per_slot) || 0
+  };
+}
+
+function mapSocialPlatform(row: any) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    icon: row.icon || "",
+    logoUrl: row.logo_url || undefined,
+    description: row.description || undefined,
+    status: row.status,
+    sortOrder: parseInt(row.sort_order) || 0,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
+  };
+}
+
+function mapOwnerBankAccount(row: any) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    bankName: row.bank_name,
+    accountNumber: row.account_number,
+    accountName: row.account_name,
+    isDefault: row.is_default === true || row.is_default === "true"
+  };
+}
+
+function mapOwnerWithdrawal(row: any) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    amount: parseFloat(row.amount) || 0,
+    bankAccountId: row.bank_account_id,
+    bankName: row.bank_name,
+    accountNumber: row.account_number,
+    accountName: row.account_name,
+    reference: row.reference,
+    status: row.status,
+    submittedAt: row.submitted_at instanceof Date ? row.submitted_at.toISOString() : row.submitted_at
+  };
+}
+
+function mapNotification(row: any): AdminNotification {
+  return {
+    id: row.id,
+    type: row.type,
+    message: row.message,
+    referenceId: row.reference_id,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    read: row.read === true || row.read === "true"
+  };
+}
+
+async function getSettings(): Promise<ReturnType<typeof mapSettings>> {
+  const res = await pool.query("SELECT * FROM settings ORDER BY id ASC LIMIT 1");
+  return res.rows.length > 0 ? mapSettings(res.rows[0]) : {
     platformName: "TasksEarn",
     referralReward: 200,
     withdrawalFee: 100,
-    minWithdrawal: 2000,
-    minDeposit: 1000,
+    minWithdrawal: 200,
+    minDeposit: 200,
     contactEmail: "support@tasksearn.com",
     contactPhone: "09164444315",
     telegramChannel: "https://t.me/tasksearn_ng",
     whatsappGroup: "https://wa.me/2349164444315"
-  },
+  };
+}
 
-  taskPricing: []
-};
+async function getAuthenticatedUser(req: express.Request): Promise<any | null> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+  const userId = authHeader.split(" ")[1];
+  if (!userId) return null;
+  const res = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
+  return res.rows.length > 0 ? mapUser(res.rows[0]) : null;
+}
+
+// ─── Schema Bootstrap ───────────────────────────────────────────────────────
+
+async function bootstrapTables() {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // 1. Users
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(150) NOT NULL,
+        email VARCHAR(150) NOT NULL UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        role VARCHAR(50) NOT NULL DEFAULT 'Earner',
+        is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+        wallet_balance DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        referral_code VARCHAR(50) NULL,
+        referred_by VARCHAR(50) NULL,
+        verification_code VARCHAR(10) NULL,
+        verification_code_expires TIMESTAMP NULL,
+        verification_code_last_sent TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 2. Tasks
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id VARCHAR(50) PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        proof_requirements TEXT NOT NULL,
+        link VARCHAR(255) NOT NULL,
+        cost_per_slot DECIMAL(10, 2) NOT NULL,
+        earning_per_slot DECIMAL(10, 2) NOT NULL,
+        total_slots INT NOT NULL,
+        filled_slots INT NOT NULL DEFAULT 0,
+        status VARCHAR(50) NOT NULL DEFAULT 'Active',
+        advertiser_id VARCHAR(50) NOT NULL,
+        advertiser_name VARCHAR(150) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 3. Submissions
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS submissions (
+        id VARCHAR(50) PRIMARY KEY,
+        task_id VARCHAR(50) NOT NULL,
+        task_title VARCHAR(255) NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        earner_id VARCHAR(50) NOT NULL,
+        earner_name VARCHAR(150) NOT NULL,
+        proof_text TEXT NOT NULL,
+        proof_screenshot VARCHAR(1000) NULL,
+        status VARCHAR(50) NOT NULL DEFAULT 'Pending',
+        feedback TEXT NULL,
+        reward DECIMAL(10, 2) NOT NULL,
+        approved_at TIMESTAMP NULL,
+        submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 4. Transactions
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id VARCHAR(50) PRIMARY KEY,
+        user_id VARCHAR(50) NOT NULL,
+        user_name VARCHAR(150) NOT NULL,
+        user_role VARCHAR(50) NOT NULL,
+        amount DECIMAL(15, 2) NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        status VARCHAR(50) NOT NULL DEFAULT 'Pending',
+        description VARCHAR(500) NOT NULL,
+        reference VARCHAR(100) NOT NULL UNIQUE,
+        gateway VARCHAR(50) NULL,
+        bank_details JSONB NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 5. Referrals
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS referrals (
+        id VARCHAR(50) PRIMARY KEY,
+        referrer_id VARCHAR(50) NOT NULL,
+        referee_id VARCHAR(50) NOT NULL,
+        referee_name VARCHAR(150) NOT NULL,
+        referee_email VARCHAR(150) NOT NULL,
+        reward_earned DECIMAL(10, 2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 6. Announcements
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS announcements (
+        id VARCHAR(50) PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        type VARCHAR(50) NOT NULL DEFAULT 'info',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 7. Banners
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS banners (
+        id VARCHAR(50) PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        image_url VARCHAR(500) NOT NULL,
+        link VARCHAR(255) NULL,
+        active BOOLEAN NOT NULL DEFAULT TRUE
+      )
+    `);
+
+    // 8. Pages
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pages (
+        id VARCHAR(50) PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL
+      )
+    `);
+
+    // 9. Settings
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS settings (
+        id SERIAL PRIMARY KEY,
+        platform_name VARCHAR(100) NOT NULL DEFAULT 'TasksEarn',
+        referral_reward DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
+        withdrawal_fee DECIMAL(10, 2) NOT NULL DEFAULT 100.00,
+        min_withdrawal DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
+        min_deposit DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
+        contact_email VARCHAR(150) NOT NULL DEFAULT 'support@tasksearn.com',
+        contact_phone VARCHAR(50) NOT NULL DEFAULT '09164444315',
+        telegram_channel VARCHAR(255) NULL,
+        whatsapp_group VARCHAR(255) NULL
+      )
+    `);
+
+    // 10. Task Pricing
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS task_pricing (
+        id VARCHAR(50) PRIMARY KEY,
+        platform VARCHAR(100) NOT NULL,
+        cost_per_slot DECIMAL(10, 2) NOT NULL,
+        earning_per_slot DECIMAL(10, 2) NOT NULL
+      )
+    `);
+
+    // 10b. Social Media Platforms (admin-managed, dynamic)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS social_platforms (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE,
+        icon VARCHAR(100) NOT NULL DEFAULT '',
+        logo_url TEXT NULL,
+        description TEXT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'Active',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 11. Owner Bank Accounts
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS owner_bank_accounts (
+        id VARCHAR(50) PRIMARY KEY,
+        bank_name VARCHAR(150) NOT NULL,
+        account_number VARCHAR(50) NOT NULL,
+        account_name VARCHAR(150) NOT NULL,
+        is_default BOOLEAN NOT NULL DEFAULT FALSE
+      )
+    `);
+
+    // 12. Owner Withdrawals (denormalized for simplicity)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS owner_withdrawals (
+        id VARCHAR(50) PRIMARY KEY,
+        amount DECIMAL(15, 2) NOT NULL,
+        bank_account_id VARCHAR(50) NOT NULL DEFAULT '',
+        bank_name VARCHAR(150) NOT NULL DEFAULT '',
+        account_number VARCHAR(50) NOT NULL DEFAULT '',
+        account_name VARCHAR(150) NOT NULL DEFAULT '',
+        reference VARCHAR(100) NOT NULL DEFAULT '',
+        status VARCHAR(50) NOT NULL DEFAULT 'Pending',
+        submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 13. Notifications
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id VARCHAR(50) PRIMARY KEY,
+        type VARCHAR(50) NOT NULL,
+        message TEXT NOT NULL,
+        reference_id VARCHAR(50) NOT NULL,
+        read BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query("COMMIT");
+    console.log("[DB] Tables bootstrapped successfully.");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("[DB] Error bootstrapping tables:", err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ─── Seed Data ───────────────────────────────────────────────────────────────
 
 function getInitialPricing(): TaskPricing[] {
   const platforms = Object.values(Platform);
@@ -109,7 +475,6 @@ function getInitialPricing(): TaskPricing[] {
     [Platform.LIKEE]: { cost: 15, earn: 10 },
     [Platform.CUSTOM]: { cost: 30, earn: 20 }
   };
-
   return platforms.map((plat, idx) => ({
     id: `prc-${idx + 1}`,
     platform: plat,
@@ -118,286 +483,182 @@ function getInitialPricing(): TaskPricing[] {
   }));
 }
 
-// Initialize DB file if not exists, otherwise load it
-function loadDB() {
-  if (fs.existsSync(DB_FILE)) {
-    try {
-      db = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
-      // Ensure arrays and objects exist
-      if (!db.users) db.users = [];
-      if (!db.tasks) db.tasks = [];
-      if (!db.submissions) db.submissions = [];
-      if (!db.transactions) db.transactions = [];
-      if (!db.referrals) db.referrals = [];
-      if (!db.announcements) db.announcements = [];
-      if (!db.banners) db.banners = [];
-      if (!db.notifications) db.notifications = [];
-      if (!db.pages) db.pages = {};
-      if (!db.taskPricing || db.taskPricing.length === 0) db.taskPricing = getInitialPricing();
-      if (!db.ownerEarnings) {
-        db.ownerEarnings = { bankAccounts: [], withdrawals: [] };
-      }
-      // Backfill isActivated for users loaded from old db.json snapshots
-      if (db.users) {
-        db.users.forEach((u: any) => {
-          if (u.isActivated === undefined) {
-            // Admin and Advertisers are always activated; Earners need to pay
-            u.isActivated = u.role !== UserRole.EARNER;
-          }
-        });
-      }
-      if (!db.settings) {
-        db.settings = {
-          platformName: "TasksEarn",
-          referralReward: 200,
-          withdrawalFee: 100,
-          minWithdrawal: 2000,
-          minDeposit: 1000,
-          contactEmail: "support@tasksearn.com",
-          contactPhone: "09164444315",
-          telegramChannel: "https://t.me/tasksearn_ng",
-          whatsappGroup: "https://wa.me/2349164444315"
-        };
-      }
-      return;
-    } catch (e) {
-      console.error("Error reading db.json, generating default database...", e);
-    }
+function slugifyPlatformId(name: string): string {
+  return "plat-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+async function ensurePricingRowForPlatform(platformName: string) {
+  const existing = await pool.query("SELECT id FROM task_pricing WHERE platform = $1 LIMIT 1", [platformName]);
+  if (existing.rows.length === 0) {
+    const idRes = await pool.query("SELECT COUNT(*) FROM task_pricing");
+    const newId = `prc-${parseInt(idRes.rows[0].count) + 1}-${Date.now()}`;
+    await pool.query(
+      "INSERT INTO task_pricing (id, platform, cost_per_slot, earning_per_slot) VALUES ($1, $2, $3, $4)",
+      [newId, platformName, 0, 0]
+    );
+  }
+}
+
+// Migrates the legacy hard-coded Platform enum values into the dynamic
+// social_platforms table automatically, once, the first time the app boots
+// with an empty table. After this, all platform management is DB-driven.
+async function ensurePlatformsSeeded() {
+  const countRes = await pool.query("SELECT COUNT(*) FROM social_platforms");
+  if (parseInt(countRes.rows[0].count) > 0) return;
+
+  const legacyPlatforms = Object.values(Platform);
+  let order = 0;
+  for (const name of legacyPlatforms) {
+    order += 1;
+    await pool.query(
+      `INSERT INTO social_platforms (id, name, icon, description, status, sort_order)
+       VALUES ($1, $2, $3, $4, 'Active', $5)
+       ON CONFLICT (name) DO NOTHING`,
+      [slugifyPlatformId(name), name, name, "Migrated automatically from default platform list.", order]
+    );
+    await ensurePricingRowForPlatform(name);
+  }
+  console.log(`[DB] Migrated ${legacyPlatforms.length} default social media platforms into social_platforms table.`);
+}
+
+async function seedDatabase() {
+  const usersCount = await pool.query("SELECT COUNT(*) FROM users");
+  if (parseInt(usersCount.rows[0].count) > 0) {
+    console.log("[DB] Database already seeded, skipping.");
+    return;
   }
 
-  // Generate Seed Data
-  const adminId = "u-admin-1";
-  const earnerId = "u-earner-1";
-  const advertiserId = "u-advertiser-1";
+  console.log("[DB] Seeding initial data...");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
 
-  db.users = [
-    {
-      id: adminId,
-      name: "Super Admin",
-      email: "admin@tasksearn.com",
-      password: hashPassword("password123"),
-      role: UserRole.ADMIN,
-      isVerified: true,
-      isActivated: true,
-      walletBalance: 0,
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: earnerId,
-      name: "Tunde Bakare",
-      email: "earner@tasksearn.com",
-      password: hashPassword("password123"),
-      role: UserRole.EARNER,
-      isVerified: true,
-      isActivated: true, // Demo earner pre-activated
-      walletBalance: 2500, // Naira
-      referralCode: "TUNDE887",
-      createdAt: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString() // 10 days ago
-    },
-    {
-      id: advertiserId,
-      name: "Chinedu Okafor",
-      email: "advertiser@tasksearn.com",
-      password: hashPassword("password123"),
-      role: UserRole.ADVERTISER,
-      isVerified: true,
-      isActivated: true, // Advertisers don't need activation fee
-      walletBalance: 35000, // Naira
-      createdAt: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString() // 15 days ago
-    }
-  ];
+    const adminId = "u-admin-1";
+    const earnerId = "u-earner-1";
+    const advertiserId = "u-advertiser-1";
+    const now = new Date();
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 3600 * 1000);
+    const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 3600 * 1000);
 
-  db.tasks = [
-    {
-      id: "task-1",
-      title: "YouTube Subscribe - TechNaija Channel",
-      description: "Go to the YouTube channel link, click Subscribe, and upload a screenshot proving you subscribed. No unsubscribing later, we audit accounts daily.",
-      category: TaskCategory.YT_SUBSCRIBE,
-      proofRequirements: "Your YouTube account username and a screenshot showing the Subscribe button clicked.",
-      link: "https://youtube.com/c/technaija",
-      costPerSlot: 20,
-      earningPerSlot: 15,
-      totalSlots: 200,
-      filledSlots: 87,
-      status: TaskStatus.ACTIVE,
-      advertiserId: advertiserId,
-      advertiserName: "Chinedu Okafor",
-      createdAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString()
-    },
-    {
-      id: "task-2",
-      title: "Instagram Follow @gossipmill_ng",
-      description: "Follow GossipMill Nigeria on Instagram, like the latest 3 posts, and submit a screenshot showing the Followed status.",
-      category: TaskCategory.IG_FOLLOW,
-      proofRequirements: "Your Instagram profile handle (@username) and follow screenshot.",
-      link: "https://instagram.com/gossipmill_ng",
-      costPerSlot: 15,
-      earningPerSlot: 10,
-      totalSlots: 150,
-      filledSlots: 142,
-      status: TaskStatus.ACTIVE,
-      advertiserId: advertiserId,
-      advertiserName: "Chinedu Okafor",
-      createdAt: new Date(Date.now() - 4 * 24 * 3600 * 1000).toISOString()
-    },
-    {
-      id: "task-3",
-      title: "Telegram Group Join - Crypto Signals NG",
-      description: "Join our active Telegram channel and group. Do not leave, users who leave will be permanently banned.",
-      category: TaskCategory.TELEGRAM_JOIN,
-      proofRequirements: "Telegram username (e.g. @username) and screenshot showing you joined.",
-      link: "https://t.me/cryptosignalsng",
-      costPerSlot: 18,
-      earningPerSlot: 12,
-      totalSlots: 100,
-      filledSlots: 98,
-      status: TaskStatus.ACTIVE,
-      advertiserId: advertiserId,
-      advertiserName: "Chinedu Okafor",
-      createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString()
-    },
-    {
-      id: "task-4",
-      title: "Facebook Follow - TasksEarn Platform",
-      description: "Follow our official Facebook page to stay updated on high-paying campaigns.",
-      category: TaskCategory.FB_FOLLOW,
-      proofRequirements: "Your Facebook profile link or name, and follow screenshot.",
-      link: "https://facebook.com/tasksearn",
-      costPerSlot: 15,
-      earningPerSlot: 10,
-      totalSlots: 500,
-      filledSlots: 500,
-      status: TaskStatus.COMPLETED,
-      advertiserId: "u-admin-1",
-      advertiserName: "Super Admin",
-      createdAt: new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString()
-    }
-  ];
+    // Users
+    await client.query(`
+      INSERT INTO users (id, name, email, password, role, is_verified, wallet_balance, referral_code, created_at)
+      VALUES
+        ($1, 'Super Admin', 'admin@tasksearn.com', $2, 'Admin', true, 0, NULL, $3),
+        ($4, 'Tunde Bakare', 'earner@tasksearn.com', $5, 'Earner', true, 2500, 'TUNDE887', $6),
+        ($7, 'Chinedu Okafor', 'advertiser@tasksearn.com', $8, 'Advertiser', true, 35000, NULL, $9)
+    `, [
+      adminId, hashPassword("password123"), now,
+      earnerId, hashPassword("password123"), tenDaysAgo,
+      advertiserId, hashPassword("password123"), fifteenDaysAgo
+    ]);
 
-  db.submissions = [
-    {
-      id: "sub-1",
-      taskId: "task-1",
-      taskTitle: "YouTube Subscribe - TechNaija Channel",
-      category: TaskCategory.YT_SUBSCRIBE,
-      earnerId: earnerId,
-      earnerName: "Tunde Bakare",
-      proofText: "My YouTube username: @tunde_tech_99",
-      proofScreenshot: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=300&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-      status: SubmissionStatus.APPROVED,
-      reward: 15,
-      submittedAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString()
-    },
-    {
-      id: "sub-2",
-      taskId: "task-2",
-      taskTitle: "Instagram Follow @gossipmill_ng",
-      category: TaskCategory.IG_FOLLOW,
-      earnerId: earnerId,
-      earnerName: "Tunde Bakare",
-      proofText: "Username: @tunde_bakare_official",
-      proofScreenshot: "https://images.unsplash.com/photo-1611224885990-ab7363d1f2a9?w=300&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-      status: SubmissionStatus.PENDING,
-      reward: 10,
-      submittedAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString() // 3 hours ago
-    }
-  ];
+    // Tasks
+    await client.query(`
+      INSERT INTO tasks (id, title, description, category, proof_requirements, link, cost_per_slot, earning_per_slot, total_slots, filled_slots, status, advertiser_id, advertiser_name, created_at)
+      VALUES
+        ('task-1', 'YouTube Subscribe - TechNaija Channel',
+          'Go to the YouTube channel link, click Subscribe, and upload a screenshot proving you subscribed. No unsubscribing later, we audit accounts daily.',
+          'YouTube Subscribe', 'Your YouTube account username and a screenshot showing the Subscribe button clicked.',
+          'https://youtube.com/c/technaija', 20, 15, 200, 87, 'Active', $1, 'Chinedu Okafor', $2),
+        ('task-2', 'Instagram Follow @gossipmill_ng',
+          'Follow GossipMill Nigeria on Instagram, like the latest 3 posts, and submit a screenshot showing the Followed status.',
+          'Instagram Follow', 'Your Instagram profile handle (@username) and follow screenshot.',
+          'https://instagram.com/gossipmill_ng', 15, 10, 150, 142, 'Active', $1, 'Chinedu Okafor', $3),
+        ('task-3', 'Telegram Group Join - Crypto Signals NG',
+          'Join our active Telegram channel and group. Do not leave, users who leave will be permanently banned.',
+          'Telegram Join', 'Telegram username (e.g. @username) and screenshot showing you joined.',
+          'https://t.me/cryptosignalsng', 18, 12, 100, 98, 'Active', $1, 'Chinedu Okafor', $4),
+        ('task-4', 'Facebook Follow - TasksEarn Platform',
+          'Follow our official Facebook page to stay updated on high-paying campaigns.',
+          'Facebook Follow', 'Your Facebook profile link or name, and follow screenshot.',
+          'https://facebook.com/tasksearn', 15, 10, 500, 500, 'Completed', 'u-admin-1', 'Super Admin', $5)
+    `, [
+      advertiserId,
+      new Date(Date.now() - 3 * 24 * 3600 * 1000),
+      new Date(Date.now() - 4 * 24 * 3600 * 1000),
+      new Date(Date.now() - 2 * 24 * 3600 * 1000),
+      new Date(Date.now() - 8 * 24 * 3600 * 1000)
+    ]);
 
-  db.transactions = [
-    {
-      id: "tx-1",
-      userId: advertiserId,
-      userName: "Chinedu Okafor",
-      userRole: UserRole.ADVERTISER,
-      amount: 50000,
-      type: TransactionType.DEPOSIT,
-      status: TransactionStatus.SUCCESS,
-      description: "Wallet Funding via Paystack Card Payment",
-      reference: "T-PAYSTACK-5884930294",
-      gateway: "Paystack",
-      createdAt: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString()
-    },
-    {
-      id: "tx-2",
-      userId: advertiserId,
-      userName: "Chinedu Okafor",
-      userRole: UserRole.ADVERTISER,
-      amount: 15000,
-      type: TransactionType.SPEND,
-      status: TransactionStatus.SUCCESS,
-      description: "Created Campaign: YouTube Subscribe - TechNaija Channel",
-      reference: "T-SPEND-992384910",
-      createdAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString()
-    },
-    {
-      id: "tx-3",
-      userId: earnerId,
-      userName: "Tunde Bakare",
-      userRole: UserRole.EARNER,
-      amount: 2500,
-      type: TransactionType.WITHDRAWAL,
-      status: TransactionStatus.PENDING,
-      description: "Withdrawal request to Guaranty Trust Bank (GTB)",
-      reference: "W-GTB-48203949",
-      bankDetails: {
-        bankName: "Guaranty Trust Bank (GTB)",
-        accountNumber: "0123456789",
-        accountName: "Tunde Bakare"
-      },
-      createdAt: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString()
-    }
-  ];
+    // Submissions
+    await client.query(`
+      INSERT INTO submissions (id, task_id, task_title, category, earner_id, earner_name, proof_text, proof_screenshot, status, reward, submitted_at)
+      VALUES
+        ('sub-1', 'task-1', 'YouTube Subscribe - TechNaija Channel', 'YouTube Subscribe', $1, 'Tunde Bakare',
+          'My YouTube username: @tunde_tech_99',
+          'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=300&auto=format&fit=crop&q=60&ixlib=rb-4.0.3',
+          'Approved', 15, $2),
+        ('sub-2', 'task-2', 'Instagram Follow @gossipmill_ng', 'Instagram Follow', $1, 'Tunde Bakare',
+          'Username: @tunde_bakare_official',
+          'https://images.unsplash.com/photo-1611224885990-ab7363d1f2a9?w=300&auto=format&fit=crop&q=60&ixlib=rb-4.0.3',
+          'Pending', 10, $3)
+    `, [
+      earnerId,
+      new Date(Date.now() - 2 * 24 * 3600 * 1000),
+      new Date(Date.now() - 3 * 3600 * 1000)
+    ]);
 
-  db.referrals = [
-    {
-      id: "ref-1",
-      referrerId: earnerId,
-      refereeId: "u-referee-1",
-      refereeName: "Sola Alabi",
-      refereeEmail: "sola@example.com",
-      rewardEarned: 200,
-      createdAt: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString()
-    }
-  ];
+    // Transactions
+    await client.query(`
+      INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, gateway, bank_details, created_at)
+      VALUES
+        ('tx-1', $1, 'Chinedu Okafor', 'Advertiser', 50000, 'Deposit', 'Success',
+          'Wallet Funding via Paystack Card Payment', 'T-PAYSTACK-5884930294', 'Paystack', NULL, $2),
+        ('tx-2', $1, 'Chinedu Okafor', 'Advertiser', 15000, 'Campaign Spend', 'Success',
+          'Created Campaign: YouTube Subscribe - TechNaija Channel', 'T-SPEND-992384910', NULL, NULL, $3),
+        ('tx-3', $4, 'Tunde Bakare', 'Earner', 2500, 'Withdrawal', 'Pending',
+          'Withdrawal request to Guaranty Trust Bank (GTB)', 'W-GTB-48203949', NULL,
+          '{"bankName":"Guaranty Trust Bank (GTB)","accountNumber":"0123456789","accountName":"Tunde Bakare"}', $5)
+    `, [
+      advertiserId, fifteenDaysAgo,
+      new Date(Date.now() - 3 * 24 * 3600 * 1000),
+      earnerId,
+      new Date(Date.now() - 1 * 24 * 3600 * 1000)
+    ]);
 
-  db.announcements = [
-    {
-      id: "ann-1",
-      title: "Welcome to TasksEarn Platform",
-      content: "Welcome Nigerians to the most trusted social media microtask exchange platform! Advertisers can publish tasks, and Earners can complete simple tasks and earn directly in Naira (₦) paid to their local bank accounts.",
-      type: "success",
-      createdAt: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString()
-    },
-    {
-      id: "ann-2",
-      title: "Withdrawal Process Audits",
-      content: "Withdrawal requests are processed every Friday at 12:00 PM. Please ensure your submitted bank details are accurate and your name matches your verification profile to avoid rejections.",
-      type: "info",
-      createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString()
-    }
-  ];
+    // Referrals
+    await client.query(`
+      INSERT INTO referrals (id, referrer_id, referee_id, referee_name, referee_email, reward_earned, created_at)
+      VALUES ('ref-1', $1, 'u-referee-1', 'Sola Alabi', 'sola@example.com', 200, $2)
+    `, [earnerId, new Date(Date.now() - 5 * 24 * 3600 * 1000)]);
 
-  db.banners = [
-    {
-      id: "ban-1",
-      title: "Boost Your Social Media Reach Instantly",
-      imageUrl: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=1200&auto=format&fit=crop&q=80",
-      link: "/advertiser/dashboard",
-      active: true
-    },
-    {
-      id: "ban-2",
-      title: "Earn Up to ₦5,000 Daily From Home",
-      imageUrl: "https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=1200&auto=format&fit=crop&q=80",
-      link: "/dashboard",
-      active: true
-    }
-  ];
+    // Announcements
+    await client.query(`
+      INSERT INTO announcements (id, title, content, type, created_at)
+      VALUES
+        ('ann-1', 'Welcome to TasksEarn Platform',
+          'Welcome Nigerians to the most trusted social media microtask exchange platform! Advertisers can publish tasks, and Earners can complete simple tasks and earn directly in Naira (₦) paid to their local bank accounts.',
+          'success', $1),
+        ('ann-2', 'Withdrawal Process Audits',
+          'Withdrawal requests are processed every Friday at 12:00 PM. Please ensure your submitted bank details are accurate and your name matches your verification profile to avoid rejections.',
+          'info', $2)
+    `, [
+      new Date(Date.now() - 10 * 24 * 3600 * 1000),
+      new Date(Date.now() - 2 * 24 * 3600 * 1000)
+    ]);
 
-  db.pages = {
-    about: {
-      title: "About TasksEarn",
-      content: `TasksEarn is Nigeria's premier microtask marketplace designed to bridge the gap between digital content advertisers and micro-job earners. Built to support digital marketers, small business owners, and online earners across Nigeria, we enable seamless social media engagements on platforms like Facebook, Instagram, TikTok, YouTube, WhatsApp, and Telegram.
+    // Banners
+    await client.query(`
+      INSERT INTO banners (id, title, image_url, link, active) VALUES
+        ('ban-1', 'Boost Your Social Media Reach Instantly',
+          'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=1200&auto=format&fit=crop&q=80',
+          '/advertiser/dashboard', true),
+        ('ban-2', 'Earn Up to ₦5,000 Daily From Home',
+          'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=1200&auto=format&fit=crop&q=80',
+          '/dashboard', true)
+    `);
+
+    // Pages
+    await client.query(`
+      INSERT INTO pages (id, title, content) VALUES
+        ('about', 'About TasksEarn', $1),
+        ('contact', 'Contact Us', $2),
+        ('faq', 'Frequently Asked Questions', $3),
+        ('terms', 'Terms of Service', $4),
+        ('privacy', 'Privacy Policy', $5)
+    `, [
+      `TasksEarn is Nigeria's premier microtask marketplace designed to bridge the gap between digital content advertisers and micro-job earners. Built to support digital marketers, small business owners, and online earners across Nigeria, we enable seamless social media engagements on platforms like Facebook, Instagram, TikTok, YouTube, WhatsApp, and Telegram.
 
 Our mission is to empower thousands of young Nigerians to monetize their spare social media screen-time, while providing advertisers with cost-effective, organic, and highly targeted growth.
 
@@ -405,11 +666,8 @@ Why Choose TasksEarn?
 - Instant Wallet Funding: Easily fund your advertising wallet using local cards, bank transfers, OPay, Moniepoint, and PalmPay.
 - Quality Auditing: Our advanced screenshot & link proof engine allows advertisers and administrators to verify proof with ultimate precision before release of payouts.
 - Swift Withdrawals: Withdraw your earnings straight into any Nigerian bank, with payouts processed seamlessly.
-- Robust Referral Network: Earn generous referral bonuses for every friend you introduce to the platform who completes tasks or creates campaigns.`
-    },
-    contact: {
-      title: "Contact Us",
-      content: `Have questions, disputes, or looking to discuss custom high-volume ad packages? Our friendly support team is here to assist you 24/7.
+- Robust Referral Network: Earn generous referral bonuses for every friend you introduce to the platform who completes tasks or creates campaigns.`,
+      `Have questions, disputes, or looking to discuss custom high-volume ad packages? Our friendly support team is here to assist you 24/7.
 
 - Email Support: support@tasksearn.com
 - Phone Contact: 09164444315
@@ -417,11 +675,8 @@ Why Choose TasksEarn?
 - Telegram Support: @TasksEarnSupport
 - Office Address: 12, Herbert Macaulay Way, Yaba, Lagos State, Nigeria.
 
-Alternatively, you can join our Telegram announcements channel and WhatsApp support chat using the quick links on your dashboard.`
-    },
-    faq: {
-      title: "Frequently Asked Questions",
-      content: `### 1. What is TasksEarn?
+Alternatively, you can join our Telegram announcements channel and WhatsApp support chat using the quick links on your dashboard.`,
+      `### 1. What is TasksEarn?
 TasksEarn is a digital engagement community where advertisers pay everyday social media users (Earners) to perform small online tasks such as liking a Facebook page, subscribing to a YouTube channel, following an Instagram profile, or joining a Telegram community.
 
 ### 2. How much can I earn as an Earner?
@@ -432,15 +687,12 @@ There is no fixed limit! Your earnings depend on how many tasks you successfully
 - Minimum Deposit for Advertisers: ₦1,000.
 
 ### 4. How long does deposit and withdrawal validation take?
-- Deposits via Paystack card payment are credited **instantly**. Bank transfer deposits are confirmed by our system inside 1 hour.
+- Deposits via Paystack card payment are credited instantly. Bank transfer deposits are confirmed by our system inside 1 hour.
 - Withdrawals are processed on our payout cycles every week, usually within 24 to 48 hours of approval.
 
 ### 5. Why was my task submission rejected?
-A submission is rejected if you did not follow the instructions, if you did not complete the social media action, or if you submitted fake/unrelated screenshots. Submitting fraudulent proofs repeatedly will lead to permanent account suspension.`
-    },
-    terms: {
-      title: "Terms of Service",
-      content: `Welcome to TasksEarn ("the Platform"). By registering an account and using our services, you agree to comply with and be bound by the following Terms and Conditions:
+A submission is rejected if you did not follow the instructions, if you did not complete the social media action, or if you submitted fake/unrelated screenshots. Submitting fraudulent proofs repeatedly will lead to permanent account suspension.`,
+      `Welcome to TasksEarn ("the Platform"). By registering an account and using our services, you agree to comply with and be bound by the following Terms and Conditions:
 
 1. Account Eligibility & Authenticity
 - You must be at least 18 years of age or have parental consent.
@@ -455,11 +707,8 @@ A submission is rejected if you did not follow the instructions, if you did not 
 - If an advertiser terminates a campaign prematurely, any remaining unallocated funds for uncompleted slots will be instantly returned to their advertiser wallet.
 
 4. Platform Fees
-- TasksEarn reserves the right to charge transaction fees on deposits (payment gateway charge) and withdrawals (₦100 flat fee). Fees are clearly stated at checkout.`
-    },
-    privacy: {
-      title: "Privacy Policy",
-      content: `Your privacy is incredibly important to us at TasksEarn. This Privacy Policy outlines the types of personal information we collect and how we safeguard it:
+- TasksEarn reserves the right to charge transaction fees on deposits (payment gateway charge) and withdrawals (₦100 flat fee). Fees are clearly stated at checkout.`,
+      `Your privacy is incredibly important to us at TasksEarn. This Privacy Policy outlines the types of personal information we collect and how we safeguard it:
 
 1. Information We Collect
 - Contact Details: Name, email address, telephone number, and Nigerian bank details (for withdrawal processing).
@@ -472,2195 +721,2185 @@ A submission is rejected if you did not follow the instructions, if you did not 
 
 3. Cookies and Browser Cache
 - We use temporary cookies and local session identifiers to keep you logged in securely while navigating the app dashboard.`
+    ]);
+
+    // Settings
+    await client.query(`
+      INSERT INTO settings (platform_name, referral_reward, withdrawal_fee, min_withdrawal, min_deposit, contact_email, contact_phone, telegram_channel, whatsapp_group)
+      VALUES ('TasksEarn', 200, 100, 200, 200, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
+    `);
+
+    // Task Pricing
+    const pricing = getInitialPricing();
+    for (const p of pricing) {
+      await client.query(
+        "INSERT INTO task_pricing (id, platform, cost_per_slot, earning_per_slot) VALUES ($1, $2, $3, $4)",
+        [p.id, p.platform, p.costPerSlot, p.earningPerSlot]
+      );
     }
-  };
 
-  db.taskPricing = getInitialPricing();
-  saveDB();
-}
-
-function saveDB() {
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf-8");
-  // Async sync to Railway PostgreSQL when DATABASE_URL is configured
-  if (isPostgresEnabled()) {
-    saveToPostgres(db).catch(err => console.error("[PostgreSQL Sync Error]", err));
+    await client.query("COMMIT");
+    console.log("[DB] Seed data inserted successfully.");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("[DB] Error seeding database:", err);
+    throw err;
+  } finally {
+    client.release();
   }
 }
 
-// Initialize Database on startup
-loadDB();
+// ─── Email Helpers ───────────────────────────────────────────────────────────
 
-const app = express();
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
-
-// Helper to check Auth headers
-// For simplified secure simulation, we will send the User-ID in the Authorization header.
-// E.g., 'Bearer <userId>'
-function getAuthenticatedUser(req: express.Request): any | null {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
-  const userId = authHeader.split(" ")[1];
-  return db.users.find(u => u.id === userId) || null;
-}
-
-// Lazy initialization of Resend client to avoid startup crashes if key is missing
 let resendClient: Resend | null = null;
 function getResendClient(): Resend | null {
-  if (!resendClient) {
-    const apiKey = process.env.RESEND_API_KEY;
-    if (apiKey) {
-      console.log(`[Resend Mailer] Initializing Resend client`);
-      resendClient = new Resend(apiKey);
-    }
+  if (!resendClient && process.env.RESEND_API_KEY) {
+    resendClient = new Resend(process.env.RESEND_API_KEY);
   }
   return resendClient;
 }
 
-// Lazy SMTP Transporter setup
 let smtpTransporter: nodemailer.Transporter | null = null;
 function getSMTPTransporter(): nodemailer.Transporter | null {
   const host = process.env.SMTP_HOST;
   const port = Number(process.env.SMTP_PORT) || 587;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASSWORD;
-
-  if (host && user && pass) {
-    if (!smtpTransporter) {
-      console.log(`[SMTP Mailer] Initializing nodemailer transporter with ${host}:${port} as ${user}`);
-      smtpTransporter = nodemailer.createTransport({
-        host,
-        port,
-        secure: port === 465, // true for 465, false for 587 or other ports
-        auth: {
-          user,
-          pass,
-        },
-      });
-    }
-    return smtpTransporter;
+  if (host && user && pass && !smtpTransporter) {
+    smtpTransporter = nodemailer.createTransport({ host, port, secure: port === 465, auth: { user, pass } });
   }
-  return null;
+  return host && user && pass ? smtpTransporter : null;
 }
 
-// Helper to send email via either Resend (preferred) or SMTP
 async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
-  const resendKey = process.env.RESEND_API_KEY;
-  
-  if (resendKey) {
-    const resend = getResendClient();
-    if (resend) {
-      const fromAddress = process.env.RESEND_FROM || "TasksEarn <onboarding@resend.dev>";
-      try {
-        console.log(`[Resend Mailer] Initiating email delivery to ${to}`);
-        const response = await resend.emails.send({
-          from: fromAddress,
-          to: [to],
-          subject,
-          html,
-        });
-        if (response.error) {
-          console.error(`[Resend Mailer Error]`, response.error);
-          throw new Error(`Resend Delivery Failed: ${response.error.message || JSON.stringify(response.error)}`);
-        }
-        console.log(`[Resend Mailer Success] Email delivered to ${to}. Message ID: ${response.data?.id}`);
-        return { success: true, provider: "resend", data: response.data };
-      } catch (error: any) {
-        console.error(`[Resend Mailer Error] Failed to send email to ${to}:`, error);
-        throw new Error(`Resend Delivery Failed: ${error.message || error}`);
-      }
-    }
+  const resend = getResendClient();
+  if (resend) {
+    const from = process.env.RESEND_FROM || "TasksEarn <onboarding@resend.dev>";
+    const response = await resend.emails.send({ from, to: [to], subject, html });
+    if (response.error) throw new Error(`Resend error: ${response.error.message}`);
+    return { success: true, provider: "resend" };
   }
 
-  // Fallback to SMTP
   const smtp = getSMTPTransporter();
   if (smtp) {
-    const fromAddress = process.env.SMTP_FROM || db.settings.contactEmail || "TasksEarn <noreply@tasksearn.com>";
-    try {
-      console.log(`[SMTP Mailer] Initiating email delivery to ${to} via ${process.env.SMTP_HOST}`);
-      const info = await smtp.sendMail({
-        from: fromAddress,
-        to,
-        subject,
-        html,
-      });
-      console.log(`[SMTP Mailer Success] Email delivered to ${to}. Message ID: ${info.messageId}`);
-      return { success: true, provider: "smtp", messageId: info.messageId };
-    } catch (error: any) {
-      console.error(`[SMTP Mailer Error] Failed to send email to ${to}:`, error);
-      throw new Error(`SMTP Delivery Failed: ${error.message || error}`);
-    }
+    const settings = await getSettings();
+    const from = process.env.SMTP_FROM || settings?.contactEmail || "TasksEarn <noreply@tasksearn.com>";
+    const info = await smtp.sendMail({ from, to, subject, html });
+    return { success: true, provider: "smtp", messageId: info.messageId };
   }
 
-  // If neither is configured:
-  const errMsg = "No email provider is configured. Please configure either Resend (set RESEND_API_KEY, RESEND_FROM) or SMTP variables (set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM) on your Google Cloud Run settings to enable real email verification and recovery.";
-  console.error(`[Email Configuration Missing] ${errMsg}`);
-  throw new Error(errMsg);
+  throw new Error("No email provider is configured. Please set RESEND_API_KEY or SMTP_HOST/SMTP_USER/SMTP_PASSWORD.");
 }
 
 async function sendVerificationEmail(email: string, name: string, code: string) {
-  const subject = "Verify your TasksEarn Email Address";
-  const htmlContent = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 16px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);">
-      <div style="text-align: center; margin-bottom: 24px;">
-        <h2 style="color: #10b981; font-size: 24px; font-weight: bold; margin: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">TasksEarn Nigeria</h2>
-        <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0 0;">Social Media Microtask Exchange</p>
-      </div>
-      <p style="color: #374151; font-size: 15px; line-height: 1.5;">Hello <strong>${name}</strong>,</p>
-      <p style="color: #374151; font-size: 15px; line-height: 1.5;">Thank you for registering on TasksEarn. To complete your registration and activate your secure earner or advertiser account, please verify your email address using the 6-digit verification code below:</p>
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 16px; background-color: #ffffff;">
+      <h2 style="color: #10b981; text-align: center;">TasksEarn Nigeria</h2>
+      <p>Hello <strong>${name}</strong>,</p>
+      <p>Please verify your email using the code below:</p>
       <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; border-radius: 12px; text-align: center; margin: 24px 0;">
         <span style="font-size: 36px; font-weight: 800; letter-spacing: 6px; color: #047857; font-family: monospace;">${code}</span>
       </div>
-      <p style="color: #ef4444; font-size: 13px; font-weight: 600; text-align: center; margin-bottom: 12px;">This verification code is valid for exactly 10 minutes.</p>
-      <p style="color: #6b7280; font-size: 13px; line-height: 1.5;">If you did not sign up or request this verification code, please ignore this email or reach out to our platform support team.</p>
-      <hr style="border: 0; border-top: 1px solid #f3f4f6; margin: 24px 0;" />
-      <p style="text-align: center; color: #9ca3af; font-size: 11px; margin: 0;">
-        © ${new Date().getFullYear()} TasksEarn Nigeria. All rights reserved.<br />
-        12, Herbert Macaulay Way, Yaba, Lagos State, Nigeria.
-      </p>
-    </div>
-  `;
-
-  return sendEmail({ to: email, subject, html: htmlContent });
+      <p style="color: #ef4444; font-size: 13px; text-align: center;">This code expires in 10 minutes.</p>
+    </div>`;
+  return sendEmail({ to: email, subject: "Verify your TasksEarn Email Address", html });
 }
 
 async function sendPasswordResetEmail(email: string, name: string, tempPassword: string) {
-  const subject = "Your TasksEarn Password Recovery Credentials";
-  const htmlContent = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 16px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);">
-      <div style="text-align: center; margin-bottom: 24px;">
-        <h2 style="color: #10b981; font-size: 24px; font-weight: bold; margin: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">TasksEarn Nigeria</h2>
-        <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0 0;">Social Media Microtask Exchange</p>
-      </div>
-      <p style="color: #374151; font-size: 15px; line-height: 1.5;">Hello <strong>${name}</strong>,</p>
-      <p style="color: #374151; font-size: 15px; line-height: 1.5;">We received a request to recover your secure login password. We have generated a new secure temporary password for your account:</p>
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 16px; background-color: #ffffff;">
+      <h2 style="color: #10b981; text-align: center;">TasksEarn Nigeria</h2>
+      <p>Hello <strong>${name}</strong>,</p>
+      <p>Your temporary password is:</p>
       <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; border-radius: 12px; text-align: center; margin: 24px 0;">
-        <span style="font-size: 28px; font-weight: 800; letter-spacing: 2px; color: #047857; font-family: monospace;">${tempPassword}</span>
+        <span style="font-size: 28px; font-weight: 800; color: #047857; font-family: monospace;">${tempPassword}</span>
       </div>
-      <p style="color: #6b7280; font-size: 13px; line-height: 1.5;">Please use this temporary password to sign in immediately. Once logged in, you can update your security password under your Profile settings to keep your earnings and campaigns fully secure.</p>
-      <p style="color: #ef4444; font-size: 13px; font-weight: 600; text-align: center;">For security reasons, do not share this password with anyone.</p>
-      <hr style="border: 0; border-top: 1px solid #f3f4f6; margin: 24px 0;" />
-      <p style="text-align: center; color: #9ca3af; font-size: 11px; margin: 0;">
-        © ${new Date().getFullYear()} TasksEarn Nigeria. All rights reserved.<br />
-        12, Herbert Macaulay Way, Yaba, Lagos State, Nigeria.
-      </p>
-    </div>
-  `;
-
-  return sendEmail({ to: email, subject, html: htmlContent });
+      <p style="color: #ef4444; text-align: center;">Do not share this password with anyone.</p>
+    </div>`;
+  return sendEmail({ to: email, subject: "Your TasksEarn Password Recovery Credentials", html });
 }
 
-// -----------------------------------------------------------------------------
-// PUBLIC API ENDPOINTS
-// -----------------------------------------------------------------------------
-app.get("/api/public/pages", (req, res) => {
-  res.json(db.pages);
+// ─── Express App ─────────────────────────────────────────────────────────────
+
+const NIGERIAN_BANK_LIST = [
+  { name: "Access Bank", code: "044" }, { name: "Ecobank Nigeria", code: "050" },
+  { name: "Fidelity Bank", code: "070" }, { name: "First Bank of Nigeria", code: "011" },
+  { name: "First City Monument Bank (FCMB)", code: "214" }, { name: "Guaranty Trust Bank (GTB)", code: "058" },
+  { name: "Keystone Bank", code: "082" }, { name: "Kuda Bank", code: "50211" },
+  { name: "Moniepoint Microfinance Bank", code: "50515" }, { name: "OPay Microfinance Bank", code: "999992" },
+  { name: "PalmPay Microfinance Bank", code: "999991" }, { name: "Polaris Bank", code: "076" },
+  { name: "Providus Bank", code: "101" }, { name: "Stanbic IBTC Bank", code: "221" },
+  { name: "Sterling Bank", code: "232" }, { name: "Union Bank of Nigeria", code: "032" },
+  { name: "United Bank for Africa (UBA)", code: "033" }, { name: "Unity Bank", code: "215" },
+  { name: "Wema Bank", code: "035" }, { name: "Zenith Bank", code: "057" },
+  { name: "Jaiz Bank", code: "301" }, { name: "Parallex Bank", code: "104" },
+  { name: "Titan Trust Bank", code: "102" }, { name: "Globus Bank", code: "00103" },
+  { name: "PremiumTrust Bank", code: "105" }, { name: "Lotus Bank", code: "303" },
+  { name: "Optimus Bank", code: "107" }, { name: "VFD Microfinance Bank", code: "566" }
+];
+
+const app = express();
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+app.get("/api/public/pages", async (_req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM pages");
+    const pages: Record<string, { title: string; content: string }> = {};
+    result.rows.forEach(r => { pages[r.id] = { title: r.title, content: r.content }; });
+    res.json(pages);
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-app.get("/api/public/banners", (req, res) => {
-  res.json(db.banners.filter(b => b.active));
+app.get("/api/public/banners", async (_req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM banners WHERE active = true");
+    res.json(result.rows.map(r => ({
+      id: r.id, title: r.title, imageUrl: r.image_url, link: r.link, active: r.active
+    })));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-app.get("/api/public/announcements", (req, res) => {
-  res.json(db.announcements);
+app.get("/api/public/announcements", async (_req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM announcements ORDER BY created_at DESC");
+    res.json(result.rows.map(r => ({
+      id: r.id, title: r.title, content: r.content, type: r.type,
+      createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at
+    })));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-app.get("/api/public/settings", (req, res) => {
-  res.json(db.settings);
+app.get("/api/public/settings", async (_req, res) => {
+  try {
+    res.json(await getSettings());
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-// -----------------------------------------------------------------------------
-// AUTHENTICATION API ENDPOINTS
-// -----------------------------------------------------------------------------
+app.get("/api/public/stats", async (_req, res) => {
+  try {
+    const earnersCount = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'Earner'");
+    const tasksCount = await pool.query("SELECT COUNT(*) FROM tasks");
+    const totalPaidOut = await pool.query(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'Withdrawal' AND status = 'Success'"
+    );
+    const latestWithdrawalTx = await pool.query(
+      "SELECT * FROM transactions WHERE type = 'Withdrawal' ORDER BY created_at DESC LIMIT 1"
+    );
+    const latestCampaign = await pool.query(
+      "SELECT * FROM tasks WHERE status = 'Active' ORDER BY created_at DESC LIMIT 1"
+    );
+    const lw = latestWithdrawalTx.rows[0] ? mapTransaction(latestWithdrawalTx.rows[0]) : null;
+    const lc = latestCampaign.rows[0] ? mapTask(latestCampaign.rows[0]) : null;
+    res.json({
+      earnersCount: parseInt(earnersCount.rows[0].count),
+      tasksCount: parseInt(tasksCount.rows[0].count),
+      totalPaidOut: parseFloat(totalPaidOut.rows[0].total),
+      latestWithdrawal: lw ? { userName: lw.userName, bankName: lw.bankDetails?.bankName || "Commercial Bank", amount: lw.amount } : null,
+      latestCampaign: lc ? { title: lc.title, cost: lc.totalSlots * lc.costPerSlot } : null
+    });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// ─── Auth API ─────────────────────────────────────────────────────────────────
+
 app.post("/api/auth/register", async (req, res) => {
   const { name, email, password, role, referralCode } = req.body;
+  if (!name || !email || !password || !role) return res.status(400).json({ error: "All fields are required" });
 
-  if (!name || !email || !password || !role) {
-    return res.status(400).json({ error: "All fields are required" });
-  }
-
-  const existing = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-  if (existing) {
-    return res.status(400).json({ error: "Email address already registered" });
-  }
-
-  // Create referral code for new earner
-  const userReferralCode = role === UserRole.EARNER ? name.substring(0, 4).toUpperCase() + Math.floor(100 + Math.random() * 900) : undefined;
-  const userId = "u-" + Math.random().toString(36).substr(2, 9);
-
-  let referredByUserId: string | undefined;
-  if (referralCode && role === UserRole.EARNER) {
-    const referrer = db.users.find(u => u.referralCode === referralCode && u.role === UserRole.EARNER);
-    if (referrer) {
-      referredByUserId = referrer.id;
-    }
-  }
-
-  // Generate 6-digit verification code with 10-minute expiry
-  const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-  const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  const verificationCodeLastSent = new Date().toISOString();
-
-  const newUser = {
-    id: userId,
-    name,
-    email,
-    password: hashPassword(password),
-    role,
-    isVerified: false, // Starts unverified — enforces email verification
-    // Earners must pay ₦500 activation fee; Advertisers and Admins are pre-activated
-    isActivated: role !== UserRole.EARNER,
-    verificationCode,
-    verificationCodeExpires,
-    verificationCodeLastSent,
-    walletBalance: 0,
-    referralCode: userReferralCode,
-    referredBy: referredByUserId,
-    createdAt: new Date().toISOString()
-  };
-
-  // Send the verification email using the configured provider
   try {
-    await sendVerificationEmail(email, name, verificationCode);
-  } catch (err: any) {
-    console.error("Failed to send verification email on registration: ", err);
-    return res.status(500).json({ 
-      error: `Could not send verification email. Please check your SMTP or Resend settings. Details: ${err.message || err}` 
-    });
-  }
+    const existing = await pool.query("SELECT id FROM users WHERE LOWER(email) = LOWER($1)", [email]);
+    if (existing.rows.length > 0) return res.status(400).json({ error: "Email address already registered" });
 
-  // ONLY save user and register referrals AFTER email succeeds!
-  db.users.push(newUser);
+    const userReferralCode = role === UserRole.EARNER
+      ? name.substring(0, 4).toUpperCase() + Math.floor(100 + Math.random() * 900)
+      : null;
+    const userId = "u-" + Math.random().toString(36).substr(2, 9);
 
-  // If referred, log the referral relation
-  if (referredByUserId) {
-    const referrer = db.users.find(u => u.id === referredByUserId);
-    db.referrals.push({
-      id: "ref-" + Math.random().toString(36).substr(2, 9),
-      referrerId: referredByUserId,
-      refereeId: userId,
-      refereeName: name,
-      refereeEmail: email,
-      rewardEarned: db.settings.referralReward,
-      createdAt: new Date().toISOString()
-    });
-    // Add referral bonus to referrer immediately
-    if (referrer) {
-      referrer.walletBalance += db.settings.referralReward;
-
-      db.transactions.push({
-        id: "tx-" + Math.random().toString(36).substr(2, 9),
-        userId: referredByUserId,
-        userName: referrer.name,
-        userRole: referrer.role,
-        amount: db.settings.referralReward,
-        type: TransactionType.REFERRAL,
-        status: TransactionStatus.SUCCESS,
-        description: `Referral bonus for inviting ${name}`,
-        reference: "R-REF-" + Math.floor(10000000 + Math.random() * 90000000),
-        createdAt: new Date().toISOString()
-      });
+    let referredByUserId: string | undefined;
+    if (referralCode && role === UserRole.EARNER) {
+      const referrer = await pool.query("SELECT id FROM users WHERE referral_code = $1 AND role = 'Earner'", [referralCode]);
+      if (referrer.rows.length > 0) referredByUserId = referrer.rows[0].id;
     }
+
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
+    const verificationCodeLastSent = new Date();
+
+    try {
+      await sendVerificationEmail(email, name, verificationCode);
+    } catch (err: any) {
+      return res.status(500).json({ error: `Could not send verification email. Details: ${err.message}` });
+    }
+
+    await pool.query(`
+      INSERT INTO users (id, name, email, password, role, is_verified, wallet_balance, referral_code, referred_by,
+        verification_code, verification_code_expires, verification_code_last_sent, created_at)
+      VALUES ($1,$2,$3,$4,$5,false,0,$6,$7,$8,$9,$10,$11)
+    `, [userId, name, email, hashPassword(password), role, userReferralCode, referredByUserId || null,
+        verificationCode, verificationCodeExpires, verificationCodeLastSent, new Date()]);
+
+    if (referredByUserId) {
+      const settings = await getSettings();
+      const referrer = await pool.query("SELECT * FROM users WHERE id = $1", [referredByUserId]);
+      if (referrer.rows.length > 0) {
+        const referrerUser = mapUser(referrer.rows[0]);
+        const reward = settings?.referralReward || 200;
+        await pool.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2", [reward, referredByUserId]);
+
+        const refId = "ref-" + Math.random().toString(36).substr(2, 9);
+        await pool.query(`
+          INSERT INTO referrals (id, referrer_id, referee_id, referee_name, referee_email, reward_earned, created_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7)
+        `, [refId, referredByUserId, userId, name, email, reward, new Date()]);
+
+        await pool.query(`
+          INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
+          VALUES ($1,$2,$3,$4,$5,'Referral Bonus','Success',$6,$7,$8)
+        `, [
+          "tx-" + Math.random().toString(36).substr(2, 9),
+          referredByUserId, referrerUser?.name || "", referrerUser?.role || "",
+          reward, `Referral bonus for inviting ${name}`,
+          "R-REF-" + Math.floor(10000000 + Math.random() * 90000000),
+          new Date()
+        ]);
+      }
+    }
+
+    res.json({ user: { id: userId, name, email, role, isVerified: false, walletBalance: 0, referralCode: userReferralCode, createdAt: new Date().toISOString() } });
+  } catch (err) {
+    console.error("Register error:", err);
+    res.status(500).json({ error: "Server error during registration" });
   }
-
-  saveDB();
-
-  // Return the user (omit password)
-  const { password: _, verificationCode: __, verificationCodeExpires: ___, ...userWithoutSecrets } = newUser;
-  res.json({ user: userWithoutSecrets });
 });
 
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required" });
-  }
+  if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
 
-  const matchedUser = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-  
-  if (!matchedUser) {
-    return res.status(401).json({ error: "Invalid email or password" });
-  }
+  try {
+    const result = await pool.query("SELECT * FROM users WHERE LOWER(email) = LOWER($1)", [email]);
+    if (result.rows.length === 0) return res.status(401).json({ error: "Invalid email or password" });
 
-  const hashedPassword = hashPassword(password);
-  if (matchedUser.password !== hashedPassword) {
-    // Return specific 'Invalid password' error for the demo accounts
-    const isDemo = ["admin@tasksearn.com", "earner@tasksearn.com", "advertiser@tasksearn.com"].includes(matchedUser.email.toLowerCase());
-    if (isDemo) {
-      return res.status(401).json({ error: "Invalid password" });
+    const user = mapUser(result.rows[0]);
+    if (user.password !== hashPassword(password)) return res.status(401).json({ error: "Invalid email or password" });
+
+    if (!user.isVerified) {
+      return res.status(400).json({ error: "EMAIL_NOT_VERIFIED", userId: user.id, email: user.email });
     }
-    return res.status(401).json({ error: "Invalid email or password" });
-  }
 
-  // Check email verification gate
-  if (!matchedUser.isVerified) {
-    return res.status(400).json({ 
-      error: "EMAIL_NOT_VERIFIED", 
-      userId: matchedUser.id, 
-      email: matchedUser.email 
-    });
+    const { password: _, verificationCode: __, verificationCodeExpires: ___, verificationCodeLastSent: ____, ...safe } = user;
+    res.json({ user: safe });
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ error: "Server error" });
   }
-
-  const { password: _, verificationCode: __, verificationCodeExpires: ___, ...userWithoutSecrets } = matchedUser;
-  res.json({ user: userWithoutSecrets });
 });
 
 app.post("/api/auth/forgot-password", async (req, res) => {
   const { email } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: "Email address is required" });
-  }
-
-  const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-  if (!user) {
-    return res.status(404).json({ error: "No account found with this email address." });
-  }
-
-  // Generate temporary password
-  const tempPassword = "TE-" + Math.floor(100000 + Math.random() * 900000).toString();
+  if (!email) return res.status(400).json({ error: "Email address is required" });
 
   try {
-    // Send email first to make sure it delivers
-    await sendPasswordResetEmail(user.email, user.name, tempPassword);
-    
-    // Email succeeded, now update password in database
-    user.password = hashPassword(tempPassword);
-    saveDB();
+    const result = await pool.query("SELECT * FROM users WHERE LOWER(email) = LOWER($1)", [email]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "No account found with this email address." });
 
-    res.json({
-      success: true,
-      message: "Password recovery credentials have been successfully sent to " + email + "."
-    });
+    const user = mapUser(result.rows[0]);
+    const tempPassword = "TE-" + Math.floor(100000 + Math.random() * 900000).toString();
+
+    await sendPasswordResetEmail(user.email, user.name, tempPassword);
+    await pool.query("UPDATE users SET password = $1 WHERE id = $2", [hashPassword(tempPassword), user.id]);
+
+    res.json({ success: true, message: "Password recovery credentials sent to " + email });
   } catch (err: any) {
-    console.error("Failed to send password recovery email: ", err);
-    res.status(500).json({ error: `Could not send password recovery email. Please check your SMTP settings. Details: ${err.message || err}` });
+    res.status(500).json({ error: `Could not send recovery email. Details: ${err.message}` });
   }
 });
 
-app.post("/api/auth/verify-email", (req, res) => {
+app.post("/api/auth/verify-email", async (req, res) => {
   const { email, code } = req.body;
+  if (!email || !code) return res.status(400).json({ error: "Email and 6-digit code are required" });
 
-  if (!email || !code) {
-    return res.status(400).json({ error: "Email and 6-digit code are required" });
+  try {
+    const result = await pool.query("SELECT * FROM users WHERE LOWER(email) = LOWER($1)", [email]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "User account not found" });
+
+    const user = mapUser(result.rows[0]);
+
+    if (user.isVerified) {
+      const { password: _, verificationCode: __, verificationCodeExpires: ___, verificationCodeLastSent: ____, ...safe } = user;
+      return res.json({ success: true, message: "Account already verified", user: safe });
+    }
+
+    if (!user.verificationCode || user.verificationCode !== code) {
+      return res.status(400).json({ error: "Invalid 6-digit verification code" });
+    }
+
+    if (user.verificationCodeExpires && new Date(user.verificationCodeExpires).getTime() < Date.now()) {
+      return res.status(400).json({ error: "Verification code has expired. Please request a new one." });
+    }
+
+    await pool.query(
+      "UPDATE users SET is_verified = true, verification_code = NULL, verification_code_expires = NULL, verification_code_last_sent = NULL WHERE id = $1",
+      [user.id]
+    );
+
+    const { password: _, verificationCode: __, verificationCodeExpires: ___, verificationCodeLastSent: ____, ...safe } = user;
+    res.json({ success: true, message: "Email successfully verified!", user: { ...safe, isVerified: true } });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
   }
-
-  const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-  if (!user) {
-    return res.status(404).json({ error: "User account not found" });
-  }
-
-  if (user.isVerified) {
-    const { password: _, verificationCode: __, verificationCodeExpires: ___, ...userWithoutSecrets } = user;
-    return res.json({ success: true, message: "Account already verified", user: userWithoutSecrets });
-  }
-
-  if (!user.verificationCode || user.verificationCode !== code) {
-    return res.status(400).json({ error: "Invalid 6-digit verification code" });
-  }
-
-  const isExpired = new Date(user.verificationCodeExpires).getTime() < Date.now();
-  if (isExpired) {
-    return res.status(400).json({ error: "Verification code has expired. Please request a new one." });
-  }
-
-  // Verification succeeds
-  user.isVerified = true;
-  delete user.verificationCode;
-  delete user.verificationCodeExpires;
-  delete user.verificationCodeLastSent;
-  
-  saveDB();
-
-  const { password: _, ...userWithoutSecrets } = user;
-  res.json({ success: true, message: "Email successfully verified!", user: userWithoutSecrets });
 });
 
 app.post("/api/auth/resend-code", async (req, res) => {
   const { email } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: "Email address is required" });
-  }
-
-  const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-  if (!user) {
-    return res.status(404).json({ error: "User account not found" });
-  }
-
-  // Rate limit: 60 seconds
-  const lastSent = user.verificationCodeLastSent ? new Date(user.verificationCodeLastSent).getTime() : 0;
-  const elapsed = Date.now() - lastSent;
-  if (elapsed < 60 * 1000) {
-    const remainingSeconds = Math.ceil((60 * 1000 - elapsed) / 1000);
-    return res.status(429).json({ error: `Please wait ${remainingSeconds} seconds before requesting a new code.` });
-  }
-
-  // Generate new code
-  const newCode = Math.floor(100000 + Math.random() * 900000).toString();
-  user.verificationCode = newCode;
-  user.verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  user.verificationCodeLastSent = new Date().toISOString();
-
-  saveDB();
+  if (!email) return res.status(400).json({ error: "Email address is required" });
 
   try {
+    const result = await pool.query("SELECT * FROM users WHERE LOWER(email) = LOWER($1)", [email]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "User account not found" });
+
+    const user = mapUser(result.rows[0]);
+
+    const lastSent = user.verificationCodeLastSent ? new Date(user.verificationCodeLastSent).getTime() : 0;
+    const elapsed = Date.now() - lastSent;
+    if (elapsed < 60 * 1000) {
+      const remaining = Math.ceil((60 * 1000 - elapsed) / 1000);
+      return res.status(429).json({ error: `Please wait ${remaining} seconds before requesting a new code.` });
+    }
+
+    const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const newExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    await pool.query(
+      "UPDATE users SET verification_code=$1, verification_code_expires=$2, verification_code_last_sent=$3 WHERE id=$4",
+      [newCode, newExpiry, new Date(), user.id]
+    );
+
     await sendVerificationEmail(user.email, user.name, newCode);
-    res.json({ success: true, message: "A new 6-digit verification code has been successfully sent." });
+    res.json({ success: true, message: "A new 6-digit verification code has been sent." });
   } catch (err: any) {
-    console.error("Resend verification code failed: ", err);
-    res.status(500).json({ error: `Failed to deliver email. Details: ${err.message || err}` });
+    res.status(500).json({ error: `Failed to send code. Details: ${err.message}` });
   }
 });
 
-app.get("/api/auth/me", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user) return res.status(401).json({ error: "Unauthorized" });
-
-  const { password: _, verificationCode: __, verificationCodeExpires: ___, ...userWithoutSecrets } = user;
-  res.json({ user: userWithoutSecrets });
+app.get("/api/auth/me", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    const { password: _, verificationCode: __, verificationCodeExpires: ___, verificationCodeLastSent: ____, ...safe } = user;
+    res.json({ user: safe });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-// -----------------------------------------------------------------------------
-// EARNER API ENDPOINTS
-// -----------------------------------------------------------------------------
-app.get("/api/earner/dashboard", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+// ─── Pricing API ──────────────────────────────────────────────────────────────
 
-  const userSubmissions = db.submissions.filter(s => s.earnerId === user.id);
-  const approved = userSubmissions.filter(s => s.status === SubmissionStatus.APPROVED);
-  const pending = userSubmissions.filter(s => s.status === SubmissionStatus.PENDING);
-  const rejected = userSubmissions.filter(s => s.status === SubmissionStatus.REJECTED);
-
-  const totalEarned = approved.reduce((sum, s) => sum + s.reward, 0);
-
-  // Referral count
-  const referralsCount = db.referrals.filter(r => r.referrerId === user.id).length;
-
-  // Let's get active available tasks
-  // Filter out tasks already completed or submitted by this earner
-  const submittedTaskIds = userSubmissions.map(s => s.taskId);
-  const availableTasks = db.tasks.filter(t => t.status === TaskStatus.ACTIVE && !submittedTaskIds.includes(t.id));
-
-  res.json({
-    walletBalance: user.walletBalance,
-    totalEarned,
-    approvedCount: approved.length,
-    pendingCount: pending.length,
-    rejectedCount: rejected.length,
-    referralsCount,
-    availableTasksCount: availableTasks.length,
-    recentSubmissions: userSubmissions.slice(-5).reverse(),
-    referralCode: user.referralCode
-  });
+app.get("/api/pricing", async (_req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM task_pricing ORDER BY id");
+    res.json(result.rows.map(mapPricing));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-app.get("/api/earner/tasks", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+// ─── Social Media Platforms API ────────────────────────────────────────────
 
-  // Get tasks and mark if already submitted
-  const userSubmissions = db.submissions.filter(s => s.earnerId === user.id);
-  const submittedMap = new Map(userSubmissions.map(s => [s.taskId, s.status]));
-
-  const tasksWithStatus = db.tasks
-    .filter(t => t.status === TaskStatus.ACTIVE)
-    .map(t => ({
-      ...t,
-      submissionStatus: submittedMap.get(t.id) || null
-    }));
-
-  res.json(tasksWithStatus);
+// Public: active platforms only, for use across task creation, listings, filters, pricing displays.
+app.get("/api/platforms", async (_req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM social_platforms WHERE status = 'Active' ORDER BY sort_order, name");
+    res.json(result.rows.map(mapSocialPlatform));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-app.post("/api/earner/tasks/:id/submit", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+app.get("/api/admin/platforms", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  // Earners must activate their account (pay ₦500 fee) before submitting tasks
-  if (!user.isActivated) {
-    return res.status(403).json({ error: "ACCOUNT_NOT_ACTIVATED", message: "Your account must be activated before you can submit tasks. Please pay the ₦500 one-time activation fee." });
-  }
-
-  const taskId = req.params.id;
-  const { proofText, proofScreenshot } = req.body;
-
-  if (!proofText) {
-    return res.status(400).json({ error: "Proof details are required" });
-  }
-
-  const task = db.tasks.find(t => t.id === taskId);
-  if (!task || task.status !== TaskStatus.ACTIVE) {
-    return res.status(404).json({ error: "Task is not active or not found" });
-  }
-
-  // Check if already submitted
-  const alreadySubmitted = db.submissions.some(s => s.taskId === taskId && s.earnerId === user.id);
-  if (alreadySubmitted) {
-    return res.status(400).json({ error: "You have already submitted a proof for this task" });
-  }
-
-  // Check slot limits
-  if (task.filledSlots >= task.totalSlots) {
-    return res.status(400).json({ error: "This task has reached its submission limit" });
-  }
-
-  const defaultScreenshot = proofScreenshot || "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=300&auto=format&fit=crop&q=60";
-
-  const newSubmission = {
-    id: "sub-" + Math.random().toString(36).substr(2, 9),
-    taskId: task.id,
-    taskTitle: task.title,
-    category: task.category,
-    earnerId: user.id,
-    earnerName: user.name,
-    proofText,
-    proofScreenshot: defaultScreenshot,
-    status: SubmissionStatus.PENDING,
-    reward: task.earningPerSlot,
-    submittedAt: new Date().toISOString()
-  };
-
-  db.submissions.push(newSubmission);
-  
-  // Note: we do NOT fill slots yet until advertiser or admin APPROVES. 
-  // Let's increment filled slots only when APPROVED.
-
-  saveDB();
-
-  // Send real-time notification to Admin Dashboard
-  notifyAdmin({
-    type: "submission",
-    message: `New task submission from ${user.name} for "${task.title}"`,
-    referenceId: newSubmission.id
-  });
-
-  res.json({ success: true, submission: newSubmission });
+    const result = await pool.query("SELECT * FROM social_platforms ORDER BY sort_order, name");
+    res.json(result.rows.map(mapSocialPlatform));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-app.get("/api/earner/submissions", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+app.post("/api/admin/platforms", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  const submissions = db.submissions.filter(s => s.earnerId === user.id);
-  res.json(submissions.reverse());
-});
+    const { name, icon, logoUrl, description, status } = req.body;
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Platform name is required." });
+    }
+    const trimmedName = name.trim();
 
-app.get("/api/earner/referrals", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
-
-  const referrals = db.referrals.filter(r => r.referrerId === user.id);
-  res.json({
-    referralCode: user.referralCode,
-    referralReward: db.settings.referralReward,
-    referrals: referrals.reverse()
-  });
-});
-
-app.post("/api/earner/withdraw", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
-
-  const { amount, bankName, accountNumber, accountName } = req.body;
-
-  if (!amount || !bankName || !accountNumber || !accountName) {
-    return res.status(400).json({ error: "All bank transfer fields are required" });
-  }
-
-  const withdrawAmount = parseFloat(amount);
-  if (isNaN(withdrawAmount) || withdrawAmount < db.settings.minWithdrawal) {
-    return res.status(400).json({ error: `Minimum withdrawal amount is ₦${db.settings.minWithdrawal}` });
-  }
-
-  // Calculate sum of all pending withdrawals to get real available balance
-  const pendingWithdrawalsTotal = db.transactions
-    .filter(t => t.userId === user.id && t.type === TransactionType.WITHDRAWAL && t.status === TransactionStatus.PENDING)
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const availableBalance = user.walletBalance - pendingWithdrawalsTotal;
-
-  if (availableBalance < withdrawAmount) {
-    return res.status(400).json({ 
-      error: `Insufficient available balance. Your total balance is ₦${user.walletBalance.toLocaleString()}, but you have ₦${pendingWithdrawalsTotal.toLocaleString()} locked in pending withdrawals. Real available balance: ₦${availableBalance.toLocaleString()}` 
-    });
-  }
-
-  // Record withdrawal request but do NOT deduct from wallet balance yet
-  const txId = "tx-" + Math.random().toString(36).substr(2, 9);
-  const ref = "W-BANK-" + Math.floor(10000000 + Math.random() * 90000000);
-
-  const newTx = {
-    id: txId,
-    userId: user.id,
-    userName: user.name,
-    userRole: user.role,
-    amount: withdrawAmount,
-    type: TransactionType.WITHDRAWAL,
-    status: TransactionStatus.PENDING,
-    description: `Withdrawal to ${bankName} (${accountNumber})`,
-    reference: ref,
-    bankDetails: {
-      bankName,
-      accountNumber,
-      accountName
-    },
-    createdAt: new Date().toISOString()
-  };
-
-  db.transactions.push(newTx);
-  saveDB();
-
-  // Send real-time notification to Admin Dashboard
-  notifyAdmin({
-    type: "withdrawal",
-    message: `New withdrawal request of ₦${withdrawAmount.toLocaleString()} from ${user.name}`,
-    referenceId: newTx.id
-  });
-
-  res.json({ 
-    success: true, 
-    transaction: newTx, 
-    walletBalance: user.walletBalance,
-    availableBalance: availableBalance - withdrawAmount 
-  });
-});
-
-// -----------------------------------------------------------------------------
-// PUBLIC & ADVERTISER PRICING ENDPOINT
-// -----------------------------------------------------------------------------
-app.get("/api/pricing", (req, res) => {
-  res.json(db.taskPricing || []);
-});
-
-app.get("/api/public/stats", (req, res) => {
-  const earnersCount = db.users.filter(u => u.role === UserRole.EARNER).length;
-  const tasksCount = db.tasks.length;
-  
-  const totalPaidOut = db.transactions
-    .filter(t => t.type === TransactionType.WITHDRAWAL && t.status === TransactionStatus.SUCCESS)
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const latestWithdrawalTx = db.transactions
-    .filter(t => t.type === TransactionType.WITHDRAWAL)
-    .slice(-1)[0] || null;
-
-  const latestCampaign = db.tasks
-    .filter(t => t.status === TaskStatus.ACTIVE)
-    .slice(-1)[0] || null;
-
-  res.json({
-    earnersCount,
-    tasksCount,
-    totalPaidOut,
-    latestWithdrawal: latestWithdrawalTx ? {
-      userName: latestWithdrawalTx.userName,
-      bankName: latestWithdrawalTx.bankDetails?.bankName || "Commercial Bank",
-      amount: latestWithdrawalTx.amount
-    } : null,
-    latestCampaign: latestCampaign ? {
-      title: latestCampaign.title,
-      cost: latestCampaign.totalSlots * latestCampaign.costPerSlot
-    } : null
-  });
-});
-
-// -----------------------------------------------------------------------------
-// ADVERTISER API ENDPOINTS
-// -----------------------------------------------------------------------------
-app.get("/api/advertiser/dashboard", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
-
-  const advertiserTasks = db.tasks.filter(t => t.advertiserId === user.id);
-  const activeCount = advertiserTasks.filter(t => t.status === TaskStatus.ACTIVE).length;
-  const pausedCount = advertiserTasks.filter(t => t.status === TaskStatus.PAUSED).length;
-  const completedCount = advertiserTasks.filter(t => t.status === TaskStatus.COMPLETED).length;
-
-  const totalSpent = db.transactions
-    .filter(t => t.userId === user.id && t.type === TransactionType.SPEND && t.status === TransactionStatus.SUCCESS)
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  // Submissions under advertiser's tasks
-  const taskIds = advertiserTasks.map(t => t.id);
-  const advertiserSubmissions = db.submissions.filter(s => taskIds.includes(s.taskId));
-  const pendingSubmissionsCount = advertiserSubmissions.filter(s => s.status === SubmissionStatus.PENDING).length;
-
-  res.json({
-    walletBalance: user.walletBalance,
-    totalSpent,
-    campaignsCount: advertiserTasks.length,
-    activeCount,
-    pausedCount,
-    completedCount,
-    pendingSubmissionsCount,
-    recentTasks: advertiserTasks.slice(-5).reverse()
-  });
-});
-
-app.get("/api/advertiser/tasks", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
-
-  const advertiserTasks = db.tasks.filter(t => t.advertiserId === user.id);
-  res.json(advertiserTasks.reverse());
-});
-
-app.post("/api/advertiser/tasks", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
-
-  const { title, description, category, proofRequirements, link, earningPerSlot, totalSlots } = req.body;
-
-  if (!title || !description || !category || !proofRequirements || !link || !earningPerSlot || !totalSlots) {
-    return res.status(400).json({ error: "All campaign fields are required" });
-  }
-
-  const rewardPerSlot = parseFloat(earningPerSlot);
-  const slots = parseInt(totalSlots);
-  
-  if (isNaN(rewardPerSlot) || rewardPerSlot <= 0 || isNaN(slots) || slots <= 0) {
-    return res.status(400).json({ error: "Invalid earning value or slot count" });
-  }
-
-  // Look up platform-level configured pricing from the database
-  const platform = getPlatformForCategory(category as TaskCategory);
-  const pricing = db.taskPricing ? db.taskPricing.find(p => p.platform === platform) : null;
-
-  const finalCostPerSlot = pricing ? pricing.costPerSlot : Math.ceil(rewardPerSlot * 1.35);
-  const finalEarningPerSlot = pricing ? pricing.earningPerSlot : rewardPerSlot;
-  const totalCampaignCost = finalCostPerSlot * slots;
-
-  if (user.walletBalance < totalCampaignCost) {
-    return res.status(400).json({ 
-      error: `Insufficient balance. This campaign costs ₦${totalCampaignCost.toLocaleString()} (₦${finalCostPerSlot}/slot). Please fund your wallet.` 
-    });
-  }
-
-  // Deduct from wallet
-  user.walletBalance -= totalCampaignCost;
-
-  const newTaskId = "task-" + Math.random().toString(36).substr(2, 9);
-  const newTask = {
-    id: newTaskId,
-    title,
-    description,
-    category,
-    proofRequirements,
-    link,
-    costPerSlot: finalCostPerSlot,
-    earningPerSlot: finalEarningPerSlot,
-    totalSlots: slots,
-    filledSlots: 0,
-    status: TaskStatus.ACTIVE,
-    advertiserId: user.id,
-    advertiserName: user.name,
-    createdAt: new Date().toISOString()
-  };
-
-  db.tasks.push(newTask);
-
-  // Add transaction
-  db.transactions.push({
-    id: "tx-" + Math.random().toString(36).substr(2, 9),
-    userId: user.id,
-    userName: user.name,
-    userRole: user.role,
-    amount: totalCampaignCost,
-    type: TransactionType.SPEND,
-    status: TransactionStatus.SUCCESS,
-    description: `Created Campaign: ${title}`,
-    reference: "T-SPEND-" + Math.floor(10000000 + Math.random() * 90000000),
-    createdAt: new Date().toISOString()
-  });
-
-  saveDB();
-  res.json({ success: true, task: newTask, remainingBalance: user.walletBalance });
-});
-
-app.put("/api/advertiser/tasks/:id/toggle", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
-
-  const taskId = req.params.id;
-  const task = db.tasks.find(t => t.id === taskId && t.advertiserId === user.id);
-
-  if (!task) return res.status(404).json({ error: "Task not found" });
-
-  if (task.status === TaskStatus.ACTIVE) {
-    task.status = TaskStatus.PAUSED;
-  } else if (task.status === TaskStatus.PAUSED) {
-    task.status = TaskStatus.ACTIVE;
-  }
-
-  saveDB();
-  res.json({ success: true, task });
-});
-
-app.delete("/api/advertiser/tasks/:id", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
-
-  const taskId = req.params.id;
-  const taskIdx = db.tasks.findIndex(t => t.id === taskId && t.advertiserId === user.id);
-
-  if (taskIdx === -1) return res.status(404).json({ error: "Task not found" });
-
-  const task = db.tasks[taskIdx];
-  
-  // Refund uncompleted slots
-  const remainingSlots = task.totalSlots - task.filledSlots;
-  if (remainingSlots > 0) {
-    const refundAmount = remainingSlots * task.costPerSlot;
-    user.walletBalance += refundAmount;
-
-    db.transactions.push({
-      id: "tx-" + Math.random().toString(36).substr(2, 9),
-      userId: user.id,
-      userName: user.name,
-      userRole: user.role,
-      amount: refundAmount,
-      type: TransactionType.DEPOSIT,
-      status: TransactionStatus.SUCCESS,
-      description: `Refund for deleted campaign: ${task.title} (${remainingSlots} slots)`,
-      reference: "T-REFUND-" + Math.floor(10000000 + Math.random() * 90000000),
-      createdAt: new Date().toISOString()
-    });
-  }
-
-  db.tasks.splice(taskIdx, 1);
-  saveDB();
-  res.json({ success: true, refundedAmount: remainingSlots * task.costPerSlot, remainingBalance: user.walletBalance });
-});
-
-app.get("/api/advertiser/submissions", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
-
-  // Get advertiser tasks
-  const myTaskIds = db.tasks.filter(t => t.advertiserId === user.id).map(t => t.id);
-  const submissions = db.submissions.filter(s => myTaskIds.includes(s.taskId));
-
-  res.json(submissions.reverse());
-});
-
-app.post("/api/advertiser/submissions/:id/review", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
-
-  const subId = req.params.id;
-  const { status, feedback } = req.body; // status = Approved or Rejected
-
-  if (!status || (status !== SubmissionStatus.APPROVED && status !== SubmissionStatus.REJECTED)) {
-    return res.status(400).json({ error: "Invalid status selection" });
-  }
-
-  const submission = db.submissions.find(s => s.id === subId);
-  if (!submission) return res.status(404).json({ error: "Submission not found" });
-
-  // Verify this advertiser owns the task
-  const task = db.tasks.find(t => t.id === submission.taskId && t.advertiserId === user.id);
-  if (!task) return res.status(403).json({ error: "Unauthorized review" });
-
-  if (submission.status !== SubmissionStatus.PENDING) {
-    return res.status(400).json({ error: "Submission has already been reviewed" });
-  }
-
-  submission.status = status;
-  submission.feedback = feedback || "";
-
-  if (status === SubmissionStatus.APPROVED) {
-    submission.approvedAt = new Date().toISOString();
-    // 1. Credit the earner
-    const earner = db.users.find(u => u.id === submission.earnerId);
-    if (earner) {
-      earner.walletBalance += submission.reward;
-      
-      db.transactions.push({
-        id: "tx-" + Math.random().toString(36).substr(2, 9),
-        userId: earner.id,
-        userName: earner.name,
-        userRole: earner.role,
-        amount: submission.reward,
-        type: TransactionType.EARN,
-        status: TransactionStatus.SUCCESS,
-        description: `Earned from task: ${task.title}`,
-        reference: "E-TASK-" + Math.floor(10000000 + Math.random() * 90000000),
-        createdAt: new Date().toISOString()
-      });
+    const existing = await pool.query("SELECT id FROM social_platforms WHERE LOWER(name) = LOWER($1)", [trimmedName]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: "A platform with this name already exists." });
     }
 
-    // 2. Increment filled slots
-    task.filledSlots += 1;
-    if (task.filledSlots >= task.totalSlots) {
-      task.status = TaskStatus.COMPLETED;
-    }
-  } else {
-    // Rejected: advertiser is already charged at task creation time.
-    // When a submission is rejected, that slot opens back up so others can do it.
-    // Therefore no wallet deduction/refund occurs directly, because the slot can be taken again by another user!
-    // If the advertiser wants to close the task and get refunded, they pause or delete the task.
-  }
+    const maxOrderRes = await pool.query("SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM social_platforms");
+    const nextOrder = parseInt(maxOrderRes.rows[0].max_order) + 1;
 
-  saveDB();
-  res.json({ success: true, submission });
+    const id = slugifyPlatformId(trimmedName) + "-" + Date.now();
+    await pool.query(
+      `INSERT INTO social_platforms (id, name, icon, logo_url, description, status, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [id, trimmedName, icon || "", logoUrl || null, description || null, status === "Inactive" ? "Inactive" : "Active", nextOrder]
+    );
+
+    // Automatically make the new platform available in Task Pricing so the
+    // admin can set an advertiser price and earner reward for it.
+    await ensurePricingRowForPlatform(trimmedName);
+
+    const result = await pool.query("SELECT * FROM social_platforms WHERE id = $1", [id]);
+    res.json({ success: true, platform: mapSocialPlatform(result.rows[0]) });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-app.post("/api/advertiser/deposit/initialize", async (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
+app.put("/api/admin/platforms/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  const { amount } = req.body;
-  const depositAmount = parseFloat(amount);
+    const { id } = req.params;
+    const { name, icon, logoUrl, description, status } = req.body;
 
-  if (isNaN(depositAmount) || depositAmount < db.settings.minDeposit) {
-    return res.status(400).json({ error: `Minimum deposit amount is ₦${db.settings.minDeposit}` });
+    const existingRes = await pool.query("SELECT * FROM social_platforms WHERE id = $1", [id]);
+    if (existingRes.rows.length === 0) {
+      return res.status(404).json({ error: "Platform not found." });
+    }
+    const existing = mapSocialPlatform(existingRes.rows[0]);
+
+    let newName = existing.name;
+    if (name && typeof name === "string" && name.trim()) {
+      newName = name.trim();
+      if (newName.toLowerCase() !== existing.name.toLowerCase()) {
+        const dupe = await pool.query("SELECT id FROM social_platforms WHERE LOWER(name) = LOWER($1) AND id != $2", [newName, id]);
+        if (dupe.rows.length > 0) {
+          return res.status(400).json({ error: "A platform with this name already exists." });
+        }
+      }
+    }
+
+    await pool.query(
+      `UPDATE social_platforms SET name=$1, icon=$2, logo_url=$3, description=$4, status=$5 WHERE id=$6`,
+      [
+        newName,
+        icon !== undefined ? icon : existing.icon,
+        logoUrl !== undefined ? (logoUrl || null) : (existing.logoUrl || null),
+        description !== undefined ? (description || null) : (existing.description || null),
+        status === "Inactive" ? "Inactive" : "Active",
+        id
+      ]
+    );
+
+    // Keep Task Pricing in sync: rename the matching pricing row if the
+    // platform name changed, or create one if it never existed.
+    if (newName !== existing.name) {
+      await pool.query("UPDATE task_pricing SET platform=$1 WHERE platform=$2", [newName, existing.name]);
+    }
+    await ensurePricingRowForPlatform(newName);
+
+    const result = await pool.query("SELECT * FROM social_platforms WHERE id = $1", [id]);
+    res.json({ success: true, platform: mapSocialPlatform(result.rows[0]) });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.delete("/api/admin/platforms/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { id } = req.params;
+    const existingRes = await pool.query("SELECT * FROM social_platforms WHERE id = $1", [id]);
+    if (existingRes.rows.length === 0) {
+      return res.status(404).json({ error: "Platform not found." });
+    }
+    const existing = mapSocialPlatform(existingRes.rows[0]);
+
+    await pool.query("DELETE FROM social_platforms WHERE id = $1", [id]);
+    await pool.query("DELETE FROM task_pricing WHERE platform = $1", [existing.name]);
+
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// ─── Earner API ───────────────────────────────────────────────────────────────
+
+app.get("/api/earner/dashboard", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+    const subs = await pool.query("SELECT * FROM submissions WHERE earner_id = $1", [user.id]);
+    const submissions = subs.rows.map(mapSubmission);
+    const approved = submissions.filter(s => s.status === SubmissionStatus.APPROVED);
+    const pending = submissions.filter(s => s.status === SubmissionStatus.PENDING);
+    const rejected = submissions.filter(s => s.status === SubmissionStatus.REJECTED);
+    const totalEarned = approved.reduce((sum, s) => sum + s.reward, 0);
+
+    const refs = await pool.query("SELECT COUNT(*) FROM referrals WHERE referrer_id = $1", [user.id]);
+    const submittedTaskIds = submissions.map(s => s.taskId);
+
+    let availableTasksCount = 0;
+    if (submittedTaskIds.length > 0) {
+      const avail = await pool.query(
+        `SELECT COUNT(*) FROM tasks WHERE status = 'Active' AND id != ALL($1::varchar[])`,
+        [submittedTaskIds]
+      );
+      availableTasksCount = parseInt(avail.rows[0].count);
+    } else {
+      const avail = await pool.query("SELECT COUNT(*) FROM tasks WHERE status = 'Active'");
+      availableTasksCount = parseInt(avail.rows[0].count);
+    }
+
+    const settings = await getSettings();
+    const recentSubmissions = [...submissions].sort((a, b) =>
+      new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+    ).slice(0, 5);
+
+    res.json({
+      walletBalance: user.walletBalance,
+      totalEarned,
+      approvedCount: approved.length,
+      pendingCount: pending.length,
+      rejectedCount: rejected.length,
+      referralsCount: parseInt(refs.rows[0].count),
+      availableTasksCount,
+      recentSubmissions,
+      referralCode: user.referralCode
+    });
+  } catch (err) {
+    console.error("Earner dashboard error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/earner/tasks", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+    const tasks = await pool.query("SELECT * FROM tasks WHERE status = 'Active' ORDER BY created_at DESC");
+    const subs = await pool.query("SELECT task_id, status FROM submissions WHERE earner_id = $1", [user.id]);
+    const submittedMap = new Map(subs.rows.map(s => [s.task_id, s.status]));
+
+    res.json(tasks.rows.map(r => ({
+      ...mapTask(r),
+      submissionStatus: submittedMap.get(r.id) || null
+    })));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.post("/api/earner/tasks/:id/submit", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+    const taskId = req.params.id;
+    const { proofText, proofScreenshot } = req.body;
+    if (!proofText) return res.status(400).json({ error: "Proof details are required" });
+
+    const taskRes = await pool.query("SELECT * FROM tasks WHERE id = $1", [taskId]);
+    if (taskRes.rows.length === 0 || taskRes.rows[0].status !== TaskStatus.ACTIVE) {
+      return res.status(404).json({ error: "Task is not active or not found" });
+    }
+    const task = mapTask(taskRes.rows[0]);
+
+    const alreadySub = await pool.query("SELECT id FROM submissions WHERE task_id = $1 AND earner_id = $2", [taskId, user.id]);
+    if (alreadySub.rows.length > 0) return res.status(400).json({ error: "You have already submitted a proof for this task" });
+
+    if (task.filledSlots >= task.totalSlots) return res.status(400).json({ error: "This task has reached its submission limit" });
+
+    const screenshot = proofScreenshot || "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=300&auto=format&fit=crop&q=60";
+    const subId = "sub-" + Math.random().toString(36).substr(2, 9);
+
+    await pool.query(`
+      INSERT INTO submissions (id, task_id, task_title, category, earner_id, earner_name, proof_text, proof_screenshot, status, reward, submitted_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Pending',$9,$10)
+    `, [subId, taskId, task.title, task.category, user.id, user.name, proofText, screenshot, task.earningPerSlot, new Date()]);
+
+    notifyAdmin({ type: "submission", message: `New task submission from ${user.name} for "${task.title}"`, referenceId: subId });
+
+    const subRes = await pool.query("SELECT * FROM submissions WHERE id = $1", [subId]);
+    res.json({ success: true, submission: mapSubmission(subRes.rows[0]) });
+  } catch (err) {
+    console.error("Submit error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/earner/submissions", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query("SELECT * FROM submissions WHERE earner_id = $1 ORDER BY submitted_at DESC", [user.id]);
+    res.json(result.rows.map(mapSubmission));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.delete("/api/earner/submissions/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const subRes = await client.query(
+        "SELECT * FROM submissions WHERE id=$1 AND earner_id=$2 FOR UPDATE",
+        [req.params.id, user.id]
+      );
+      if (subRes.rows.length === 0) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Submission not found" }); }
+
+      const submission = mapSubmission(subRes.rows[0]);
+      if (submission.status !== SubmissionStatus.PENDING) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Only pending submissions can be deleted" });
+      }
+
+      const delRes = await client.query(
+        "DELETE FROM submissions WHERE id=$1 AND earner_id=$2 AND status='Pending' RETURNING id",
+        [submission.id, user.id]
+      );
+      if (delRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Only pending submissions can be deleted" });
+      }
+
+      await client.query("COMMIT");
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Delete submission error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/earner/referrals", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+    const settings = await getSettings();
+    const refs = await pool.query("SELECT * FROM referrals WHERE referrer_id = $1 ORDER BY created_at DESC", [user.id]);
+    res.json({
+      referralCode: user.referralCode,
+      referralReward: settings?.referralReward || 200,
+      referrals: refs.rows.map(r => ({
+        id: r.id,
+        referrerId: r.referrer_id,
+        refereeId: r.referee_id,
+        refereeName: r.referee_name,
+        refereeEmail: r.referee_email,
+        rewardEarned: parseFloat(r.reward_earned),
+        createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at
+      }))
+    });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.get("/api/banks", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: "Authentication required" });
+
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (paystackKey) {
+      try {
+        const response = await fetch("https://api.paystack.co/bank?country=nigeria", {
+          headers: { "Authorization": `Bearer ${paystackKey}` }
+        });
+        const data: any = await response.json();
+        if (data?.status && data?.data) {
+          return res.json(data.data.map((b: any) => ({ name: b.name, code: b.code })).sort((a: any, b: any) => a.name.localeCompare(b.name)));
+        }
+      } catch {}
+    }
+
+    res.json(NIGERIAN_BANK_LIST);
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// Shared resolver used by both the standalone verify endpoint and server-side
+// enforcement inside the withdrawal handler (never trust client-only verification).
+type BankResolution =
+  | { success: true; accountName: string; isSimulated?: boolean }
+  | { success: false; error: string };
+
+async function resolveBankAccount(accountNumber: string, bankName?: string, bankCode?: string): Promise<BankResolution> {
+  if (!accountNumber || (!bankCode && !bankName)) {
+    return { success: false, error: "Account number and bank are required" };
+  }
+  if (accountNumber.length !== 10 || !/^\d+$/.test(accountNumber)) {
+    return { success: false, error: "Account number must be exactly 10 digits" };
   }
 
-  const txId = "tx-" + Math.random().toString(36).substr(2, 9);
-  const ref = "DEP-" + Math.floor(10000000 + Math.random() * 90000000);
-
-  const newTx = {
-    id: txId,
-    userId: user.id,
-    userName: user.name,
-    userRole: user.role,
-    amount: depositAmount,
-    type: TransactionType.DEPOSIT,
-    status: TransactionStatus.PENDING,
-    description: "Wallet Funding via Paystack Checkout",
-    reference: ref,
-    gateway: "Paystack",
-    createdAt: new Date().toISOString()
-  };
-
-  db.transactions.push(newTx);
-  saveDB();
+  const resolvedCode = bankCode || NIGERIAN_BANK_LIST.find(b => b.name === bankName)?.code;
 
   const paystackKey = process.env.PAYSTACK_SECRET_KEY;
   if (!paystackKey) {
-    return res.status(400).json({ error: "PAYSTACK_SECRET_KEY environment variable is not configured on the server. Please set it in the Secrets/Settings menu." });
+    return { success: true, accountName: `Verified Account Holder (${bankName || "Nigerian Bank"})`, isSimulated: true };
   }
 
+  if (!resolvedCode) return { success: false, error: "Could not determine bank code for the selected bank" };
+
   try {
+    const response = await fetch(`https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${resolvedCode}`, {
+      headers: { "Authorization": `Bearer ${paystackKey}` }
+    });
+    const data: any = await response.json();
+    if (data?.status && data?.data) {
+      return { success: true, accountName: data.data.account_name };
+    }
+    return { success: false, error: data.message || "Could not resolve bank account. Please check the details and try again." };
+  } catch {
+    return { success: false, error: "Bank verification service is unavailable. Please try again." };
+  }
+}
+
+app.post("/api/verify-bank", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: "Authentication required" });
+
+    const { accountNumber, bankCode, bankName } = req.body;
+    const result = await resolveBankAccount(accountNumber, bankName, bankCode);
+    if ("error" in result) return res.status(400).json({ error: result.error });
+    res.json({ success: true, accountName: result.accountName, isSimulated: result.isSimulated });
+  } catch (err) {
+    console.error("Verify bank error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.post("/api/earner/withdraw", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+    const { amount, bankName, accountNumber, accountName } = req.body;
+    if (!amount || !bankName || !accountNumber || !accountName) {
+      return res.status(400).json({ error: "All bank transfer fields are required" });
+    }
+    if (String(accountNumber).length !== 10 || !/^\d+$/.test(String(accountNumber))) {
+      return res.status(400).json({ error: "Account number must be exactly 10 digits" });
+    }
+
+    // Never trust client-side verification state — re-resolve the account server-side.
+    const verification = await resolveBankAccount(String(accountNumber), bankName);
+    if ("error" in verification) {
+      return res.status(400).json({ error: `Bank account verification failed: ${verification.error}` });
+    }
+    if (!verification.isSimulated) {
+      // Token-based comparison: require at least two whole-word matches (or the
+      // full name for single-word names) so short/common substrings can't slip
+      // fraudulent mismatches past a naive substring check.
+      const tokenize = (s: string) => s.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).filter(t => t.length >= 3);
+      const resolvedTokens = tokenize(verification.accountName);
+      const submittedTokens = tokenize(String(accountName));
+      const overlap = resolvedTokens.filter(t => submittedTokens.includes(t));
+      const requiredMatches = Math.max(1, Math.min(2, resolvedTokens.length));
+      if (overlap.length < requiredMatches) {
+        return res.status(400).json({ error: `Account name does not match bank records. Verified name: ${verification.accountName}` });
+      }
+    }
+
+    const settings = await getSettings();
+    const withdrawAmount = parseFloat(amount);
+    if (isNaN(withdrawAmount) || withdrawAmount < (settings?.minWithdrawal || 200)) {
+      return res.status(400).json({ error: `Minimum withdrawal amount is ₦${settings?.minWithdrawal}` });
+    }
+
+    const pendingRes = await pool.query(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE user_id = $1 AND type = 'Withdrawal' AND status = 'Pending'",
+      [user.id]
+    );
+    const pendingTotal = parseFloat(pendingRes.rows[0].total) || 0;
+    const available = user.walletBalance - pendingTotal;
+
+    if (available < withdrawAmount) {
+      return res.status(400).json({
+        error: `Insufficient available balance. Balance: ₦${user.walletBalance.toLocaleString()}, locked in pending: ₦${pendingTotal.toLocaleString()}, available: ₦${available.toLocaleString()}`
+      });
+    }
+
+    const txId = "tx-" + Math.random().toString(36).substr(2, 9);
+    const ref = "W-BANK-" + Math.floor(10000000 + Math.random() * 90000000);
+    const bankDetails = JSON.stringify({ bankName, accountNumber, accountName });
+
+    await pool.query(`
+      INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, bank_details, created_at)
+      VALUES ($1,$2,$3,$4,$5,'Withdrawal','Pending',$6,$7,$8,$9)
+    `, [txId, user.id, user.name, user.role, withdrawAmount, `Withdrawal to ${bankName} (${accountNumber})`, ref, bankDetails, new Date()]);
+
+    notifyAdmin({ type: "withdrawal", message: `New withdrawal request of ₦${withdrawAmount.toLocaleString()} from ${user.name}`, referenceId: txId });
+
+    res.json({ success: true, transaction: { id: txId, amount: withdrawAmount, status: "Pending", reference: ref }, walletBalance: user.walletBalance, availableBalance: available - withdrawAmount });
+  } catch (err) {
+    console.error("Withdraw error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Advertiser API ───────────────────────────────────────────────────────────
+
+app.get("/api/advertiser/dashboard", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
+
+    const tasks = await pool.query("SELECT * FROM tasks WHERE advertiser_id = $1 ORDER BY created_at DESC", [user.id]);
+    const taskList = tasks.rows.map(mapTask);
+    const taskIds = taskList.map(t => t.id);
+
+    const totalSpent = await pool.query(
+      "SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE user_id=$1 AND type='Campaign Spend' AND status='Success'",
+      [user.id]
+    );
+
+    let pendingSubCount = 0;
+    if (taskIds.length > 0) {
+      const psubs = await pool.query(
+        "SELECT COUNT(*) FROM submissions WHERE task_id = ANY($1::varchar[]) AND status = 'Pending'",
+        [taskIds]
+      );
+      pendingSubCount = parseInt(psubs.rows[0].count);
+    }
+
+    res.json({
+      walletBalance: user.walletBalance,
+      totalSpent: parseFloat(totalSpent.rows[0].total),
+      campaignsCount: taskList.length,
+      activeCount: taskList.filter(t => t.status === TaskStatus.ACTIVE).length,
+      pausedCount: taskList.filter(t => t.status === TaskStatus.PAUSED).length,
+      completedCount: taskList.filter(t => t.status === TaskStatus.COMPLETED).length,
+      pendingSubmissionsCount: pendingSubCount,
+      recentTasks: taskList.slice(0, 5)
+    });
+  } catch (err) {
+    console.error("Advertiser dashboard error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/advertiser/tasks", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query("SELECT * FROM tasks WHERE advertiser_id = $1 ORDER BY created_at DESC", [user.id]);
+    res.json(result.rows.map(mapTask));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.post("/api/advertiser/tasks", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
+
+    const { title, description, category, proofRequirements, link, totalSlots } = req.body;
+    if (!title || !description || !category || !proofRequirements || !link || !totalSlots) {
+      return res.status(400).json({ error: "All campaign fields are required" });
+    }
+
+    const slots = parseInt(totalSlots);
+    if (isNaN(slots) || slots <= 0) {
+      return res.status(400).json({ error: "Invalid slot count" });
+    }
+
+    // Pricing (advertiser cost and earner reward) is ALWAYS sourced from the
+    // admin-controlled task_pricing table in the database. Advertisers cannot
+    // supply or override the cost or earner payout — no hard-coded fallback.
+    const platform = getPlatformForCategory(category as TaskCategory);
+
+    const platformRes = await pool.query("SELECT * FROM social_platforms WHERE LOWER(name) = LOWER($1) LIMIT 1", [platform]);
+    if (platformRes.rows.length === 0 || mapSocialPlatform(platformRes.rows[0]).status !== "Active") {
+      return res.status(400).json({ error: "This platform is not currently available for new campaigns. Please contact the administrator." });
+    }
+
+    const pricingRes = await pool.query("SELECT * FROM task_pricing WHERE platform = $1 LIMIT 1", [platform]);
+    if (pricingRes.rows.length === 0 || parseFloat(pricingRes.rows[0].cost_per_slot) <= 0) {
+      return res.status(400).json({ error: "No pricing has been configured for this platform yet. Please contact the administrator." });
+    }
+    const pricing = mapPricing(pricingRes.rows[0]);
+
+    const finalCostPerSlot = pricing.costPerSlot;
+    const finalEarningPerSlot = pricing.earningPerSlot;
+    const totalCost = finalCostPerSlot * slots;
+
+    if (user.walletBalance < totalCost) {
+      return res.status(400).json({ error: `Insufficient balance. Campaign costs ₦${totalCost.toLocaleString()} (₦${finalCostPerSlot}/slot).` });
+    }
+
+    const client = await pool.connect();
+    let newTask: any;
+    let newBalance: number;
+    try {
+      await client.query("BEGIN");
+
+      // Lock the user row and re-check balance atomically
+      const lockedUser = await client.query("SELECT wallet_balance FROM users WHERE id=$1 FOR UPDATE", [user.id]);
+      const currentBalance = parseFloat(lockedUser.rows[0].wallet_balance);
+      if (currentBalance < totalCost) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: `Insufficient balance. Campaign costs ₦${totalCost.toLocaleString()}.` });
+      }
+
+      await client.query("UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2", [totalCost, user.id]);
+
+      const newTaskId = "task-" + Math.random().toString(36).substr(2, 9);
+      const taskInsert = await client.query(`
+        INSERT INTO tasks (id, title, description, category, proof_requirements, link, cost_per_slot, earning_per_slot, total_slots, filled_slots, status, advertiser_id, advertiser_name, created_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'Active',$10,$11,$12) RETURNING *
+      `, [newTaskId, title, description, category, proofRequirements, link, finalCostPerSlot, finalEarningPerSlot, slots, user.id, user.name, new Date()]);
+
+      await client.query(`
+        INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
+        VALUES ($1,$2,$3,$4,$5,'Campaign Spend','Success',$6,$7,$8)
+      `, [
+        "tx-" + Math.random().toString(36).substr(2, 9),
+        user.id, user.name, user.role, totalCost,
+        `Created Campaign: ${title}`,
+        "T-SPEND-" + Math.floor(10000000 + Math.random() * 90000000),
+        new Date()
+      ]);
+
+      await client.query("COMMIT");
+      newTask = mapTask(taskInsert.rows[0]);
+      newBalance = currentBalance - totalCost;
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    res.json({ success: true, task: newTask, remainingBalance: newBalance });
+  } catch (err) {
+    console.error("Create task error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.put("/api/advertiser/tasks/:id/toggle", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
+
+    const taskRes = await pool.query("SELECT * FROM tasks WHERE id = $1 AND advertiser_id = $2", [req.params.id, user.id]);
+    if (taskRes.rows.length === 0) return res.status(404).json({ error: "Task not found" });
+
+    const task = mapTask(taskRes.rows[0]);
+    let newStatus = task.status;
+    if (task.status === TaskStatus.ACTIVE) newStatus = TaskStatus.PAUSED;
+    else if (task.status === TaskStatus.PAUSED) newStatus = TaskStatus.ACTIVE;
+
+    await pool.query("UPDATE tasks SET status = $1 WHERE id = $2", [newStatus, task.id]);
+    res.json({ success: true, task: { ...task, status: newStatus } });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.delete("/api/advertiser/tasks/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
+
+    const client = await pool.connect();
+    let refundAmount = 0;
+    let newBalance = 0;
+    try {
+      await client.query("BEGIN");
+
+      const taskRes = await client.query("SELECT * FROM tasks WHERE id=$1 AND advertiser_id=$2 FOR UPDATE", [req.params.id, user.id]);
+      if (taskRes.rows.length === 0) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Task not found" }); }
+
+      const task = mapTask(taskRes.rows[0]);
+      const remainingSlots = task.totalSlots - task.filledSlots;
+      refundAmount = remainingSlots * task.costPerSlot;
+
+      if (refundAmount > 0) {
+        await client.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2", [refundAmount, user.id]);
+        await client.query(`
+          INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
+          VALUES ($1,$2,$3,$4,$5,'Deposit','Success',$6,$7,$8)
+        `, [
+          "tx-" + Math.random().toString(36).substr(2, 9),
+          user.id, user.name, user.role, refundAmount,
+          `Refund for deleted campaign: ${task.title} (${remainingSlots} slots)`,
+          "T-REFUND-" + Math.floor(10000000 + Math.random() * 90000000),
+          new Date()
+        ]);
+      }
+
+      await client.query("DELETE FROM tasks WHERE id=$1", [task.id]);
+
+      const balRes = await client.query("SELECT wallet_balance FROM users WHERE id=$1", [user.id]);
+      newBalance = parseFloat(balRes.rows[0].wallet_balance);
+
+      await client.query("COMMIT");
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    res.json({ success: true, refundedAmount: refundAmount, remainingBalance: newBalance });
+  } catch (err) {
+    console.error("Delete task error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/advertiser/submissions", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
+
+    const taskRes = await pool.query("SELECT id FROM tasks WHERE advertiser_id = $1", [user.id]);
+    const taskIds = taskRes.rows.map(r => r.id);
+    if (taskIds.length === 0) return res.json([]);
+
+    const subsRes = await pool.query(
+      "SELECT * FROM submissions WHERE task_id = ANY($1::varchar[]) ORDER BY submitted_at DESC",
+      [taskIds]
+    );
+    res.json(subsRes.rows.map(mapSubmission));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
+
+    const { status, feedback } = req.body;
+    if (!status || (status !== SubmissionStatus.APPROVED && status !== SubmissionStatus.REJECTED)) {
+      return res.status(400).json({ error: "Invalid status selection" });
+    }
+
+    const client = await pool.connect();
+    let updatedSubmission: any;
+    try {
+      await client.query("BEGIN");
+
+      // Lock submission row
+      const subRes = await client.query("SELECT * FROM submissions WHERE id=$1 FOR UPDATE", [req.params.id]);
+      if (subRes.rows.length === 0) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Submission not found" }); }
+
+      const submission = mapSubmission(subRes.rows[0]);
+      if (submission.status !== SubmissionStatus.PENDING) { await client.query("ROLLBACK"); return res.status(400).json({ error: "Submission has already been reviewed" }); }
+
+      const taskRes = await client.query("SELECT * FROM tasks WHERE id=$1 AND advertiser_id=$2 FOR UPDATE", [submission.taskId, user.id]);
+      if (taskRes.rows.length === 0) { await client.query("ROLLBACK"); return res.status(403).json({ error: "Unauthorized review" }); }
+
+      const task = mapTask(taskRes.rows[0]);
+      const now = new Date();
+
+      if (status === SubmissionStatus.APPROVED) {
+        await client.query("UPDATE submissions SET status=$1, feedback=$2, approved_at=$3 WHERE id=$4", [status, feedback || "", now, submission.id]);
+
+        const earnerRes = await client.query("SELECT name, role FROM users WHERE id=$1", [submission.earnerId]);
+        const earnerName = earnerRes.rows[0]?.name || "";
+        const earnerRole = earnerRes.rows[0]?.role || "Earner";
+        await client.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2", [submission.reward, submission.earnerId]);
+        await client.query(`
+          INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
+          VALUES ($1,$2,$3,$4,$5,'Task Earnings','Success',$6,$7,$8)
+        `, [
+          "tx-" + Math.random().toString(36).substr(2, 9),
+          submission.earnerId, earnerName, earnerRole, submission.reward,
+          `Earned from task: ${task.title}`,
+          "E-TASK-" + Math.floor(10000000 + Math.random() * 90000000), now
+        ]);
+
+        const newFilled = task.filledSlots + 1;
+        const newStatus = newFilled >= task.totalSlots ? TaskStatus.COMPLETED : task.status;
+        await client.query("UPDATE tasks SET filled_slots=$1, status=$2 WHERE id=$3", [newFilled, newStatus, task.id]);
+      } else {
+        await client.query("UPDATE submissions SET status=$1, feedback=$2 WHERE id=$3", [status, feedback || "", submission.id]);
+      }
+
+      await client.query("COMMIT");
+      const updated = await pool.query("SELECT * FROM submissions WHERE id=$1", [submission.id]);
+      updatedSubmission = mapSubmission(updated.rows[0]);
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    res.json({ success: true, submission: updatedSubmission });
+  } catch (err) {
+    console.error("Review submission error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.post("/api/advertiser/deposit/initialize", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
+
+    const settings = await getSettings();
+    const depositAmount = parseFloat(req.body.amount);
+    if (isNaN(depositAmount) || depositAmount < (settings?.minDeposit || 200)) {
+      return res.status(400).json({ error: `Minimum deposit amount is ₦${settings?.minDeposit}` });
+    }
+
+    const txId = "tx-" + Math.random().toString(36).substr(2, 9);
+    const ref = "DEP-" + Math.floor(10000000 + Math.random() * 90000000);
+
+    await pool.query(`
+      INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, gateway, created_at)
+      VALUES ($1,$2,$3,$4,$5,'Deposit','Pending','Wallet Funding via Paystack Checkout',$6,'Paystack',$7)
+    `, [txId, user.id, user.name, user.role, depositAmount, ref, new Date()]);
+
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackKey) {
+      return res.status(400).json({ error: "PAYSTACK_SECRET_KEY environment variable is not configured." });
+    }
+
     const origin = req.headers.referer || req.headers.origin || `http://localhost:${PORT}`;
-    // Clean up origin trailing slash if any
     const baseOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
     const callbackUrl = `${baseOrigin}/#paystack_ref=${ref}`;
 
     const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${paystackKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        email: user.email,
-        amount: Math.round(depositAmount * 100), // convert to kobo and ensure integer
-        reference: ref,
-        callback_url: callbackUrl
-      })
+      headers: { "Authorization": `Bearer ${paystackKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: user.email, amount: Math.round(depositAmount * 100), reference: ref, callback_url: callbackUrl })
     });
-
     const paystackData: any = await paystackRes.json();
-    if (paystackData && paystackData.status && paystackData.data) {
-      return res.json({ 
-        success: true, 
-        authorization_url: paystackData.data.authorization_url, 
-        reference: ref 
-      });
+
+    if (paystackData?.status && paystackData?.data) {
+      return res.json({ success: true, authorization_url: paystackData.data.authorization_url, reference: ref });
     } else {
-      console.error("Paystack API error: ", paystackData);
       return res.status(500).json({ error: paystackData.message || "Failed to initialize payment gateway" });
     }
-  } catch (err) {
-    console.error("Paystack Initialize Fetch error: ", err);
-    return res.status(500).json({ error: "Failed to connect to Paystack payment gateway" });
-  }
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
 app.post("/api/advertiser/deposit/verify", async (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
-
-  const { reference } = req.body;
-  if (!reference) {
-    return res.status(400).json({ error: "Transaction reference is required" });
-  }
-
-  const transaction = db.transactions.find(t => t.reference === reference && t.userId === user.id);
-  if (!transaction) {
-    return res.status(404).json({ error: "Transaction record not found" });
-  }
-
-  // Prevent duplicate credit
-  if (transaction.status === TransactionStatus.SUCCESS) {
-    return res.json({ 
-      success: true, 
-      alreadyProcessed: true, 
-      walletBalance: user.walletBalance,
-      transaction 
-    });
-  }
-
-  if (transaction.status === TransactionStatus.FAILED || transaction.status === TransactionStatus.REJECTED) {
-    return res.status(400).json({ error: "This transaction has already been processed as failed" });
-  }
-
-  const paystackKey = process.env.PAYSTACK_SECRET_KEY;
-  if (!paystackKey) {
-    return res.status(400).json({ error: "PAYSTACK_SECRET_KEY environment variable is not configured on the server. Please set it in the Secrets/Settings menu." });
-  }
-
   try {
-    const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${paystackKey}`
-      }
-    });
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
 
-    const paystackData: any = await paystackRes.json();
-    if (paystackData && paystackData.status && paystackData.data) {
-      const paystackStatus = paystackData.data.status;
-      const paystackAmount = paystackData.data.amount / 100; // convert back from kobo
+    const { reference } = req.body;
+    if (!reference) return res.status(400).json({ error: "Transaction reference is required" });
 
-      if (paystackStatus === "success") {
-        // Double check amount to prevent tampering
-        if (Math.abs(paystackAmount - transaction.amount) > 0.01) {
-          transaction.status = TransactionStatus.FAILED;
-          saveDB();
-          return res.status(400).json({ error: "Transaction amount mismatch. Audit flag raised." });
-        }
+    // Verify with Paystack BEFORE acquiring any DB lock
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackKey) return res.status(400).json({ error: "PAYSTACK_SECRET_KEY is not configured." });
 
-        transaction.status = TransactionStatus.SUCCESS;
-        user.walletBalance += transaction.amount;
-        saveDB();
-
-        return res.json({ 
-          success: true, 
-          walletBalance: user.walletBalance, 
-          transaction 
-        });
-      } else {
-        transaction.status = TransactionStatus.FAILED;
-        saveDB();
-        return res.status(400).json({ error: `Payment failed. Paystack status: ${paystackStatus}` });
-      }
-    } else {
-      console.error("Paystack Verification Error: ", paystackData);
-      return res.status(500).json({ error: "Could not verify payment status with gateway" });
-    }
-  } catch (err) {
-    console.error("Paystack Verify Fetch error: ", err);
-    return res.status(500).json({ error: "Failed to verify transaction with payment gateway" });
-  }
-});
-
-// -----------------------------------------------------------------------------
-// EARNER ACCOUNT ACTIVATION — ONE-TIME ₦500 FEE VIA PAYSTACK
-// -----------------------------------------------------------------------------
-app.post("/api/earner/activation/initialize", async (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
-
-  if (user.isActivated) {
-    return res.json({ success: true, alreadyActivated: true });
-  }
-
-  const ACTIVATION_FEE = 500; // ₦500 one-time earner activation fee
-  const txId = "tx-" + Math.random().toString(36).substr(2, 9);
-  const ref = "ACT-" + Math.floor(10000000 + Math.random() * 90000000);
-
-  const pendingTx = {
-    id: txId,
-    userId: user.id,
-    userName: user.name,
-    userRole: user.role,
-    amount: ACTIVATION_FEE,
-    type: TransactionType.ACTIVATION,
-    status: TransactionStatus.PENDING,
-    description: "Earner Account Activation Fee (One-Time)",
-    reference: ref,
-    gateway: "Paystack",
-    createdAt: new Date().toISOString()
-  };
-
-  db.transactions.push(pendingTx);
-  saveDB();
-
-  const paystackKey = process.env.PAYSTACK_SECRET_KEY;
-  if (!paystackKey) {
-    db.transactions = db.transactions.filter(t => t.id !== txId);
-    saveDB();
-    return res.status(400).json({ error: "PAYSTACK_SECRET_KEY is not configured. Please set it in your Replit Secrets panel." });
-  }
-
-  try {
-    const origin = req.headers.referer || req.headers.origin || `http://localhost:${PORT}`;
-    const baseOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
-    const callbackUrl = `${baseOrigin}/#paystack_activation_ref=${ref}`;
-
-    const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${paystackKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ email: user.email, amount: ACTIVATION_FEE * 100, reference: ref, callback_url: callbackUrl })
-    });
-
-    const paystackData: any = await paystackRes.json();
-    if (paystackData && paystackData.status && paystackData.data) {
-      return res.json({ success: true, authorization_url: paystackData.data.authorization_url, reference: ref });
-    } else {
-      db.transactions = db.transactions.filter(t => t.id !== txId);
-      saveDB();
-      return res.status(500).json({ error: paystackData.message || "Failed to initialize activation payment" });
-    }
-  } catch (err) {
-    db.transactions = db.transactions.filter(t => t.id !== txId);
-    saveDB();
-    return res.status(500).json({ error: "Failed to connect to Paystack payment gateway" });
-  }
-});
-
-app.post("/api/earner/activation/verify", async (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
-
-  // Idempotent — already activated
-  if (user.isActivated) {
-    const { password: _, verificationCode: __, verificationCodeExpires: ___, ...safe } = user;
-    return res.json({ success: true, alreadyActivated: true, user: safe });
-  }
-
-  const { reference } = req.body;
-  if (!reference) return res.status(400).json({ error: "Transaction reference is required" });
-
-  const transaction = db.transactions.find(
-    t => t.reference === reference && t.userId === user.id && t.type === TransactionType.ACTIVATION
-  );
-  if (!transaction) return res.status(404).json({ error: "Activation transaction record not found" });
-
-  // Prevent double-credit
-  if (transaction.status === TransactionStatus.SUCCESS) {
-    if (!user.isActivated) { user.isActivated = true; saveDB(); }
-    const { password: _, ...safe } = user;
-    return res.json({ success: true, user: safe });
-  }
-  if (transaction.status === TransactionStatus.FAILED || transaction.status === TransactionStatus.REJECTED) {
-    return res.status(400).json({ error: "This activation payment has already been marked as failed." });
-  }
-
-  const paystackKey = process.env.PAYSTACK_SECRET_KEY;
-  if (!paystackKey) return res.status(400).json({ error: "PAYSTACK_SECRET_KEY is not configured." });
-
-  try {
     const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
       method: "GET",
       headers: { "Authorization": `Bearer ${paystackKey}` }
     });
-
     const paystackData: any = await paystackRes.json();
-    if (paystackData && paystackData.status && paystackData.data) {
-      const paystackStatus = paystackData.data.status;
-      const paystackAmount = paystackData.data.amount / 100; // kobo → naira
+    if (!paystackData?.status || !paystackData?.data) {
+      return res.status(500).json({ error: "Could not verify payment status with gateway" });
+    }
+    const pStatus = paystackData.data.status;
+    const pAmount = paystackData.data.amount / 100;
 
-      if (paystackStatus === "success") {
-        if (Math.abs(paystackAmount - transaction.amount) > 0.01) {
-          transaction.status = TransactionStatus.FAILED;
-          saveDB();
-          return res.status(400).json({ error: "Activation payment amount mismatch. Security audit flag raised." });
-        }
+    // Now acquire row lock and apply atomically
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
 
-        // ✅ Mark payment successful and INSTANTLY activate the account
-        transaction.status = TransactionStatus.SUCCESS;
-        user.isActivated = true;
-        saveDB();
+      const txRes = await client.query("SELECT * FROM transactions WHERE reference=$1 AND user_id=$2 FOR UPDATE", [reference, user.id]);
+      if (txRes.rows.length === 0) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Transaction record not found" }); }
 
-        // Notify admin dashboard in real-time
-        notifyAdmin({
-          type: "submission",
-          message: `🎉 Earner "${user.name}" activated their account — ₦500 commission received.`,
-          referenceId: transaction.id
-        });
+      const transaction = mapTransaction(txRes.rows[0]);
 
-        const { password: _, verificationCode: __, verificationCodeExpires: ___, ...safe } = user;
-        return res.json({ success: true, activated: true, user: safe });
-      } else {
-        transaction.status = TransactionStatus.FAILED;
-        saveDB();
-        return res.status(400).json({ error: `Activation payment failed. Paystack reported: ${paystackStatus}` });
+      if (transaction.status === TransactionStatus.SUCCESS) {
+        await client.query("ROLLBACK");
+        const freshUser = await pool.query("SELECT wallet_balance FROM users WHERE id=$1", [user.id]);
+        return res.json({ success: true, alreadyProcessed: true, walletBalance: parseFloat(freshUser.rows[0].wallet_balance), transaction });
       }
-    } else {
-      return res.status(500).json({ error: "Could not verify activation payment status with Paystack" });
+
+      if (transaction.status === TransactionStatus.FAILED || transaction.status === TransactionStatus.REJECTED) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "This transaction has already been processed as failed" });
+      }
+
+      if (pStatus === "success") {
+        if (Math.abs(pAmount - transaction.amount) > 0.01) {
+          await client.query("UPDATE transactions SET status='Failed' WHERE id=$1", [transaction.id]);
+          await client.query("COMMIT");
+          return res.status(400).json({ error: "Transaction amount mismatch. Audit flag raised." });
+        }
+        await client.query("UPDATE transactions SET status='Success' WHERE id=$1", [transaction.id]);
+        await client.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2", [transaction.amount, user.id]);
+        await client.query("COMMIT");
+        const freshUser = await pool.query("SELECT wallet_balance FROM users WHERE id=$1", [user.id]);
+        return res.json({ success: true, walletBalance: parseFloat(freshUser.rows[0].wallet_balance), transaction: { ...transaction, status: "Success" } });
+      } else {
+        await client.query("UPDATE transactions SET status='Failed' WHERE id=$1", [transaction.id]);
+        await client.query("COMMIT");
+        return res.status(400).json({ error: `Payment failed. Paystack status: ${pStatus}` });
+      }
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      throw txErr;
+    } finally {
+      client.release();
     }
   } catch (err) {
-    return res.status(500).json({ error: "Failed to verify activation payment with Paystack" });
+    console.error("Deposit verify error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// -----------------------------------------------------------------------------
-// HISTORIC TRANSACTION HISTORY
-// -----------------------------------------------------------------------------
-app.get("/api/user/transactions", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user) return res.status(401).json({ error: "Unauthorized" });
+// ─── Transactions API ─────────────────────────────────────────────────────────
 
-  const transactions = db.transactions.filter(t => t.userId === user.id);
-  res.json(transactions.reverse());
+app.get("/api/user/transactions", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+    const result = await pool.query("SELECT * FROM transactions WHERE user_id=$1 ORDER BY created_at DESC", [user.id]);
+    res.json(result.rows.map(mapTransaction));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-// -----------------------------------------------------------------------------
-// ADMIN PANEL API ENDPOINTS
-// -----------------------------------------------------------------------------
-app.get("/api/admin/dashboard", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+// ─── Admin API ────────────────────────────────────────────────────────────────
 
-  const earners = db.users.filter(u => u.role === UserRole.EARNER);
-  const advertisers = db.users.filter(u => u.role === UserRole.ADVERTISER);
+app.get("/api/admin/dashboard", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  const totalEarned = db.submissions
-    .filter(s => s.status === SubmissionStatus.APPROVED)
-    .reduce((sum, s) => sum + s.reward, 0);
+    const [earners, advertisers, tasks, totalEarned, pendingWd, totalDep, recentUsers, recentTx, settings] = await Promise.all([
+      pool.query("SELECT COUNT(*) FROM users WHERE role='Earner'"),
+      pool.query("SELECT COUNT(*) FROM users WHERE role='Advertiser'"),
+      pool.query("SELECT COUNT(*) FROM tasks"),
+      pool.query("SELECT COALESCE(SUM(reward),0) AS total FROM submissions WHERE status='Approved'"),
+      pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE type='Withdrawal' AND status='Pending'"),
+      pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE type='Deposit' AND status='Success'"),
+      pool.query("SELECT * FROM users ORDER BY created_at DESC LIMIT 5"),
+      pool.query("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 5"),
+      getSettings()
+    ]);
 
-  const pendingWithdrawals = db.transactions
-    .filter(t => t.type === TransactionType.WITHDRAWAL && t.status === TransactionStatus.PENDING)
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const totalDeposited = db.transactions
-    .filter(t => t.type === TransactionType.DEPOSIT && t.status === TransactionStatus.SUCCESS)
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  res.json({
-    earnersCount: earners.length,
-    advertisersCount: advertisers.length,
-    tasksCount: db.tasks.length,
-    totalEarned,
-    pendingWithdrawals,
-    totalDeposited,
-    recentUsers: db.users.slice(-5).reverse(),
-    recentTransactions: db.transactions.slice(-5).reverse(),
-    settings: db.settings
-  });
-});
-
-app.get("/api/admin/users", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  res.json(db.users.filter(u => u.role !== UserRole.ADMIN).reverse());
-});
-
-app.put("/api/admin/users/:id", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const targetId = req.params.id;
-  const targetUser = db.users.find(u => u.id === targetId);
-  if (!targetUser) return res.status(404).json({ error: "User not found" });
-
-  const { walletBalance, isVerified } = req.body;
-
-  if (walletBalance !== undefined) targetUser.walletBalance = parseFloat(walletBalance);
-  if (isVerified !== undefined) targetUser.isVerified = !!isVerified;
-
-  saveDB();
-  res.json({ success: true, user: targetUser });
-});
-
-app.get("/api/admin/tasks", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  res.json(db.tasks.reverse());
-});
-
-app.put("/api/admin/tasks/:id/status", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const taskId = req.params.id;
-  const { status } = req.body; // Active, Paused, Completed
-
-  const task = db.tasks.find(t => t.id === taskId);
-  if (!task) return res.status(404).json({ error: "Task not found" });
-
-  task.status = status;
-  saveDB();
-  res.json({ success: true, task });
-});
-
-app.delete("/api/admin/tasks/:id", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const taskId = req.params.id;
-  const idx = db.tasks.findIndex(t => t.id === taskId);
-  if (idx === -1) return res.status(404).json({ error: "Task not found" });
-
-  db.tasks.splice(idx, 1);
-  saveDB();
-  res.json({ success: true });
-});
-
-app.get("/api/admin/submissions", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  res.json(db.submissions.reverse());
-});
-
-app.post("/api/admin/submissions/:id/review", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const subId = req.params.id;
-  const { status, feedback } = req.body;
-
-  const submission = db.submissions.find(s => s.id === subId);
-  if (!submission) return res.status(404).json({ error: "Submission not found" });
-
-  if (submission.status !== SubmissionStatus.PENDING) {
-    return res.status(400).json({ error: "Submission has already been audited" });
+    res.json({
+      earnersCount: parseInt(earners.rows[0].count),
+      advertisersCount: parseInt(advertisers.rows[0].count),
+      tasksCount: parseInt(tasks.rows[0].count),
+      totalEarned: parseFloat(totalEarned.rows[0].total),
+      pendingWithdrawals: parseFloat(pendingWd.rows[0].total),
+      totalDeposited: parseFloat(totalDep.rows[0].total),
+      recentUsers: recentUsers.rows.map(r => {
+        const u = mapUser(r);
+        const { password: _, verificationCode: __, verificationCodeExpires: ___, verificationCodeLastSent: ____, ...safe } = u;
+        return safe;
+      }),
+      recentTransactions: recentTx.rows.map(mapTransaction),
+      settings
+    });
+  } catch (err) {
+    console.error("Admin dashboard error:", err);
+    res.status(500).json({ error: "Server error" });
   }
+});
 
-  const task = db.tasks.find(t => t.id === submission.taskId);
-  if (!task) return res.status(404).json({ error: "Associated task not found" });
+app.get("/api/admin/users", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  submission.status = status;
-  submission.feedback = feedback || "";
+    const result = await pool.query("SELECT * FROM users WHERE role != 'Admin' ORDER BY created_at DESC");
+    res.json(result.rows.map(r => {
+      const u = mapUser(r);
+      const { password: _, verificationCode: __, verificationCodeExpires: ___, verificationCodeLastSent: ____, ...safe } = u;
+      return safe;
+    }));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
 
-  if (status === SubmissionStatus.APPROVED) {
-    submission.approvedAt = new Date().toISOString();
-    const earner = db.users.find(u => u.id === submission.earnerId);
-    if (earner) {
-      earner.walletBalance += submission.reward;
-      
-      db.transactions.push({
-        id: "tx-" + Math.random().toString(36).substr(2, 9),
-        userId: earner.id,
-        userName: earner.name,
-        userRole: earner.role,
-        amount: submission.reward,
-        type: TransactionType.EARN,
-        status: TransactionStatus.SUCCESS,
-        description: `Earned from task (Admin Audited): ${task.title}`,
-        reference: "E-TASK-ADM-" + Math.floor(10000000 + Math.random() * 90000000),
-        createdAt: new Date().toISOString()
-      });
+app.put("/api/admin/users/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { walletBalance, isVerified } = req.body;
+    const updates: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+
+    if (walletBalance !== undefined) { updates.push(`wallet_balance=$${idx++}`); params.push(parseFloat(walletBalance)); }
+    if (isVerified !== undefined) { updates.push(`is_verified=$${idx++}`); params.push(!!isVerified); }
+
+    if (updates.length === 0) return res.status(400).json({ error: "No fields to update" });
+
+    params.push(req.params.id);
+    await pool.query(`UPDATE users SET ${updates.join(",")} WHERE id=$${idx}`, params);
+
+    const updated = await pool.query("SELECT * FROM users WHERE id=$1", [req.params.id]);
+    if (updated.rows.length === 0) return res.status(404).json({ error: "User not found" });
+
+    const u = mapUser(updated.rows[0]);
+    const { password: _, verificationCode: __, verificationCodeExpires: ___, verificationCodeLastSent: ____, ...safe } = u;
+    res.json({ success: true, user: safe });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.get("/api/admin/tasks", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query("SELECT * FROM tasks ORDER BY created_at DESC");
+    res.json(result.rows.map(mapTask));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.put("/api/admin/tasks/:id/status", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { status } = req.body;
+    const result = await pool.query("UPDATE tasks SET status=$1 WHERE id=$2 RETURNING *", [status, req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "Task not found" });
+
+    res.json({ success: true, task: mapTask(result.rows[0]) });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.delete("/api/admin/tasks/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const client = await pool.connect();
+    let refundAmount = 0;
+    try {
+      await client.query("BEGIN");
+
+      const taskRes = await client.query("SELECT * FROM tasks WHERE id=$1 FOR UPDATE", [req.params.id]);
+      if (taskRes.rows.length === 0) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Task not found" }); }
+
+      const task = mapTask(taskRes.rows[0]);
+      const remainingSlots = task.totalSlots - task.filledSlots;
+      refundAmount = remainingSlots * task.costPerSlot;
+
+      if (refundAmount > 0 && task.advertiserId) {
+        await client.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2", [refundAmount, task.advertiserId]);
+        await client.query(`
+          INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
+          VALUES ($1,$2,$3,$4,$5,'Deposit','Success',$6,$7,$8)
+        `, [
+          "tx-" + Math.random().toString(36).substr(2, 9),
+          task.advertiserId, task.advertiserName, UserRole.ADVERTISER, refundAmount,
+          `Refund for campaign deleted by admin: ${task.title} (${remainingSlots} slots)`,
+          "T-REFUND-ADM-" + Math.floor(10000000 + Math.random() * 90000000),
+          new Date()
+        ]);
+      }
+
+      await client.query("DELETE FROM submissions WHERE task_id=$1 AND status='Pending'", [task.id]);
+      await client.query("DELETE FROM tasks WHERE id=$1", [task.id]);
+      await client.query("COMMIT");
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      throw txErr;
+    } finally {
+      client.release();
     }
 
-    task.filledSlots += 1;
-    if (task.filledSlots >= task.totalSlots) {
-      task.status = TaskStatus.COMPLETED;
-    }
+    res.json({ success: true, refundedAmount: refundAmount });
+  } catch (err) {
+    console.error("Admin delete task error:", err);
+    res.status(500).json({ error: "Server error" });
   }
-
-  saveDB();
-  res.json({ success: true, submission });
 });
 
-// Helper to calculate platform revenue stats (includes commission, withdrawal fees, activation fees)
-function getPlatformRevenueStats() {
-  let totalCommission = 0;
-  let todayCommission = 0;
-  let monthCommission = 0;
+app.get("/api/admin/submissions", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
+    const result = await pool.query("SELECT * FROM submissions ORDER BY submitted_at DESC");
+    res.json(result.rows.map(mapSubmission));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.post("/api/admin/submissions/:id/review", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { status, feedback } = req.body;
+    const client = await pool.connect();
+    let updatedSubmission: any;
+    try {
+      await client.query("BEGIN");
+
+      const subRes = await client.query("SELECT * FROM submissions WHERE id=$1 FOR UPDATE", [req.params.id]);
+      if (subRes.rows.length === 0) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Submission not found" }); }
+
+      const submission = mapSubmission(subRes.rows[0]);
+      if (submission.status !== SubmissionStatus.PENDING) { await client.query("ROLLBACK"); return res.status(400).json({ error: "Submission has already been audited" }); }
+
+      const taskRes = await client.query("SELECT * FROM tasks WHERE id=$1 FOR UPDATE", [submission.taskId]);
+      if (taskRes.rows.length === 0) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Associated task not found" }); }
+
+      const task = mapTask(taskRes.rows[0]);
+      const now = new Date();
+
+      if (status === SubmissionStatus.APPROVED) {
+        await client.query("UPDATE submissions SET status=$1, feedback=$2, approved_at=$3 WHERE id=$4", [status, feedback || "", now, submission.id]);
+        const earnerRes = await client.query("SELECT name, role FROM users WHERE id=$1", [submission.earnerId]);
+        if (earnerRes.rows.length > 0) {
+          await client.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2", [submission.reward, submission.earnerId]);
+          await client.query(`
+            INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
+            VALUES ($1,$2,$3,$4,$5,'Task Earnings','Success',$6,$7,$8)
+          `, [
+            "tx-" + Math.random().toString(36).substr(2, 9),
+            submission.earnerId, earnerRes.rows[0].name, earnerRes.rows[0].role,
+            submission.reward,
+            `Earned from task (Admin Audited): ${task.title}`,
+            "E-TASK-ADM-" + Math.floor(10000000 + Math.random() * 90000000), now
+          ]);
+        }
+        const newFilled = task.filledSlots + 1;
+        const newStatus = newFilled >= task.totalSlots ? TaskStatus.COMPLETED : task.status;
+        await client.query("UPDATE tasks SET filled_slots=$1, status=$2 WHERE id=$3", [newFilled, newStatus, task.id]);
+      } else {
+        await client.query("UPDATE submissions SET status=$1, feedback=$2 WHERE id=$3", [status, feedback || "", submission.id]);
+      }
+
+      await client.query("COMMIT");
+      const updated = await pool.query("SELECT * FROM submissions WHERE id=$1", [submission.id]);
+      updatedSubmission = mapSubmission(updated.rows[0]);
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    res.json({ success: true, submission: updatedSubmission });
+  } catch (err) {
+    console.error("Admin review error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/admin/withdrawals", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query("SELECT * FROM transactions WHERE type='Withdrawal' ORDER BY created_at DESC");
+    res.json(result.rows.map(mapTransaction));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { status } = req.body;
+    const isApproved = ["Success", "Approved", "success", "approved"].includes(status);
+
+    const client = await pool.connect();
+    let updatedTx: any;
+    try {
+      await client.query("BEGIN");
+
+      const txRes = await client.query("SELECT * FROM transactions WHERE id=$1 AND type='Withdrawal' FOR UPDATE", [req.params.id]);
+      if (txRes.rows.length === 0) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Withdrawal transaction not found" }); }
+
+      const transaction = mapTransaction(txRes.rows[0]);
+      if (transaction.status !== TransactionStatus.PENDING) { await client.query("ROLLBACK"); return res.status(400).json({ error: "Withdrawal already reviewed" }); }
+
+      if (isApproved) {
+        const earnerRes = await client.query("SELECT wallet_balance FROM users WHERE id=$1 FOR UPDATE", [transaction.userId]);
+        if (earnerRes.rows.length > 0) {
+          const bal = parseFloat(earnerRes.rows[0].wallet_balance);
+          if (bal < transaction.amount) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ error: `User has insufficient balance (₦${bal}) for payout of ₦${transaction.amount}.` });
+          }
+          await client.query("UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id=$2", [transaction.amount, transaction.userId]);
+        }
+        await client.query("UPDATE transactions SET status='Success' WHERE id=$1", [transaction.id]);
+      } else {
+        await client.query("UPDATE transactions SET status='Rejected' WHERE id=$1", [transaction.id]);
+      }
+
+      await client.query("COMMIT");
+      const updated = await pool.query("SELECT * FROM transactions WHERE id=$1", [transaction.id]);
+      updatedTx = mapTransaction(updated.rows[0]);
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    res.json({ success: true, transaction: updatedTx });
+  } catch (err) {
+    console.error("Review withdrawal error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/admin/deposits", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query("SELECT * FROM transactions WHERE type='Deposit' ORDER BY created_at DESC");
+    res.json(result.rows.map(mapTransaction));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.get("/api/admin/referrals", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query("SELECT * FROM referrals ORDER BY created_at DESC");
+    res.json(result.rows.map(r => ({
+      id: r.id, referrerId: r.referrer_id, refereeId: r.referee_id,
+      refereeName: r.referee_name, refereeEmail: r.referee_email,
+      rewardEarned: parseFloat(r.reward_earned),
+      createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at
+    })));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// Announcements
+app.get("/api/admin/announcements", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query("SELECT * FROM announcements ORDER BY created_at DESC");
+    res.json(result.rows.map(r => ({
+      id: r.id, title: r.title, content: r.content, type: r.type,
+      createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at
+    })));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.post("/api/admin/announcements", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { title, content, type } = req.body;
+    if (!title || !content) return res.status(400).json({ error: "Title and Content are required" });
+
+    const id = "ann-" + Math.random().toString(36).substr(2, 9);
+    await pool.query(
+      "INSERT INTO announcements (id, title, content, type, created_at) VALUES ($1,$2,$3,$4,$5)",
+      [id, title, content, type || "info", new Date()]
+    );
+    res.json({ success: true, announcement: { id, title, content, type: type || "info", createdAt: new Date().toISOString() } });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.delete("/api/admin/announcements/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query("DELETE FROM announcements WHERE id=$1 RETURNING id", [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "Announcement not found" });
+
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// Banners
+app.get("/api/admin/banners", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query("SELECT * FROM banners ORDER BY id");
+    res.json(result.rows.map(r => ({ id: r.id, title: r.title, imageUrl: r.image_url, link: r.link, active: r.active })));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.post("/api/admin/banners", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { title, imageUrl, link } = req.body;
+    if (!title || !imageUrl) return res.status(400).json({ error: "Title and Image URL are required" });
+
+    const id = "ban-" + Math.random().toString(36).substr(2, 9);
+    await pool.query("INSERT INTO banners (id, title, image_url, link, active) VALUES ($1,$2,$3,$4,true)", [id, title, imageUrl, link || ""]);
+    res.json({ success: true, banner: { id, title, imageUrl, link: link || "", active: true } });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.put("/api/admin/banners/:id/toggle", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query("UPDATE banners SET active = NOT active WHERE id=$1 RETURNING *", [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "Banner not found" });
+
+    const r = result.rows[0];
+    res.json({ success: true, banner: { id: r.id, title: r.title, imageUrl: r.image_url, link: r.link, active: r.active } });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.delete("/api/admin/banners/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query("DELETE FROM banners WHERE id=$1 RETURNING id", [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "Banner not found" });
+
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// Pages
+app.put("/api/admin/pages/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const pageId = req.params.id;
+    const { title, content } = req.body;
+
+    const existing = await pool.query("SELECT id FROM pages WHERE id=$1", [pageId]);
+    if (existing.rows.length === 0) {
+      await pool.query("INSERT INTO pages (id, title, content) VALUES ($1,$2,$3)", [pageId, title || "", content || ""]);
+    } else {
+      const updates: string[] = [];
+      const params: any[] = [];
+      let idx = 1;
+      if (title) { updates.push(`title=$${idx++}`); params.push(title); }
+      if (content) { updates.push(`content=$${idx++}`); params.push(content); }
+      if (updates.length > 0) {
+        params.push(pageId);
+        await pool.query(`UPDATE pages SET ${updates.join(",")} WHERE id=$${idx}`, params);
+      }
+    }
+
+    const updated = await pool.query("SELECT * FROM pages WHERE id=$1", [pageId]);
+    res.json({ success: true, page: updated.rows[0] ? { title: updated.rows[0].title, content: updated.rows[0].content } : {} });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// Settings
+app.get("/api/admin/settings", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    res.json(await getSettings());
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.put("/api/admin/settings", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { platformName, referralReward, withdrawalFee, minWithdrawal, minDeposit, contactEmail, contactPhone, telegramChannel, whatsappGroup } = req.body;
+
+    await pool.query(`
+      UPDATE settings SET
+        platform_name = COALESCE($1, platform_name),
+        referral_reward = COALESCE($2, referral_reward),
+        withdrawal_fee = COALESCE($3, withdrawal_fee),
+        min_withdrawal = COALESCE($4, min_withdrawal),
+        min_deposit = COALESCE($5, min_deposit),
+        contact_email = COALESCE($6, contact_email),
+        contact_phone = COALESCE($7, contact_phone),
+        telegram_channel = COALESCE($8, telegram_channel),
+        whatsapp_group = COALESCE($9, whatsapp_group)
+      WHERE id = (SELECT id FROM settings ORDER BY id ASC LIMIT 1)
+    `, [
+      platformName || null,
+      referralReward !== undefined ? parseFloat(referralReward) : null,
+      withdrawalFee !== undefined ? parseFloat(withdrawalFee) : null,
+      minWithdrawal !== undefined ? parseFloat(minWithdrawal) : null,
+      minDeposit !== undefined ? parseFloat(minDeposit) : null,
+      contactEmail || null, contactPhone || null,
+      telegramChannel !== undefined ? telegramChannel : null,
+      whatsappGroup !== undefined ? whatsappGroup : null
+    ]);
+
+    res.json({ success: true, settings: await getSettings() });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// Task Pricing
+app.get("/api/admin/task-pricing", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query("SELECT * FROM task_pricing ORDER BY id");
+    res.json(result.rows.map(mapPricing));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.put("/api/admin/task-pricing", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { pricing } = req.body;
+    if (!pricing || !Array.isArray(pricing)) return res.status(400).json({ error: "Invalid pricing array" });
+
+    for (const p of pricing) {
+      await pool.query(`
+        INSERT INTO task_pricing (id, platform, cost_per_slot, earning_per_slot)
+        VALUES ($1,$2,$3,$4)
+        ON CONFLICT (id) DO UPDATE SET platform=EXCLUDED.platform, cost_per_slot=EXCLUDED.cost_per_slot, earning_per_slot=EXCLUDED.earning_per_slot
+      `, [p.id, p.platform, p.costPerSlot, p.earningPerSlot]);
+    }
+
+    const result = await pool.query("SELECT * FROM task_pricing ORDER BY id");
+    res.json({ success: true, pricing: result.rows.map(mapPricing) });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// ─── Owner Earnings API ───────────────────────────────────────────────────────
+
+async function getPlatformRevenueStats() {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
-  // 1. Task submission commissions (costPerSlot - earnerReward per approved submission)
-  const submissions = db.submissions || [];
-  submissions.forEach(s => {
-    if (s.status === SubmissionStatus.APPROVED || s.status === "Approved") {
-      const task = (db.tasks || []).find(t => t.id === s.taskId);
-      const cost = task ? task.costPerSlot : (s.reward * 1.35);
-      const commission = cost - s.reward;
-      totalCommission += commission;
-      const approvedTime = s.approvedAt ? new Date(s.approvedAt).getTime() : new Date(s.submittedAt).getTime();
-      if (approvedTime >= startOfToday) todayCommission += commission;
-      if (approvedTime >= startOfThisMonth) monthCommission += commission;
-    }
-  });
+  // Commission from approved submissions
+  const approvedSubs = await pool.query(`
+    SELECT s.reward, s.approved_at, s.submitted_at, t.cost_per_slot
+    FROM submissions s
+    LEFT JOIN tasks t ON t.id = s.task_id
+    WHERE s.status = 'Approved'
+  `);
 
-  // 2. Withdrawal fees
-  let totalWithdrawalFees = 0;
-  let todayWithdrawalFees = 0;
-  let monthWithdrawalFees = 0;
-  const userWithdrawals = (db.transactions || []).filter(
-    t => t.type === TransactionType.WITHDRAWAL && (t.status === TransactionStatus.SUCCESS || t.status === "Success" || t.status === "Approved")
-  );
-  userWithdrawals.forEach(t => {
-    const fee = db.settings?.withdrawalFee || 100;
-    totalWithdrawalFees += fee;
-    const time = new Date(t.createdAt).getTime();
-    if (time >= startOfToday) todayWithdrawalFees += fee;
-    if (time >= startOfThisMonth) monthWithdrawalFees += fee;
-  });
+  let totalCommission = 0, todayCommission = 0, monthCommission = 0;
+  for (const row of approvedSubs.rows) {
+    const cost = parseFloat(row.cost_per_slot) || (parseFloat(row.reward) * 1.35);
+    const commission = cost - parseFloat(row.reward);
+    totalCommission += commission;
+    const approvedTime = row.approved_at ? new Date(row.approved_at).getTime() : new Date(row.submitted_at).getTime();
+    if (approvedTime >= startOfToday) todayCommission += commission;
+    if (approvedTime >= startOfThisMonth) monthCommission += commission;
+  }
 
-  // 3. Earner activation fees (₦500 per activated earner) — stored as ACTIVATION transactions
-  let totalActivationFees = 0;
-  let todayActivationFees = 0;
-  let monthActivationFees = 0;
-  const activationTxs = (db.transactions || []).filter(
-    t => t.type === TransactionType.ACTIVATION && (t.status === TransactionStatus.SUCCESS || t.status === "Success")
-  );
-  activationTxs.forEach(t => {
-    totalActivationFees += t.amount;
-    const time = new Date(t.createdAt).getTime();
-    if (time >= startOfToday) todayActivationFees += t.amount;
-    if (time >= startOfThisMonth) monthActivationFees += t.amount;
-  });
+  // Withdrawal fees from approved user withdrawals
+  const settings = await getSettings();
+  const feePerWd = settings?.withdrawalFee || 100;
 
-  const lifetimeRevenue = totalCommission + totalWithdrawalFees + totalActivationFees;
-  const todayRevenue = todayCommission + todayWithdrawalFees + todayActivationFees;
-  const monthRevenue = monthCommission + monthWithdrawalFees + monthActivationFees;
+  const wdRes = await pool.query("SELECT created_at FROM transactions WHERE type='Withdrawal' AND status IN ('Success','Approved')");
+  let totalWdFees = 0, todayWdFees = 0, monthWdFees = 0;
+  for (const row of wdRes.rows) {
+    totalWdFees += feePerWd;
+    const t = new Date(row.created_at).getTime();
+    if (t >= startOfToday) todayWdFees += feePerWd;
+    if (t >= startOfThisMonth) monthWdFees += feePerWd;
+  }
 
-  const ownerWithdrawals = db.ownerEarnings?.withdrawals || [];
-  const totalWithdrawn = ownerWithdrawals
-    .filter(w => w.status === "Approved" || w.status === "Success")
-    .reduce((sum, w) => sum + w.amount, 0);
+  const lifetimeRevenue = totalCommission + totalWdFees;
+  const todayRevenue = todayCommission + todayWdFees;
+  const monthRevenue = monthCommission + monthWdFees;
 
-  const pendingWithdrawalAmount = ownerWithdrawals
-    .filter(w => w.status === "Pending")
-    .reduce((sum, w) => sum + w.amount, 0);
+  const ownerWds = await pool.query("SELECT amount, status FROM owner_withdrawals");
+  let totalWithdrawn = 0, pendingWithdrawalAmount = 0;
+  for (const row of ownerWds.rows) {
+    if (["Approved", "Success"].includes(row.status)) totalWithdrawn += parseFloat(row.amount);
+    if (row.status === "Pending") pendingWithdrawalAmount += parseFloat(row.amount);
+  }
 
   const availableBalance = Math.max(0, lifetimeRevenue - totalWithdrawn - pendingWithdrawalAmount);
 
-  return {
-    lifetimeRevenue,
-    totalPlatformRevenue: lifetimeRevenue,
-    todayRevenue,
-    thisMonthRevenue: monthRevenue,
-    totalWithdrawn,
-    pendingWithdrawalAmount,
-    availableBalance,
-    // Breakdown for Admin Dashboard display
-    totalActivationFees,
-    totalCommission,
-    totalWithdrawalFees,
-    activatedEarnersCount: activationTxs.length
-  };
+  return { lifetimeRevenue, totalPlatformRevenue: lifetimeRevenue, todayRevenue, thisMonthRevenue: monthRevenue, totalWithdrawn, pendingWithdrawalAmount, availableBalance };
 }
 
-// Platform Owner (Admin) Earnings Endpoints
-app.get("/api/admin/owner-earnings/stats", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+app.get("/api/admin/owner-earnings/stats", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  if (!db.ownerEarnings) {
-    db.ownerEarnings = { bankAccounts: [], withdrawals: [] };
-  }
-
-  const stats = getPlatformRevenueStats();
-  res.json(stats);
+    res.json(await getPlatformRevenueStats());
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-app.get("/api/admin/owner-earnings/bank-accounts", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+app.get("/api/admin/owner-earnings/bank-accounts", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  if (!db.ownerEarnings) {
-    db.ownerEarnings = { bankAccounts: [], withdrawals: [] };
-  }
-  if (!db.ownerEarnings.bankAccounts) {
-    db.ownerEarnings.bankAccounts = [];
-    saveDB();
-  }
-
-  res.json(db.ownerEarnings.bankAccounts);
+    const result = await pool.query("SELECT * FROM owner_bank_accounts ORDER BY id");
+    res.json(result.rows.map(mapOwnerBankAccount));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-app.post("/api/admin/owner-earnings/bank-accounts", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+app.post("/api/admin/owner-earnings/bank-accounts", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  const { bankName, accountNumber, accountName, isDefault } = req.body;
-  if (!bankName || !accountNumber || !accountName) {
-    return res.status(400).json({ error: "All bank account details are required" });
-  }
+    const { bankName, accountNumber, accountName, isDefault } = req.body;
+    if (!bankName || !accountNumber || !accountName) return res.status(400).json({ error: "All bank account details are required" });
 
-  if (!db.ownerEarnings) {
-    db.ownerEarnings = { bankAccounts: [], withdrawals: [] };
-  }
-  if (!db.ownerEarnings.bankAccounts) {
-    db.ownerEarnings.bankAccounts = [];
-  }
+    const count = await pool.query("SELECT COUNT(*) FROM owner_bank_accounts");
+    const shouldBeDefault = isDefault || parseInt(count.rows[0].count) === 0;
 
-  // If set to default, unset other defaults
-  if (isDefault) {
-    db.ownerEarnings.bankAccounts.forEach(ba => ba.isDefault = false);
-  }
-
-  const newAccount = {
-    id: "ba-" + Math.random().toString(36).substr(2, 9),
-    bankName,
-    accountNumber,
-    accountName,
-    isDefault: isDefault || db.ownerEarnings.bankAccounts.length === 0
-  };
-
-  db.ownerEarnings.bankAccounts.push(newAccount);
-  saveDB();
-  res.json(newAccount);
-});
-
-app.put("/api/admin/owner-earnings/bank-accounts/:id", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const { id } = req.params;
-  const { bankName, accountNumber, accountName, isDefault } = req.body;
-
-  if (!db.ownerEarnings || !db.ownerEarnings.bankAccounts) {
-    return res.status(404).json({ error: "Bank account database not found" });
-  }
-
-  const account = db.ownerEarnings.bankAccounts.find(ba => ba.id === id);
-  if (!account) return res.status(404).json({ error: "Bank account not found" });
-
-  if (bankName) account.bankName = bankName;
-  if (accountNumber) account.accountNumber = accountNumber;
-  if (accountName) account.accountName = accountName;
-  
-  if (isDefault !== undefined) {
-    account.isDefault = isDefault;
-    if (isDefault) {
-      db.ownerEarnings.bankAccounts.forEach(ba => {
-        if (ba.id !== id) ba.isDefault = false;
-      });
+    if (shouldBeDefault) {
+      await pool.query("UPDATE owner_bank_accounts SET is_default = false");
     }
-  }
 
-  saveDB();
-  res.json(account);
+    const id = "ba-" + Math.random().toString(36).substr(2, 9);
+    await pool.query(
+      "INSERT INTO owner_bank_accounts (id, bank_name, account_number, account_name, is_default) VALUES ($1,$2,$3,$4,$5)",
+      [id, bankName, accountNumber, accountName, shouldBeDefault]
+    );
+
+    res.json({ id, bankName, accountNumber, accountName, isDefault: shouldBeDefault });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-app.delete("/api/admin/owner-earnings/bank-accounts/:id", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+app.put("/api/admin/owner-earnings/bank-accounts/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  const { id } = req.params;
-  if (!db.ownerEarnings || !db.ownerEarnings.bankAccounts) {
-    return res.status(404).json({ error: "Bank account database not found" });
-  }
+    const { bankName, accountNumber, accountName, isDefault } = req.body;
+    const { id } = req.params;
 
-  const index = db.ownerEarnings.bankAccounts.findIndex(ba => ba.id === id);
-  if (index === -1) return res.status(404).json({ error: "Bank account not found" });
+    if (isDefault) await pool.query("UPDATE owner_bank_accounts SET is_default = false");
 
-  const wasDefault = db.ownerEarnings.bankAccounts[index].isDefault;
-  db.ownerEarnings.bankAccounts.splice(index, 1);
+    const updates: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+    if (bankName) { updates.push(`bank_name=$${idx++}`); params.push(bankName); }
+    if (accountNumber) { updates.push(`account_number=$${idx++}`); params.push(accountNumber); }
+    if (accountName) { updates.push(`account_name=$${idx++}`); params.push(accountName); }
+    if (isDefault !== undefined) { updates.push(`is_default=$${idx++}`); params.push(isDefault); }
 
-  // If we deleted the default account, make the first remaining one default
-  if (wasDefault && db.ownerEarnings.bankAccounts.length > 0) {
-    db.ownerEarnings.bankAccounts[0].isDefault = true;
-  }
+    if (updates.length > 0) {
+      params.push(id);
+      await pool.query(`UPDATE owner_bank_accounts SET ${updates.join(",")} WHERE id=$${idx}`, params);
+    }
 
-  saveDB();
-  res.json({ success: true });
+    const result = await pool.query("SELECT * FROM owner_bank_accounts WHERE id=$1", [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "Bank account not found" });
+
+    res.json(mapOwnerBankAccount(result.rows[0]));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-app.post("/api/admin/owner-earnings/bank-accounts/:id/default", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+app.delete("/api/admin/owner-earnings/bank-accounts/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  const { id } = req.params;
-  if (!db.ownerEarnings || !db.ownerEarnings.bankAccounts) {
-    return res.status(404).json({ error: "Bank account database not found" });
-  }
+    const { id } = req.params;
+    const existing = await pool.query("SELECT * FROM owner_bank_accounts WHERE id=$1", [id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: "Bank account not found" });
 
-  const account = db.ownerEarnings.bankAccounts.find(ba => ba.id === id);
-  if (!account) return res.status(404).json({ error: "Bank account not found" });
+    const wasDefault = existing.rows[0].is_default;
+    await pool.query("DELETE FROM owner_bank_accounts WHERE id=$1", [id]);
 
-  db.ownerEarnings.bankAccounts.forEach(ba => ba.isDefault = false);
-  account.isDefault = true;
+    if (wasDefault) {
+      await pool.query("UPDATE owner_bank_accounts SET is_default=true WHERE id=(SELECT id FROM owner_bank_accounts LIMIT 1)");
+    }
 
-  saveDB();
-  res.json({ success: true, account });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.post("/api/admin/owner-earnings/bank-accounts/:id/default", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { id } = req.params;
+    await pool.query("UPDATE owner_bank_accounts SET is_default = false");
+    const result = await pool.query("UPDATE owner_bank_accounts SET is_default = true WHERE id=$1 RETURNING *", [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "Bank account not found" });
+
+    res.json({ success: true, account: mapOwnerBankAccount(result.rows[0]) });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
 app.get("/api/admin/owner-earnings/banks", async (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  const paystackKey = process.env.PAYSTACK_SECRET_KEY;
-  if (paystackKey) {
-    try {
-      const response = await fetch("https://api.paystack.co/bank?country=nigeria", {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${paystackKey}`
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (paystackKey) {
+      try {
+        const response = await fetch("https://api.paystack.co/bank?country=nigeria", {
+          headers: { "Authorization": `Bearer ${paystackKey}` }
+        });
+        const data: any = await response.json();
+        if (data?.status && data?.data) {
+          return res.json(data.data.map((b: any) => ({ name: b.name, code: b.code })).sort((a: any, b: any) => a.name.localeCompare(b.name)));
         }
-      });
-      const data: any = await response.json();
-      if (data && data.status && data.data) {
-        const banks = data.data.map((b: any) => ({
-          name: b.name,
-          code: b.code
-        })).sort((a: any, b: any) => a.name.localeCompare(b.name));
-        return res.json(banks);
-      }
-    } catch (err) {
-      console.error("Failed to fetch banks from Paystack, falling back to static list.", err);
+      } catch {}
     }
-  }
 
-  const staticBanks = [
-    { name: "Access Bank", code: "044" },
-    { name: "Accion Microfinance Bank", code: "090134" },
-    { name: "Carbon", code: "565" },
-    { name: "Ecobank Nigeria", code: "050" },
-    { name: "Fidelity Bank", code: "070" },
-    { name: "First Bank of Nigeria", code: "011" },
-    { name: "First City Monument Bank (FCMB)", code: "214" },
-    { name: "Globus Bank", code: "00103" },
-    { name: "Guaranty Trust Bank (GTB)", code: "058" },
-    { name: "Heritage Bank", code: "030" },
-    { name: "Jaiz Bank", code: "301" },
-    { name: "Keystone Bank", code: "082" },
-    { name: "Kuda Bank", code: "50211" },
-    { name: "Moniepoint Microfinance Bank", code: "50515" },
-    { name: "OPay Microfinance Bank", code: "999992" },
-    { name: "Optimus Bank", code: "107" },
-    { name: "PalmPay Microfinance Bank", code: "999991" },
-    { name: "Parallex Bank", code: "502" },
-    { name: "Polaris Bank", code: "076" },
-    { name: "PremiumTrust Bank", code: "105" },
-    { name: "Providus Bank", code: "101" },
-    { name: "Rubies MFB", code: "125" },
-    { name: "Stanbic IBTC Bank", code: "221" },
-    { name: "Standard Chartered Bank", code: "023" },
-    { name: "Sterling Bank", code: "232" },
-    { name: "Taj Bank", code: "302" },
-    { name: "Titan Trust Bank", code: "102" },
-    { name: "Union Bank of Nigeria", code: "032" },
-    { name: "United Bank for Africa (UBA)", code: "033" },
-    { name: "Unity Bank", code: "215" },
-    { name: "VFD Microfinance Bank", code: "566" },
-    { name: "Wema Bank", code: "035" },
-    { name: "Zenith Bank", code: "057" }
-  ];
-
-  res.json(staticBanks);
+    res.json([
+      { name: "Access Bank", code: "044" }, { name: "Ecobank Nigeria", code: "050" },
+      { name: "Fidelity Bank", code: "070" }, { name: "First Bank of Nigeria", code: "011" },
+      { name: "First City Monument Bank (FCMB)", code: "214" }, { name: "Guaranty Trust Bank (GTB)", code: "058" },
+      { name: "Keystone Bank", code: "082" }, { name: "Kuda Bank", code: "50211" },
+      { name: "Moniepoint Microfinance Bank", code: "50515" }, { name: "OPay Microfinance Bank", code: "999992" },
+      { name: "PalmPay Microfinance Bank", code: "999991" }, { name: "Polaris Bank", code: "076" },
+      { name: "Providus Bank", code: "101" }, { name: "Stanbic IBTC Bank", code: "221" },
+      { name: "Sterling Bank", code: "232" }, { name: "Union Bank of Nigeria", code: "032" },
+      { name: "United Bank for Africa (UBA)", code: "033" }, { name: "Unity Bank", code: "215" },
+      { name: "Wema Bank", code: "035" }, { name: "Zenith Bank", code: "057" }
+    ]);
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
 app.post("/api/admin/owner-earnings/resolve-bank", async (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const { accountNumber, bankCode, bankName } = req.body;
-  if (!accountNumber || !bankCode) {
-    return res.status(400).json({ error: "Account number and bank are required" });
-  }
-
-  if (accountNumber.length !== 10 || !/^\d+$/.test(accountNumber)) {
-    return res.status(400).json({ error: "Account number must be exactly 10 digits" });
-  }
-
-  const paystackKey = process.env.PAYSTACK_SECRET_KEY;
-  if (!paystackKey) {
-    return res.json({
-      success: true,
-      accountName: `Verified Owner Account (${bankName || "Commercial Bank"})`,
-      isSimulated: true
-    });
-  }
-
   try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { accountNumber, bankCode, bankName } = req.body;
+    if (!accountNumber || !bankCode) return res.status(400).json({ error: "Account number and bank are required" });
+    if (accountNumber.length !== 10 || !/^\d+$/.test(accountNumber)) return res.status(400).json({ error: "Account number must be exactly 10 digits" });
+
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackKey) {
+      return res.json({ success: true, accountName: `Verified Owner Account (${bankName || "Commercial Bank"})`, isSimulated: true });
+    }
+
     const response = await fetch(`https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${paystackKey}`
-      }
+      headers: { "Authorization": `Bearer ${paystackKey}` }
     });
-
     const data: any = await response.json();
-    if (data && data.status && data.data) {
-      return res.json({
-        success: true,
-        accountName: data.data.account_name,
-        accountNumber: data.data.account_number,
-        bankCode
-      });
-    } else {
-      return res.status(400).json({ error: data.message || "Could not resolve bank account. Please check details." });
+    if (data?.status && data?.data) {
+      return res.json({ success: true, accountName: data.data.account_name, accountNumber: data.data.account_number, bankCode });
     }
+    return res.status(400).json({ error: data.message || "Could not resolve bank account." });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.get("/api/admin/owner-earnings/withdrawals", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query("SELECT * FROM owner_withdrawals ORDER BY submitted_at DESC");
+    res.json(result.rows.map(mapOwnerWithdrawal));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.post("/api/admin/owner-earnings/withdraw", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { amount, bankAccountId } = req.body;
+    if (!amount || !bankAccountId) return res.status(400).json({ error: "Amount and bank account selection are required" });
+
+    const withdrawAmount = parseFloat(amount);
+    if (isNaN(withdrawAmount) || withdrawAmount <= 0) return res.status(400).json({ error: "Please enter a valid positive withdrawal amount" });
+
+    const accountRes = await pool.query("SELECT * FROM owner_bank_accounts WHERE id=$1", [bankAccountId]);
+    if (accountRes.rows.length === 0) return res.status(400).json({ error: "Selected bank account is invalid" });
+
+    const account = mapOwnerBankAccount(accountRes.rows[0]);
+    const stats = await getPlatformRevenueStats();
+    if (stats.availableBalance < withdrawAmount) {
+      return res.status(400).json({ error: `Insufficient balance. Maximum: ₦${stats.availableBalance.toLocaleString()}` });
+    }
+
+    const id = "own-wd-" + Math.random().toString(36).substr(2, 9);
+    const reference = "OWN-PAY-" + Math.floor(10000000 + Math.random() * 90000000);
+
+    await pool.query(`
+      INSERT INTO owner_withdrawals (id, amount, bank_account_id, bank_name, account_number, account_name, reference, status, submitted_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,'Pending',$8)
+    `, [id, withdrawAmount, bankAccountId, account.bankName, account.accountNumber, account.accountName, reference, new Date()]);
+
+    const result = await pool.query("SELECT * FROM owner_withdrawals WHERE id=$1", [id]);
+    res.json({ success: true, withdrawal: mapOwnerWithdrawal(result.rows[0]) });
   } catch (err) {
-    console.error("Paystack resolve-bank error: ", err);
-    return res.status(500).json({ error: "Failed to connect to bank verification service." });
+    console.error("Owner withdraw error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-app.get("/api/admin/owner-earnings/withdrawals", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+app.post("/api/admin/owner-earnings/withdrawals/:id/status", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  if (!db.ownerEarnings) {
-    db.ownerEarnings = { bankAccounts: [], withdrawals: [] };
-  }
-  if (!db.ownerEarnings.withdrawals) {
-    db.ownerEarnings.withdrawals = [];
-  }
+    const { id } = req.params;
+    const { status } = req.body;
 
-  res.json(db.ownerEarnings.withdrawals.reverse());
+    const result = await pool.query("UPDATE owner_withdrawals SET status=$1 WHERE id=$2 RETURNING *", [status, id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "Withdrawal not found" });
+
+    res.json({ success: true, withdrawal: mapOwnerWithdrawal(result.rows[0]) });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-app.post("/api/admin/owner-earnings/withdraw", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+// ─── Notifications API ────────────────────────────────────────────────────────
 
-  const { amount, bankAccountId } = req.body;
-  if (!amount || !bankAccountId) {
-    return res.status(400).json({ error: "Amount and bank account selection are required" });
-  }
+app.get("/api/admin/notifications", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  const withdrawAmount = parseFloat(amount);
-  if (isNaN(withdrawAmount) || withdrawAmount <= 0) {
-    return res.status(400).json({ error: "Please enter a valid positive withdrawal amount" });
-  }
-
-  if (!db.ownerEarnings || !db.ownerEarnings.bankAccounts) {
-    return res.status(400).json({ error: "No bank accounts set up" });
-  }
-
-  const account = db.ownerEarnings.bankAccounts.find(ba => ba.id === bankAccountId);
-  if (!account) {
-    return res.status(400).json({ error: "Selected bank account is invalid" });
-  }
-
-  // Check if owner has sufficient balance
-  const stats = getPlatformRevenueStats();
-  if (stats.availableBalance < withdrawAmount) {
-    return res.status(400).json({ error: `Insufficient platform available balance. Maximum you can withdraw is ₦${stats.availableBalance.toLocaleString()}` });
-  }
-
-  if (!db.ownerEarnings.withdrawals) {
-    db.ownerEarnings.withdrawals = [];
-  }
-
-  const newWithdrawal = {
-    id: "own-wd-" + Math.random().toString(36).substr(2, 9),
-    amount: withdrawAmount,
-    submittedAt: new Date().toISOString(),
-    status: "Pending", // Owner can complete it to record actual disbursement
-    bankName: account.bankName,
-    accountNumber: account.accountNumber,
-    accountName: account.accountName,
-    reference: "OWN-PAY-" + Math.floor(10000000 + Math.random() * 90000000)
-  };
-
-  db.ownerEarnings.withdrawals.push(newWithdrawal);
-  saveDB();
-
-  res.json({ success: true, withdrawal: newWithdrawal });
+    const result = await pool.query("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 100");
+    res.json(result.rows.map(mapNotification));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-// Update status of an owner withdrawal (e.g. mark as Success or Rejected)
-app.post("/api/admin/owner-earnings/withdrawals/:id/status", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+app.post("/api/admin/notifications/read-all", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  const { id } = req.params;
-  const { status } = req.body; // "Success" or "Rejected"
-
-  if (!db.ownerEarnings || !db.ownerEarnings.withdrawals) {
-    return res.status(404).json({ error: "Withdrawal not found" });
-  }
-
-  const withdrawal = db.ownerEarnings.withdrawals.find(w => w.id === id);
-  if (!withdrawal) return res.status(404).json({ error: "Withdrawal not found" });
-
-  withdrawal.status = status;
-  saveDB();
-  res.json({ success: true, withdrawal });
+    await pool.query("UPDATE notifications SET read = true");
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-app.get("/api/admin/withdrawals", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+app.post("/api/admin/notifications/:id/read", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-  const withdrawals = db.transactions.filter(t => t.type === TransactionType.WITHDRAWAL);
-  res.json(withdrawals.reverse());
+    const result = await pool.query("UPDATE notifications SET read=true WHERE id=$1 RETURNING *", [req.params.id]);
+    res.json({ success: true, notification: result.rows.length > 0 ? mapNotification(result.rows[0]) : null });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-app.post("/api/admin/withdrawals/:id/review", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+// ─── WebSocket & Notification Broadcasting ────────────────────────────────────
 
-  const txId = req.params.id;
-  const { status } = req.body; // SUCCESS or FAILED/REJECTED
-
-  const transaction = db.transactions.find(t => t.id === txId && t.type === TransactionType.WITHDRAWAL);
-  if (!transaction) return res.status(404).json({ error: "Withdrawal transaction not found" });
-
-  if (transaction.status !== TransactionStatus.PENDING) {
-    return res.status(400).json({ error: "Withdrawal already reviewed" });
-  }
-
-  const isApproved = status === TransactionStatus.SUCCESS || status === TransactionStatus.APPROVED || status === "Success" || status === "Approved";
-
-  if (isApproved) {
-    // Deduct the wallet balance now that it's approved
-    const earner = db.users.find(u => u.id === transaction.userId);
-    if (earner) {
-      if (earner.walletBalance < transaction.amount) {
-        return res.status(400).json({ error: `User has insufficient balance (₦${earner.walletBalance}) to complete this payout of ₦${transaction.amount}.` });
-      }
-      earner.walletBalance -= transaction.amount;
-    }
-    transaction.status = TransactionStatus.SUCCESS;
-  } else {
-    // Rejected/failed: No balance deduction needed as it was never deducted during request
-    transaction.status = TransactionStatus.REJECTED;
-  }
-
-  saveDB();
-  res.json({ success: true, transaction });
-});
-
-app.get("/api/admin/deposits", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const deposits = db.transactions.filter(t => t.type === TransactionType.DEPOSIT);
-  res.json(deposits.reverse());
-});
-
-app.get("/api/admin/referrals", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  res.json(db.referrals.reverse());
-});
-
-// Manage Announcements
-app.get("/api/admin/announcements", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-  res.json(db.announcements);
-});
-
-app.post("/api/admin/announcements", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const { title, content, type } = req.body;
-  if (!title || !content) return res.status(400).json({ error: "Title and Content are required" });
-
-  const newAnn = {
-    id: "ann-" + Math.random().toString(36).substr(2, 9),
-    title,
-    content,
-    type: type || "info",
-    createdAt: new Date().toISOString()
-  };
-
-  db.announcements.push(newAnn);
-  saveDB();
-  res.json({ success: true, announcement: newAnn });
-});
-
-app.delete("/api/admin/announcements/:id", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const idx = db.announcements.findIndex(a => a.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: "Announcement not found" });
-
-  db.announcements.splice(idx, 1);
-  saveDB();
-  res.json({ success: true });
-});
-
-// Manage Banners
-app.get("/api/admin/banners", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-  res.json(db.banners);
-});
-
-app.post("/api/admin/banners", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const { title, imageUrl, link } = req.body;
-  if (!title || !imageUrl) return res.status(400).json({ error: "Title and Image URL are required" });
-
-  const newBanner = {
-    id: "ban-" + Math.random().toString(36).substr(2, 9),
-    title,
-    imageUrl,
-    link: link || "",
-    active: true
-  };
-
-  db.banners.push(newBanner);
-  saveDB();
-  res.json({ success: true, banner: newBanner });
-});
-
-app.put("/api/admin/banners/:id/toggle", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const banner = db.banners.find(b => b.id === req.params.id);
-  if (!banner) return res.status(404).json({ error: "Banner not found" });
-
-  banner.active = !banner.active;
-  saveDB();
-  res.json({ success: true, banner });
-});
-
-app.delete("/api/admin/banners/:id", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const idx = db.banners.findIndex(b => b.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: "Banner not found" });
-
-  db.banners.splice(idx, 1);
-  saveDB();
-  res.json({ success: true });
-});
-
-// Manage Pages Content
-app.put("/api/admin/pages/:id", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const pageId = req.params.id; // about, contact, faq, terms, privacy
-  const { title, content } = req.body;
-
-  if (!db.pages[pageId]) {
-    db.pages[pageId] = { title: "", content: "" };
-  }
-
-  if (title) db.pages[pageId].title = title;
-  if (content) db.pages[pageId].content = content;
-
-  saveDB();
-  res.json({ success: true, page: db.pages[pageId] });
-});
-
-// Manage Settings
-app.get("/api/admin/settings", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-  res.json(db.settings);
-});
-
-app.put("/api/admin/settings", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const { platformName, referralReward, withdrawalFee, minWithdrawal, minDeposit, contactEmail, contactPhone, telegramChannel, whatsappGroup } = req.body;
-
-  if (platformName) db.settings.platformName = platformName;
-  if (referralReward !== undefined) db.settings.referralReward = parseFloat(referralReward);
-  if (withdrawalFee !== undefined) db.settings.withdrawalFee = parseFloat(withdrawalFee);
-  if (minWithdrawal !== undefined) db.settings.minWithdrawal = parseFloat(minWithdrawal);
-  if (minDeposit !== undefined) db.settings.minDeposit = parseFloat(minDeposit);
-  if (contactEmail) db.settings.contactEmail = contactEmail;
-  if (contactPhone) db.settings.contactPhone = contactPhone;
-  if (telegramChannel !== undefined) db.settings.telegramChannel = telegramChannel;
-  if (whatsappGroup !== undefined) db.settings.whatsappGroup = whatsappGroup;
-
-  saveDB();
-  res.json({ success: true, settings: db.settings });
-});
-
-// Manage Task Pricing
-app.get("/api/admin/task-pricing", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-  res.json(db.taskPricing || []);
-});
-
-app.put("/api/admin/task-pricing", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-
-  const { pricing } = req.body;
-  if (!pricing || !Array.isArray(pricing)) {
-    return res.status(400).json({ error: "Invalid pricing array data" });
-  }
-
-  db.taskPricing = pricing;
-  saveDB();
-  res.json({ success: true, pricing: db.taskPricing });
-});
-
-// -----------------------------------------------------------------------------
-// WEBSOCKET & NOTIFICATION SYSTEM
-// -----------------------------------------------------------------------------
 const server = createHttpServer(app);
 const wss = new WebSocketServer({ noServer: true });
 const adminClients = new Set<WebSocket>();
 
 wss.on("connection", (ws) => {
   console.log("[WS] Admin client connected");
-  
-  ws.on("message", (message) => {
+
+  ws.on("message", async (message) => {
     try {
       const data = JSON.parse(message.toString());
       if (data.type === "register-admin") {
         adminClients.add(ws);
         console.log("[WS] Admin client registered");
-        // Send initial unread notifications count and list
-        const unread = db.notifications ? db.notifications.filter(n => !n.read) : [];
-        ws.send(JSON.stringify({ 
-          type: "init-unread", 
-          count: unread.length, 
-          notifications: db.notifications || [] 
+        const unread = await pool.query("SELECT * FROM notifications WHERE read=false ORDER BY created_at DESC LIMIT 100");
+        const all = await pool.query("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 100");
+        ws.send(JSON.stringify({
+          type: "init-unread",
+          count: unread.rows.length,
+          notifications: all.rows.map(mapNotification)
         }));
       }
     } catch (e) {
-      console.error("[WS] Error parsing message:", e);
+      console.error("[WS] Error:", e);
     }
   });
 
-  ws.on("close", () => {
-    adminClients.delete(ws);
-    console.log("[WS] Admin client disconnected");
-  });
-  
-  ws.on("error", (err) => {
-    console.error("[WS] Socket error:", err);
-    adminClients.delete(ws);
-  });
+  ws.on("close", () => { adminClients.delete(ws); });
+  ws.on("error", () => { adminClients.delete(ws); });
 });
 
 server.on("upgrade", (request, socket, head) => {
   const { pathname } = new URL(request.url || "", `http://${request.headers.host || "localhost"}`);
   if (pathname === "/ws") {
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit("connection", ws, request);
-    });
+    wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
   }
 });
 
-// Helper to notify admin
-function notifyAdmin(notification: { type: "submission" | "withdrawal"; message: string; referenceId: string }) {
-  if (!db.notifications) db.notifications = [];
-  
+async function notifyAdmin(notification: { type: "submission" | "withdrawal"; message: string; referenceId: string }) {
+  const id = "notif-" + Math.random().toString(36).substr(2, 9);
+  const now = new Date();
+
+  try {
+    await pool.query(
+      "INSERT INTO notifications (id, type, message, reference_id, read, created_at) VALUES ($1,$2,$3,$4,false,$5)",
+      [id, notification.type, notification.message, notification.referenceId, now]
+    );
+    // Keep only last 100 notifications
+    await pool.query("DELETE FROM notifications WHERE id NOT IN (SELECT id FROM notifications ORDER BY created_at DESC LIMIT 100)");
+  } catch (err) {
+    console.error("[Notify] Failed to persist notification:", err);
+  }
+
   const newNotif: AdminNotification = {
-    id: "notif-" + Math.random().toString(36).substr(2, 9),
-    type: notification.type,
-    message: notification.message,
-    referenceId: notification.referenceId,
-    createdAt: new Date().toISOString(),
-    read: false
+    id, type: notification.type, message: notification.message,
+    referenceId: notification.referenceId, createdAt: now.toISOString(), read: false
   };
 
-  db.notifications.unshift(newNotif); // latest first
-  // Limit to last 100 notifications for memory efficiency
-  if (db.notifications.length > 100) {
-    db.notifications = db.notifications.slice(0, 100);
-  }
-  saveDB();
-
-  // Broadcast to all active admin sockets
   const payload = JSON.stringify({ type: "notification", notification: newNotif });
   adminClients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(payload);
-    }
+    if (client.readyState === WebSocket.OPEN) client.send(payload);
   });
 }
 
-// Admin Notifications API Endpoints
-app.get("/api/admin/notifications", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-  
-  res.json(db.notifications || []);
-});
+// ─── Vite / Static Server ─────────────────────────────────────────────────────
 
-app.post("/api/admin/notifications/read-all", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-  
-  if (db.notifications) {
-    db.notifications.forEach(n => n.read = true);
-  }
-  saveDB();
-  res.json({ success: true });
-});
-
-app.post("/api/admin/notifications/:id/read", (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-  
-  const notif = db.notifications?.find(n => n.id === req.params.id);
-  if (notif) {
-    notif.read = true;
-    saveDB();
-  }
-  res.json({ success: true, notification: notif });
-});
-
-// -----------------------------------------------------------------------------
-// VITE CLIENT DEV SERVER INTEGRATION & SPA FALLBACK
-// -----------------------------------------------------------------------------
 async function startServer() {
-  // Load from Railway PostgreSQL (DATABASE_URL) before serving any requests
-  if (isPostgresEnabled()) {
-    console.log("[PostgreSQL] DATABASE_URL detected — loading database state from Railway PostgreSQL...");
-    try {
-      db = await loadFromPostgres(db);
-      console.log("[PostgreSQL] ✅ Database state loaded successfully from Railway PostgreSQL.");
-    } catch (err) {
-      console.error("[PostgreSQL] ❌ Failed to load from PostgreSQL, falling back to db.json:", err);
-    }
-  } else {
-    console.log("[Database] No DATABASE_URL configured — using local db.json file storage.");
-  }
-
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true, allowedHosts: true },
-      appType: "spa",
+      appType: "spa"
     });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+    app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
 
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(`[TasksEarn Server] running on http://0.0.0.0:${PORT}`);
-    
-    // Comprehensive SMTP Startup Diagnostics Check
-    console.log("====================================================================");
-    console.log("[SMTP Mailer Diagnostics] Checking Mail Configuration on Startup...");
-    const host = process.env.SMTP_HOST;
-    const port = process.env.SMTP_PORT;
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASSWORD;
-    const from = process.env.SMTP_FROM;
+    console.log(`[TasksEarn Server] PostgreSQL mode — running on http://0.0.0.0:${PORT}`);
+
     const resendKey = process.env.RESEND_API_KEY;
-
-    if (resendKey) {
-      console.log(`-> Resend Provider Detected (RESEND_API_KEY is configured)`);
-    }
-
-    console.log(`-> SMTP_HOST:      ${host ? host : "❌ [MISSING]"}`);
-    console.log(`-> SMTP_PORT:      ${port ? port : "❌ [MISSING] (Defaults to 587 if omitted)"}`);
-    console.log(`-> SMTP_USER:      ${user ? user : "❌ [MISSING]"}`);
-    console.log(`-> SMTP_FROM:      ${from ? from : "❌ [MISSING]"}`);
-    console.log(`-> SMTP_PASSWORD:  ${pass ? "✔ [CONFIGURED] (Masked for Security)" : "❌ [MISSING]"}`);
-
-    if (host && user && pass) {
-      console.log(`[SMTP Mailer Startup] SUCCESS: Mail delivery system is READY using ${user}`);
-    } else if (!resendKey) {
-      console.error(`[SMTP Mailer Startup] ERROR: No valid email provider is configured.`);
-      console.error(`Please verify that SMTP_HOST, SMTP_USER, and SMTP_PASSWORD are set in your environment variables.`);
-    }
-    console.log("====================================================================");
+    const smtpHost = process.env.SMTP_HOST;
+    console.log("=".repeat(60));
+    console.log("[Email Config]");
+    if (resendKey) console.log("-> Resend: CONFIGURED");
+    else if (smtpHost) console.log(`-> SMTP: CONFIGURED (${smtpHost})`);
+    else console.log("-> No email provider configured (optional)");
+    console.log("=".repeat(60));
   });
 }
 
-startServer();
+// ─── Bootstrap & Start ────────────────────────────────────────────────────────
+
+(async () => {
+  try {
+    await bootstrapTables();
+    await seedDatabase();
+    await ensurePlatformsSeeded();
+    await startServer();
+  } catch (err) {
+    console.error("FATAL: Failed to start server:", err);
+    process.exit(1);
+  }
+})();
