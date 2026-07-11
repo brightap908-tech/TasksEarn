@@ -1,0 +1,1 @@
+- [TasksEarn dynamic platforms](tasksearn-dynamic-platforms.md) — how social media platforms are DB-driven end-to-end; backend was already built, only the frontend needed wiring.
