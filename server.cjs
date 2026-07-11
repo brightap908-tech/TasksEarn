@@ -126,6 +126,8 @@ function mapUser(row) {
     password: row.password,
     role: row.role,
     isVerified: row.is_verified === true || row.is_verified === "true",
+    isActive: row.is_active === true || row.is_active === "true",
+    activationPaidAt: row.activation_paid_at ? row.activation_paid_at instanceof Date ? row.activation_paid_at.toISOString() : row.activation_paid_at : void 0,
     walletBalance: parseFloat(row.wallet_balance) || 0,
     referralCode: row.referral_code || void 0,
     referredBy: row.referred_by || void 0,
@@ -300,6 +302,8 @@ async function bootstrapTables() {
         password VARCHAR(255) NOT NULL,
         role VARCHAR(50) NOT NULL DEFAULT 'Earner',
         is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+        is_active BOOLEAN NOT NULL DEFAULT FALSE,
+        activation_paid_at TIMESTAMP NULL,
         wallet_balance DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
         referral_code VARCHAR(50) NULL,
         referred_by VARCHAR(50) NULL,
@@ -308,6 +312,15 @@ async function bootstrapTables() {
         verification_code_last_sent TIMESTAMP NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_paid_at TIMESTAMP NULL
+    `);
+    await client.query(`
+      UPDATE users SET is_active = TRUE WHERE role != 'Earner' AND is_active = FALSE
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS tasks (
@@ -459,6 +472,19 @@ async function bootstrapTables() {
         message TEXT NOT NULL,
         reference_id VARCHAR(50) NOT NULL,
         read BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS activation_payments (
+        id VARCHAR(50) PRIMARY KEY,
+        user_id VARCHAR(50) NOT NULL UNIQUE,
+        user_name VARCHAR(150) NOT NULL,
+        user_email VARCHAR(150) NOT NULL,
+        amount DECIMAL(10, 2) NOT NULL DEFAULT 500.00,
+        reference VARCHAR(100) NOT NULL UNIQUE,
+        status VARCHAR(50) NOT NULL DEFAULT 'Pending',
+        paid_at TIMESTAMP NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -930,16 +956,18 @@ app.post("/api/auth/register", async (req, res) => {
     } catch (err) {
       return res.status(500).json({ error: `Could not send verification email. Details: ${err.message}` });
     }
+    const isActiveOnCreate = role !== "Earner" /* EARNER */;
     await pool.query(`
-      INSERT INTO users (id, name, email, password, role, is_verified, wallet_balance, referral_code, referred_by,
+      INSERT INTO users (id, name, email, password, role, is_verified, is_active, wallet_balance, referral_code, referred_by,
         verification_code, verification_code_expires, verification_code_last_sent, created_at)
-      VALUES ($1,$2,$3,$4,$5,false,0,$6,$7,$8,$9,$10,$11)
+      VALUES ($1,$2,$3,$4,$5,false,$6,0,$7,$8,$9,$10,$11,$12)
     `, [
       userId,
       name,
       email,
       hashPassword(password),
       role,
+      isActiveOnCreate,
       userReferralCode,
       referredByUserId || null,
       verificationCode,
@@ -974,7 +1002,8 @@ app.post("/api/auth/register", async (req, res) => {
         ]);
       }
     }
-    res.json({ user: { id: userId, name, email, role, isVerified: false, walletBalance: 0, referralCode: userReferralCode, createdAt: (/* @__PURE__ */ new Date()).toISOString() } });
+    const isActiveOnResponse = role !== "Earner" /* EARNER */;
+    res.json({ user: { id: userId, name, email, role, isVerified: false, isActive: isActiveOnResponse, walletBalance: 0, referralCode: userReferralCode, createdAt: (/* @__PURE__ */ new Date()).toISOString() } });
   } catch (err) {
     console.error("Register error:", err);
     res.status(500).json({ error: "Server error during registration" });
@@ -2723,6 +2752,217 @@ async function startServer() {
     console.log("=".repeat(60));
   });
 }
+var ACTIVATION_FEE = 500;
+app.post("/api/earner/activation/initialize", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (user.isActive) return res.status(400).json({ error: "Your account is already activated." });
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackKey) return res.status(400).json({ error: "Payment gateway is not configured. Please contact support." });
+    const existingPending = await pool.query(
+      "SELECT * FROM activation_payments WHERE user_id=$1 AND status='Pending'",
+      [user.id]
+    );
+    let ref;
+    if (existingPending.rows.length > 0) {
+      ref = existingPending.rows[0].reference;
+    } else {
+      ref = "ACT-" + Math.floor(1e7 + Math.random() * 9e7);
+      const apId = "ap-" + Math.random().toString(36).substr(2, 9);
+      await pool.query(`
+        INSERT INTO activation_payments (id, user_id, user_name, user_email, amount, reference, status, created_at)
+        VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7)
+        ON CONFLICT (user_id) DO UPDATE SET reference=EXCLUDED.reference, status='Pending', created_at=EXCLUDED.created_at
+      `, [apId, user.id, user.name, user.email, ACTIVATION_FEE, ref, /* @__PURE__ */ new Date()]);
+    }
+    const origin = req.headers.referer || req.headers.origin || `http://localhost:${PORT}`;
+    const baseOrigin = origin.replace(/\/$/, "");
+    const callbackUrl = `${baseOrigin}/#activation_ref=${ref}`;
+    const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${paystackKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: user.email,
+        amount: Math.round(ACTIVATION_FEE * 100),
+        reference: ref,
+        callback_url: callbackUrl,
+        metadata: { custom_fields: [{ display_name: "Purpose", variable_name: "purpose", value: "Earner Account Activation" }] }
+      })
+    });
+    const paystackData = await paystackRes.json();
+    if (paystackData?.status && paystackData?.data) {
+      return res.json({ success: true, authorization_url: paystackData.data.authorization_url, reference: ref });
+    }
+    return res.status(500).json({ error: paystackData?.message || "Failed to initialize payment gateway" });
+  } catch (err) {
+    console.error("Activation initialize error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.post("/api/earner/activation/verify", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (user.isActive) return res.json({ success: true, alreadyActive: true });
+    const { reference } = req.body;
+    if (!reference) return res.status(400).json({ error: "Transaction reference is required" });
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackKey) return res.status(400).json({ error: "Payment gateway is not configured." });
+    const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+      headers: { "Authorization": `Bearer ${paystackKey}` }
+    });
+    const paystackData = await paystackRes.json();
+    if (!paystackData?.status || !paystackData?.data) {
+      return res.status(500).json({ error: "Could not verify payment with gateway" });
+    }
+    const pStatus = paystackData.data.status;
+    const pAmount = paystackData.data.amount / 100;
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const apRes = await client.query(
+        "SELECT * FROM activation_payments WHERE reference=$1 AND user_id=$2 FOR UPDATE",
+        [reference, user.id]
+      );
+      if (apRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Activation payment record not found" });
+      }
+      const ap = apRes.rows[0];
+      if (ap.status === "Success") {
+        await client.query("ROLLBACK");
+        const freshUser = await pool.query("SELECT * FROM users WHERE id=$1", [user.id]);
+        return res.json({ success: true, alreadyProcessed: true, user: mapUser(freshUser.rows[0]) });
+      }
+      if (pStatus === "success") {
+        if (Math.abs(pAmount - ACTIVATION_FEE) > 0.5) {
+          await client.query("UPDATE activation_payments SET status='Failed' WHERE id=$1", [ap.id]);
+          await client.query("COMMIT");
+          return res.status(400).json({ error: "Payment amount mismatch. Please contact support." });
+        }
+        const now = /* @__PURE__ */ new Date();
+        await client.query(
+          "UPDATE users SET is_active=TRUE, activation_paid_at=$1 WHERE id=$2",
+          [now, user.id]
+        );
+        await client.query(
+          "UPDATE activation_payments SET status='Success', paid_at=$1 WHERE id=$2",
+          [now, ap.id]
+        );
+        const txId = "tx-" + Math.random().toString(36).substr(2, 9);
+        await client.query(`
+          INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, gateway, created_at)
+          VALUES ($1,$2,$3,$4,$5,'Deposit','Success','Account Activation Fee Payment',$6,'Paystack',$7)
+        `, [txId, user.id, user.name, user.role, ACTIVATION_FEE, reference, now]);
+        const adminRes = await client.query("SELECT id, name, role FROM users WHERE role='Admin' LIMIT 1");
+        if (adminRes.rows.length > 0) {
+          const admin = adminRes.rows[0];
+          await client.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2", [ACTIVATION_FEE, admin.id]);
+          const adminTxId = "tx-" + Math.random().toString(36).substr(2, 9);
+          await client.query(`
+            INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
+            VALUES ($1,$2,$3,$4,$5,'Deposit','Success',$6,$7,$8)
+          `, [
+            adminTxId,
+            admin.id,
+            admin.name,
+            admin.role,
+            ACTIVATION_FEE,
+            `Activation fee from ${user.name} (${user.email})`,
+            "ACT-ADM-" + Math.random().toString(36).substr(2, 6).toUpperCase(),
+            now
+          ]);
+        }
+        await client.query("COMMIT");
+        const freshUser = await pool.query("SELECT * FROM users WHERE id=$1", [user.id]);
+        return res.json({ success: true, user: mapUser(freshUser.rows[0]) });
+      } else {
+        await client.query("UPDATE activation_payments SET status='Failed' WHERE id=$1", [ap.id]);
+        await client.query("COMMIT");
+        return res.status(400).json({ error: `Payment failed. Paystack status: ${pStatus}` });
+      }
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      throw txErr;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("Activation verify error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.get("/api/admin/activations", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const result = await pool.query(`
+      SELECT
+        u.id, u.name, u.email, u.is_active, u.activation_paid_at, u.created_at,
+        ap.id AS ap_id, ap.reference, ap.status AS payment_status, ap.amount AS payment_amount, ap.paid_at
+      FROM users u
+      LEFT JOIN activation_payments ap ON ap.user_id = u.id
+      WHERE u.role = 'Earner'
+      ORDER BY u.created_at DESC
+    `);
+    const rows = result.rows.map((r) => ({
+      userId: r.id,
+      name: r.name,
+      email: r.email,
+      isActive: r.is_active === true || r.is_active === "true",
+      activationPaidAt: r.activation_paid_at || null,
+      createdAt: r.created_at,
+      payment: r.ap_id ? {
+        id: r.ap_id,
+        reference: r.reference,
+        status: r.payment_status,
+        amount: parseFloat(r.payment_amount) || 0,
+        paidAt: r.paid_at || null
+      } : null
+    }));
+    return res.json(rows);
+  } catch (err) {
+    console.error("Admin activations list error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.put("/api/admin/activations/:userId", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedUser(req);
+    if (!admin || admin.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const { userId } = req.params;
+    const { isActive } = req.body;
+    if (typeof isActive !== "boolean") return res.status(400).json({ error: "isActive (boolean) is required" });
+    const userRes = await pool.query("SELECT * FROM users WHERE id=$1 AND role='Earner'", [userId]);
+    if (userRes.rows.length === 0) return res.status(404).json({ error: "Earner not found" });
+    const now = /* @__PURE__ */ new Date();
+    await pool.query(
+      "UPDATE users SET is_active=$1, activation_paid_at=$2 WHERE id=$3",
+      [isActive, isActive ? userRes.rows[0].activation_paid_at || now : null, userId]
+    );
+    if (isActive) {
+      await pool.query(`
+        INSERT INTO activation_payments (id, user_id, user_name, user_email, amount, reference, status, paid_at, created_at)
+        VALUES ($1,$2,$3,$4,0,$5,'ManualActivation',$6,$7)
+        ON CONFLICT (user_id) DO UPDATE SET status='ManualActivation', paid_at=$6
+      `, [
+        "ap-" + Math.random().toString(36).substr(2, 9),
+        userId,
+        userRes.rows[0].name,
+        userRes.rows[0].email,
+        "MANUAL-" + Math.random().toString(36).substr(2, 8).toUpperCase(),
+        now,
+        now
+      ]);
+    }
+    const updated = await pool.query("SELECT * FROM users WHERE id=$1", [userId]);
+    return res.json({ success: true, user: mapUser(updated.rows[0]) });
+  } catch (err) {
+    console.error("Admin activate/deactivate error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 (async () => {
   try {
     await bootstrapTables();
