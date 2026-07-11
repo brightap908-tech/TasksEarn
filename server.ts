@@ -1219,7 +1219,7 @@ app.post("/api/admin/platforms", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-    const { name, icon, logoUrl, description, status } = req.body;
+    const { name, icon, logoUrl, description, status, costPerSlot, earningPerSlot } = req.body;
     if (!name || typeof name !== "string" || !name.trim()) {
       return res.status(400).json({ error: "Platform name is required." });
     }
@@ -1240,9 +1240,20 @@ app.post("/api/admin/platforms", async (req, res) => {
       [id, trimmedName, icon || "", logoUrl || null, description || null, status === "Inactive" ? "Inactive" : "Active", nextOrder]
     );
 
-    // Automatically make the new platform available in Task Pricing so the
-    // admin can set an advertiser price and earner reward for it.
-    await ensurePricingRowForPlatform(trimmedName);
+    // Automatically make the new platform available in Task Pricing.
+    // If the admin supplied pricing values in the creation form, use them directly.
+    const parsedCost = typeof costPerSlot === "number" ? costPerSlot : parseFloat(costPerSlot) || 0;
+    const parsedEarning = typeof earningPerSlot === "number" ? earningPerSlot : parseFloat(earningPerSlot) || 0;
+    if (parsedCost > 0 || parsedEarning > 0) {
+      const idRes = await pool.query("SELECT COUNT(*) FROM task_pricing");
+      const prcId = `prc-${parseInt(idRes.rows[0].count) + 1}-${Date.now()}`;
+      await pool.query(
+        "INSERT INTO task_pricing (id, platform, cost_per_slot, earning_per_slot) VALUES ($1, $2, $3, $4)",
+        [prcId, trimmedName, parsedCost, parsedEarning]
+      );
+    } else {
+      await ensurePricingRowForPlatform(trimmedName);
+    }
 
     const result = await pool.query("SELECT * FROM social_platforms WHERE id = $1", [id]);
     res.json({ success: true, platform: mapSocialPlatform(result.rows[0]) });

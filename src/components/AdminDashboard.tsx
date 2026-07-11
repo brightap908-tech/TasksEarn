@@ -1889,7 +1889,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
 
         {activeTab === "pricing" && (
           <div className="space-y-6 animate-fadeIn">
-            <AdminTaskPricing apiFetch={apiFetch} />
+            <AdminTaskPricing apiFetch={apiFetch} onAddPlatform={() => setActiveTab("platforms")} />
           </div>
         )}
 

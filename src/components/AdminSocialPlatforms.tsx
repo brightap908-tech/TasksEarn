@@ -14,7 +14,8 @@ import {
   Share2,
   X,
   Upload,
-  ImageOff
+  ImageOff,
+  Coins
 } from "lucide-react";
 
 interface AdminSocialPlatformsProps {
@@ -27,9 +28,11 @@ interface PlatformFormState {
   description: string;
   status: "Active" | "Inactive";
   logoUrl: string;
+  costPerSlot: string;
+  earningPerSlot: string;
 }
 
-const EMPTY_FORM: PlatformFormState = { id: null, name: "", description: "", status: "Active", logoUrl: "" };
+const EMPTY_FORM: PlatformFormState = { id: null, name: "", description: "", status: "Active", logoUrl: "", costPerSlot: "", earningPerSlot: "" };
 
 export default function AdminSocialPlatforms({ apiFetch }: AdminSocialPlatformsProps) {
   const [platforms, setPlatforms] = React.useState<SocialPlatform[]>([]);
@@ -81,7 +84,9 @@ export default function AdminSocialPlatforms({ apiFetch }: AdminSocialPlatformsP
       name: p.name,
       description: p.description || "",
       status: p.status,
-      logoUrl: p.logoUrl || ""
+      logoUrl: p.logoUrl || "",
+      costPerSlot: "",
+      earningPerSlot: ""
     });
     setModalError("");
     setShowModal(true);
@@ -111,13 +116,24 @@ export default function AdminSocialPlatforms({ apiFetch }: AdminSocialPlatformsP
     setSaving(true);
     setModalError("");
     try {
-      const payload = {
+      const costNum = parseFloat(form.costPerSlot) || 0;
+      const earnNum = parseFloat(form.earningPerSlot) || 0;
+      if (!form.id && costNum > 0 && earnNum > 0 && costNum < earnNum) {
+        setModalError("Advertiser price must be greater than or equal to the earner reward.");
+        setSaving(false);
+        return;
+      }
+      const payload: Record<string, unknown> = {
         name: form.name.trim(),
         icon: form.name.trim(),
         logoUrl: form.logoUrl || null,
         description: form.description.trim() || null,
         status: form.status
       };
+      if (!form.id) {
+        if (costNum > 0) payload.costPerSlot = costNum;
+        if (earnNum > 0) payload.earningPerSlot = earnNum;
+      }
 
       const res = form.id
         ? await apiFetch(`/api/admin/platforms/${form.id}`, {
@@ -401,6 +417,47 @@ export default function AdminSocialPlatforms({ apiFetch }: AdminSocialPlatformsP
                   className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none"
                 />
               </div>
+
+              {!form.id && (
+                <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4 space-y-3">
+                  <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Coins className="h-3.5 w-3.5" /> Task Pricing (optional — set now or later in Task Pricing tab)
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Advertiser Price (₦)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-sans">₦</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={form.costPerSlot}
+                          onChange={(e) => setForm({ ...form, costPerSlot: e.target.value })}
+                          placeholder="e.g. 200"
+                          className="w-full rounded-xl border border-gray-200 pl-7 pr-3 py-2 text-xs focus:border-indigo-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Earner Reward (₦)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-sans">₦</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={form.earningPerSlot}
+                          onChange={(e) => setForm({ ...form, earningPerSlot: e.target.value })}
+                          placeholder="e.g. 130"
+                          className="w-full rounded-xl border border-gray-200 pl-7 pr-3 py-2 text-xs focus:border-indigo-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400">Leave at 0 to configure pricing separately. Advertiser price must be ≥ earner reward.</p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Status</label>

@@ -1,13 +1,14 @@
 import React from "react";
 import { Platform, TaskPricing } from "../types";
-import { Save, RefreshCw, CheckCircle, AlertTriangle, Coins, ShieldCheck, Search } from "lucide-react";
+import { Save, RefreshCw, CheckCircle, AlertTriangle, Coins, ShieldCheck, Search, PlusCircle } from "lucide-react";
 import PlatformIcon from "./PlatformIcon";
 
 interface AdminTaskPricingProps {
   apiFetch: (endpoint: string, options?: RequestInit) => Promise<any>;
+  onAddPlatform?: () => void;
 }
 
-export default function AdminTaskPricing({ apiFetch }: AdminTaskPricingProps) {
+export default function AdminTaskPricing({ apiFetch, onAddPlatform }: AdminTaskPricingProps) {
   const [pricing, setPricing] = React.useState<TaskPricing[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -194,7 +195,7 @@ export default function AdminTaskPricing({ apiFetch }: AdminTaskPricingProps) {
               Configure rewards paid to earners (₦) and fees charged to advertisers (₦) dynamically across all supported social media platforms.
             </p>
           </div>
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
             <button
               onClick={fetchPricing}
               disabled={loading}
@@ -203,6 +204,14 @@ export default function AdminTaskPricing({ apiFetch }: AdminTaskPricingProps) {
             >
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Reload
             </button>
+            {onAddPlatform && (
+              <button
+                onClick={onAddPlatform}
+                className="rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 px-4 py-2.5 text-xs font-bold text-blue-700 transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <PlusCircle className="h-4 w-4" /> Add New Platform
+              </button>
+            )}
             <button
               onClick={handleSaveAll}
               disabled={saving || loading}
