@@ -660,7 +660,7 @@ export default function App() {
   ];
 
   return (
-    <div className="flex min-h-screen flex-col font-sans" style={{ background: "#0b1220", color: "#f1f5f9" }}>
+    <div className="flex min-h-screen flex-col font-sans" style={{ background: isDarkMode ? "#0b1220" : "#f0f4ff", color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>
       
       {/* Navigation Header */}
       <Navbar 
@@ -681,7 +681,7 @@ export default function App() {
           <div className="space-y-16 pb-16">
             
             {/* Hero Section */}
-            <section className="relative overflow-hidden hero-grid" style={{ background: "linear-gradient(180deg,#0b1220 0%,#0d1626 100%)", borderBottom: "1px solid rgba(255,255,255,0.06)", paddingTop: "5rem", paddingBottom: "6rem" }}>
+            <section className="relative overflow-hidden hero-grid" style={{ background: isDarkMode ? "linear-gradient(180deg,#0b1220 0%,#0d1626 100%)" : "linear-gradient(180deg,#f0f4ff 0%,#e8f0ff 100%)", borderBottom: isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1.5px solid #dde8ff", paddingTop: "5rem", paddingBottom: "6rem" }}>
               {/* Glow orbs */}
               <div className="glow-orb-blue" style={{ width: "500px", height: "500px", top: "-120px", left: "-100px", opacity: 0.6 }} />
               <div className="glow-orb-indigo" style={{ width: "400px", height: "400px", bottom: "-80px", right: "-60px", opacity: 0.5 }} />
@@ -700,7 +700,7 @@ export default function App() {
 
                   <h1
                     className="font-extrabold tracking-tight leading-tight"
-                    style={{ fontFamily: "var(--font-display)", fontSize: "clamp(2.25rem,5vw,3.5rem)", color: "#f1f5f9" }}
+                    style={{ fontFamily: "var(--font-display)", fontSize: "clamp(2.25rem,5vw,3.5rem)", color: isDarkMode ? "#f1f5f9" : "#0f172a" }}
                   >
                     Get Paid Weekly for{" "}
                     <span style={{ background: "linear-gradient(135deg,#60a5fa,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
@@ -727,9 +727,9 @@ export default function App() {
                       onClick={() => { setAuthRole(UserRole.ADVERTISER); setCurrentView("register"); }}
                       className="rounded-full px-7 py-3.5 text-sm font-bold text-center cursor-pointer transition-all"
                       style={{
-                        background: "rgba(255,255,255,0.04)",
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        color: "#cbd5e1"
+                        background: isDarkMode ? "rgba(255,255,255,0.04)" : "rgba(0,102,255,0.06)",
+                        border: isDarkMode ? "1px solid rgba(255,255,255,0.12)" : "1.5px solid #b0cfff",
+                        color: isDarkMode ? "#cbd5e1" : "#0052cc"
                       }}
                     >
                       Promote My Business

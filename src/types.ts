@@ -91,6 +91,18 @@ export interface User {
   referralCode?: string;
   referredBy?: string;
   createdAt: string;
+  // Extended profile fields
+  username?: string;
+  phone?: string;
+  country?: string;
+  businessName?: string;
+  photoUrl?: string;
+  twoFactorEnabled?: boolean;
+  notificationPrefs?: {
+    emailNotifications: boolean;
+    campaignUpdates: boolean;
+    transactionAlerts: boolean;
+  };
 }
 
 export interface Task {

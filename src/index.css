@@ -6,20 +6,21 @@
   --font-display: "Space Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* Brand palette */
-  --color-brand-50:  rgba(59, 130, 246, 0.05);
-  --color-brand-100: rgba(59, 130, 246, 0.12);
-  --color-brand-500: #3b82f6;
-  --color-brand-600: #2563eb;
-  --color-brand-700: #1d4ed8;
-  --color-brand-900: #1e3a8a;
+  /* Brand palette — #0066FF primary */
+  --color-brand-50:  #eff5ff;
+  --color-brand-100: #dceaff;
+  --color-brand-200: #b0cfff;
+  --color-brand-500: #0066FF;
+  --color-brand-600: #0052cc;
+  --color-brand-700: #003d99;
+  --color-brand-900: #001f66;
 
-  /* Surface tokens */
-  --surface-base:    #0b1220;
-  --surface-card:    #111827;
-  --surface-raised:  #1a2236;
-  --surface-float:   #1f2d45;
-  --surface-border:  rgba(255,255,255,0.07);
+  /* Light mode surface tokens */
+  --surface-base:    #f0f4ff;
+  --surface-card:    #ffffff;
+  --surface-raised:  #f8faff;
+  --surface-float:   #eef2ff;
+  --surface-border:  #dde8ff;
 }
 
 /* ==========================================================================
@@ -28,275 +29,465 @@
 *, *::before, *::after { box-sizing: border-box; }
 
 html, :root {
-  background-color: #0b1220 !important;
-  color-scheme: dark !important;
+  background-color: #f0f4ff;
+  color-scheme: light;
+  scroll-behavior: smooth;
 }
 
 body {
   font-family: var(--font-sans);
-  background-color: #0b1220 !important;
-  color: #f1f5f9 !important;
+  background-color: #f0f4ff;
+  color: #0f172a;
   overflow-x: hidden;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.25s ease, color 0.25s ease;
   -webkit-font-smoothing: antialiased;
+}
+
+/* ==========================================================================
+   DARK MODE BASE (activated via html.dark class)
+   ========================================================================== */
+html.dark,
+html.dark body {
+  background-color: #050d1a !important;
+  color: #f1f5f9 !important;
+  color-scheme: dark !important;
 }
 
 /* ==========================================================================
    SCROLLBAR
    ========================================================================== */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #0b1220; }
-::-webkit-scrollbar-thumb { background: #1e3a5f; border-radius: 9999px; }
-::-webkit-scrollbar-thumb:hover { background: #2563eb; }
+::-webkit-scrollbar-track { background: #f0f4ff; }
+::-webkit-scrollbar-thumb { background: #b0cfff; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #0066FF; }
+
+html.dark ::-webkit-scrollbar-track { background: #050d1a; }
+html.dark ::-webkit-scrollbar-thumb { background: #1e3a5f; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: #0066FF; }
 
 /* ==========================================================================
-   SURFACE OVERRIDES — turn every white/light class dark
+   LIGHT MODE — SURFACES
    ========================================================================== */
-
-/* Cards, panels, modals */
-.bg-white,
-[class*="bg-white"],
+.bg-white {
+  background-color: #ffffff !important;
+}
 .bg-slate-50,
-.bg-gray-50,
-.bg-slate-100\/50,
-.bg-gray-50\/50,
-.bg-slate-50\/80,
-.bg-gray-50\/80,
-.bg-slate-50\/50,
-.bg-gray-50\/50,
-.rounded-2xl.border.bg-white,
-.rounded-3xl.border.bg-white {
+.bg-gray-50 {
+  background-color: #f8faff !important;
+}
+.bg-slate-100,
+.bg-gray-100 {
+  background-color: #eff5ff !important;
+}
+.bg-slate-200,
+.bg-gray-200 {
+  background-color: #dde8ff !important;
+}
+
+/* ==========================================================================
+   DARK MODE — SURFACE OVERRIDES
+   ========================================================================== */
+html.dark .bg-white,
+html.dark [class*="bg-white"] {
   background-color: #111827 !important;
   color: #f1f5f9 !important;
   border-color: rgba(255,255,255,0.07) !important;
 }
-
-/* Sections with light backgrounds */
-.bg-slate-50,
-.bg-gray-50 {
+html.dark .bg-slate-50,
+html.dark .bg-gray-50 {
   background-color: #0d1626 !important;
 }
-
-/* Inset accent surfaces */
-.bg-slate-100,
-.bg-gray-100,
-.bg-slate-200,
-.bg-gray-200,
-.bg-slate-100\/80,
-.bg-slate-50\/50,
-.bg-gray-50\/50,
-.hover\:bg-slate-50\/50:hover,
-.hover\:bg-slate-50:hover,
-.hover\:bg-gray-50:hover,
-.hover\:bg-slate-100:hover,
-.hover\:bg-gray-100:hover {
+html.dark .bg-slate-100,
+html.dark .bg-gray-100,
+html.dark .bg-slate-200,
+html.dark .bg-gray-200 {
   background-color: #1a2236 !important;
   color: #f1f5f9 !important;
 }
+html.dark .hover\:bg-slate-50\/50:hover,
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-gray-50:hover,
+html.dark .hover\:bg-slate-100:hover,
+html.dark .hover\:bg-gray-100:hover {
+  background-color: #1a2236 !important;
+}
 
-/* Borders */
+/* ==========================================================================
+   LIGHT MODE — BORDERS
+   ========================================================================== */
 .border-slate-200,
 .border-gray-200,
 .border-slate-100,
 .border-gray-100,
 .border-slate-300,
-.border-gray-300,
-.border-slate-100\/50,
-.border-slate-100/50,
-.border-slate-200\/80,
-.border-gray-50,
-.border-slate-50 {
+.border-gray-300 {
+  border-color: #dde8ff !important;
+}
+.border-slate-50,
+.border-gray-50 {
+  border-color: #eff5ff !important;
+}
+
+/* ==========================================================================
+   DARK MODE — BORDERS
+   ========================================================================== */
+html.dark .border-slate-200,
+html.dark .border-gray-200,
+html.dark .border-slate-100,
+html.dark .border-gray-100,
+html.dark .border-slate-300,
+html.dark .border-gray-300,
+html.dark .border-slate-100\/50,
+html.dark .border-slate-200\/80,
+html.dark .border-gray-50,
+html.dark .border-slate-50 {
   border-color: rgba(255,255,255,0.07) !important;
 }
 
 /* ==========================================================================
-   TYPOGRAPHY
+   LIGHT MODE — TYPOGRAPHY
    ========================================================================== */
-.text-slate-900, .text-gray-900,
-.text-slate-800, .text-gray-800,
-.text-slate-700, .text-gray-700 {
-  color: #f1f5f9 !important;
-}
-.text-slate-600, .text-gray-600 {
-  color: #cbd5e1 !important;
-}
-.text-slate-500, .text-gray-500,
-.text-slate-400, .text-gray-400 {
-  color: #94a3b8 !important;
-}
+.text-slate-900, .text-gray-900 { color: #0f172a !important; }
+.text-slate-800, .text-gray-800 { color: #1e293b !important; }
+.text-slate-700, .text-gray-700 { color: #334155 !important; }
+.text-slate-600, .text-gray-600 { color: #475569 !important; }
+.text-slate-500, .text-gray-500 { color: #64748b !important; }
+.text-slate-400, .text-gray-400 { color: #94a3b8 !important; }
 
 /* ==========================================================================
-   INPUTS & FORMS
+   DARK MODE — TYPOGRAPHY
+   ========================================================================== */
+html.dark .text-slate-900, html.dark .text-gray-900,
+html.dark .text-slate-800, html.dark .text-gray-800,
+html.dark .text-slate-700, html.dark .text-gray-700 { color: #f1f5f9 !important; }
+html.dark .text-slate-600, html.dark .text-gray-600 { color: #cbd5e1 !important; }
+html.dark .text-slate-500, html.dark .text-gray-500,
+html.dark .text-slate-400, html.dark .text-gray-400 { color: #94a3b8 !important; }
+
+/* ==========================================================================
+   LIGHT MODE — INPUTS & FORMS
    ========================================================================== */
 input,
 textarea,
 select {
-  background-color: #0f1e35 !important;
-  color: #f1f5f9 !important;
-  border: 1px solid rgba(255,255,255,0.10) !important;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1.5px solid #dde8ff !important;
   border-radius: 0.75rem !important;
   padding: 0.625rem 1rem !important;
   font-size: 0.875rem !important;
   outline: none !important;
   transition: all 0.2s cubic-bezier(0.4,0,0.2,1) !important;
+  box-shadow: 0 1px 3px rgba(0,102,255,0.05) !important;
 }
 input:focus, textarea:focus, select:focus {
-  border-color: #3b82f6 !important;
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important;
-  background-color: #0d1a2e !important;
+  border-color: #0066FF !important;
+  box-shadow: 0 0 0 3px rgba(0,102,255,0.12) !important;
+  background-color: #ffffff !important;
 }
 input::placeholder, textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* ==========================================================================
+   DARK MODE — INPUTS & FORMS
+   ========================================================================== */
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background-color: #0f1e35 !important;
+  color: #f1f5f9 !important;
+  border: 1.5px solid rgba(255,255,255,0.10) !important;
+}
+html.dark input:focus,
+html.dark textarea:focus,
+html.dark select:focus {
+  border-color: #0066FF !important;
+  box-shadow: 0 0 0 3px rgba(0,102,255,0.20) !important;
+  background-color: #0d1a2e !important;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder {
   color: #475569 !important;
 }
 
 /* ==========================================================================
-   NAVIGATION HEADER
+   NAVIGATION HEADER — LIGHT
    ========================================================================== */
 #app-header {
-  background-color: rgba(11,18,32,0.92) !important;
+  background-color: rgba(255,255,255,0.95) !important;
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
+  border-bottom: 1.5px solid #dde8ff !important;
+  box-shadow: 0 1px 20px rgba(0,102,255,0.08) !important;
+}
+#app-header span.text-slate-900 { color: #0f172a !important; }
+#app-header nav span {
+  font-weight: 500 !important;
+  color: #334155 !important;
+  transition: color 0.15s ease-in-out !important;
+}
+#app-header nav span:hover { color: #0066FF !important; }
+
+/* ==========================================================================
+   NAVIGATION HEADER — DARK
+   ========================================================================== */
+html.dark #app-header {
+  background-color: rgba(11,18,32,0.95) !important;
   border-bottom: 1px solid rgba(255,255,255,0.06) !important;
   box-shadow: 0 1px 40px rgba(0,0,0,0.4) !important;
 }
-#app-header span.text-slate-900 { color: #f1f5f9 !important; }
-#app-header nav span {
-  font-weight: 500 !important;
-  transition: color 0.15s ease-in-out !important;
-}
+html.dark #app-header span.text-slate-900 { color: #f1f5f9 !important; }
+html.dark #app-header nav span { color: #cbd5e1 !important; }
+html.dark #app-header nav span:hover { color: #60a5fa !important; }
 
-/* Mobile drawer */
+/* Mobile drawer — light */
 #mobile-nav-drawer {
+  background-color: #ffffff !important;
+  border-left: 1.5px solid #dde8ff !important;
+}
+#mobile-nav-drawer span { color: #334155 !important; border-radius: 0.5rem !important; }
+#mobile-nav-drawer span:hover { background-color: #eff5ff !important; color: #0066FF !important; }
+
+html.dark #mobile-nav-drawer {
   background-color: #0e1729 !important;
   border-left: 1px solid rgba(255,255,255,0.07) !important;
 }
-#mobile-nav-drawer span { color: #e2e8f0 !important; border-radius: 0.5rem !important; }
-#mobile-nav-drawer span:hover { background-color: #1a2236 !important; color: #60a5fa !important; }
+html.dark #mobile-nav-drawer span { color: #e2e8f0 !important; }
+html.dark #mobile-nav-drawer span:hover { background-color: #1a2236 !important; color: #60a5fa !important; }
 
 /* ==========================================================================
-   SIDEBAR NAV BUTTONS (Dashboards)
+   SIDEBAR NAV BUTTONS (Dashboards) — LIGHT
    ========================================================================== */
 button[class*="text-slate-500 hover:bg-slate-50"] {
-  color: #94a3b8 !important;
+  color: #64748b !important;
   border-radius: 0.75rem !important;
 }
 button[class*="text-slate-500 hover:bg-slate-50"]:hover {
+  background-color: #eff5ff !important;
+  color: #0066FF !important;
+}
+
+html.dark button[class*="text-slate-500 hover:bg-slate-50"] {
+  color: #94a3b8 !important;
+}
+html.dark button[class*="text-slate-500 hover:bg-slate-50"]:hover {
   background-color: rgba(255,255,255,0.03) !important;
   color: #f1f5f9 !important;
 }
 
-/* Active sidebar tabs */
+/* Active sidebar tabs — LIGHT */
 .bg-blue-50,
-.bg-blue-50\/50,
-.bg-blue-50/50,
 [class*="bg-blue-50"] {
-  background-color: rgba(59,130,246,0.10) !important;
-  color: #60a5fa !important;
-  border-right-color: #3b82f6 !important;
+  background-color: #eff5ff !important;
+  color: #0066FF !important;
 }
+
+html.dark .bg-blue-50,
+html.dark [class*="bg-blue-50"] {
+  background-color: rgba(0,102,255,0.12) !important;
+  color: #60a5fa !important;
+  border-right-color: #0066FF !important;
+}
+
+/* ==========================================================================
+   BLUE COLOR OVERRIDES
+   ========================================================================== */
+.text-blue-600 { color: #0066FF !important; }
+.text-blue-500 { color: #0066FF !important; }
+.text-blue-700 { color: #0052cc !important; }
+.text-blue-800 { color: #003d99 !important; }
+.bg-blue-600 { background-color: #0066FF !important; }
+.bg-blue-500 { background-color: #0066FF !important; }
+.border-blue-500 { border-color: #0066FF !important; }
+.border-blue-600 { border-color: #0052cc !important; }
+.border-blue-200 { border-color: #b0cfff !important; }
+.border-r-4.border-blue-500 { border-right-color: #0066FF !important; }
+
+html.dark .text-blue-600 { color: #60a5fa !important; }
+html.dark .text-blue-500 { color: #60a5fa !important; }
 
 /* ==========================================================================
    DROPDOWN MENUS
    ========================================================================== */
 [class*="absolute right-0 mt-2 w-"],
 [class*="dropdown-menu"] {
+  background-color: #ffffff !important;
+  border: 1.5px solid #dde8ff !important;
+  box-shadow: 0 8px 30px rgba(0,102,255,0.12) !important;
+  border-radius: 0.875rem !important;
+}
+html.dark [class*="absolute right-0 mt-2 w-"],
+html.dark [class*="dropdown-menu"] {
   background-color: #111827 !important;
   border: 1px solid rgba(255,255,255,0.08) !important;
   box-shadow: 0 20px 40px -10px rgba(0,0,0,0.7) !important;
-  border-radius: 0.875rem !important;
 }
 
 /* ==========================================================================
-   TABLES
+   TABLES — LIGHT
    ========================================================================== */
 table { border-collapse: collapse !important; width: 100% !important; }
 th {
-  background-color: rgba(255,255,255,0.02) !important;
+  background-color: #f0f4ff !important;
   color: #64748b !important;
   font-weight: 600 !important;
   text-transform: uppercase !important;
   font-size: 0.7rem !important;
   letter-spacing: 0.08em !important;
   padding: 0.875rem 1rem !important;
-  border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+  border-bottom: 1.5px solid #dde8ff !important;
 }
 td {
   padding: 1rem !important;
-  border-bottom: 1px solid rgba(255,255,255,0.05) !important;
-  color: #e2e8f0 !important;
+  border-bottom: 1px solid #eff5ff !important;
+  color: #1e293b !important;
   font-size: 0.875rem !important;
 }
-tr:hover td { background-color: rgba(59,130,246,0.03) !important; }
+tr:hover td { background-color: #f0f4ff !important; }
+
+html.dark th {
+  background-color: rgba(255,255,255,0.02) !important;
+  color: #64748b !important;
+  border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+}
+html.dark td {
+  border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+  color: #e2e8f0 !important;
+}
+html.dark tr:hover td { background-color: rgba(0,102,255,0.04) !important; }
 
 /* ==========================================================================
-   BADGES / PILLS
+   BADGES / PILLS — LIGHT
    ========================================================================== */
-.bg-blue-50, .bg-blue-100 {
-  background-color: rgba(59,130,246,0.10) !important;
-  color: #60a5fa !important;
-  border: 1px solid rgba(59,130,246,0.15) !important;
+.bg-blue-100 {
+  background-color: #dceaff !important;
+  color: #0052cc !important;
 }
 .bg-amber-50, .bg-amber-100 {
+  background-color: rgba(245,158,11,0.10) !important;
+  color: #b45309 !important;
+  border: 1px solid rgba(245,158,11,0.20) !important;
+}
+.bg-indigo-50, .bg-indigo-100 {
+  background-color: #f0f0ff !important;
+  color: #4f46e5 !important;
+  border: 1px solid rgba(99,102,241,0.20) !important;
+}
+.bg-rose-50, .bg-rose-100 {
+  background-color: #fff0f3 !important;
+  color: #e11d48 !important;
+  border: 1px solid rgba(225,29,72,0.15) !important;
+}
+.bg-green-50, .bg-green-100 {
+  background-color: #f0fff4 !important;
+  color: #15803d !important;
+  border: 1px solid rgba(21,128,61,0.15) !important;
+}
+.bg-red-50, .bg-red-100 {
+  background-color: #fff0f0 !important;
+  color: #dc2626 !important;
+  border: 1px solid rgba(220,38,38,0.15) !important;
+}
+
+html.dark .bg-blue-50, html.dark .bg-blue-100 {
+  background-color: rgba(0,102,255,0.10) !important;
+  color: #60a5fa !important;
+  border: 1px solid rgba(0,102,255,0.15) !important;
+}
+html.dark .bg-amber-50, html.dark .bg-amber-100 {
   background-color: rgba(245,158,11,0.10) !important;
   color: #fbbf24 !important;
   border: 1px solid rgba(245,158,11,0.15) !important;
 }
-.bg-indigo-50, .bg-indigo-100 {
+html.dark .bg-indigo-50, html.dark .bg-indigo-100 {
   background-color: rgba(99,102,241,0.10) !important;
   color: #818cf8 !important;
   border: 1px solid rgba(99,102,241,0.15) !important;
 }
-.bg-rose-50, .bg-rose-100 {
+html.dark .bg-rose-50, html.dark .bg-rose-100 {
   background-color: rgba(244,63,94,0.10) !important;
   color: #fb7185 !important;
-  border: 1px solid rgba(244,63,94,0.15) !important;
+}
+html.dark .bg-green-50, html.dark .bg-green-100 {
+  background-color: rgba(34,197,94,0.10) !important;
+  color: #4ade80 !important;
+}
+html.dark .bg-red-50, html.dark .bg-red-100 {
+  background-color: rgba(220,38,38,0.10) !important;
+  color: #f87171 !important;
 }
 
 /* ==========================================================================
-   BUTTONS
+   BUTTONS — LIGHT
    ========================================================================== */
 
 /* Primary blue buttons */
 button.bg-blue-500,
 button.bg-blue-600,
-button.bg-brand-500,
 .bg-blue-500,
 .bg-blue-600 {
-  background: linear-gradient(135deg,#3b82f6 0%,#2563eb 100%) !important;
+  background: linear-gradient(135deg, #0066FF 0%, #0052cc 100%) !important;
   color: #ffffff !important;
   border: none !important;
   font-weight: 600 !important;
-  box-shadow: 0 4px 16px rgba(37,99,235,0.30) !important;
+  box-shadow: 0 4px 16px rgba(0,102,255,0.30) !important;
   transition: all 0.25s cubic-bezier(0.4,0,0.2,1) !important;
 }
 button.bg-blue-500:hover,
 button.bg-blue-600:hover,
-button.bg-brand-500:hover,
 .bg-blue-500:hover {
   opacity: 0.92 !important;
   transform: translateY(-1px) !important;
-  box-shadow: 0 8px 24px rgba(37,99,235,0.40) !important;
+  box-shadow: 0 8px 24px rgba(0,102,255,0.40) !important;
 }
 button.bg-blue-500:active,
 button.bg-blue-600:active { transform: translateY(0) !important; }
+
+/* Indigo buttons */
+button.bg-indigo-600,
+.bg-indigo-600 {
+  background: linear-gradient(135deg, #0066FF 0%, #4f46e5 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 16px rgba(0,102,255,0.25) !important;
+  border: none !important;
+  font-weight: 600 !important;
+  transition: all 0.25s cubic-bezier(0.4,0,0.2,1) !important;
+}
+button.bg-indigo-600:hover,
+.bg-indigo-600:hover {
+  opacity: 0.92 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 8px 24px rgba(0,102,255,0.35) !important;
+}
 
 /* Ghost / secondary buttons */
 button.bg-slate-100,
 button.bg-gray-100,
 button.bg-slate-200 {
-  background-color: #1a2236 !important;
-  color: #e2e8f0 !important;
-  border: 1px solid rgba(255,255,255,0.09) !important;
+  background-color: #eff5ff !important;
+  color: #334155 !important;
+  border: 1.5px solid #dde8ff !important;
   transition: all 0.2s ease !important;
 }
 button.bg-slate-100:hover,
-button.bg-gray-100:hover { background-color: #243047 !important; }
+button.bg-gray-100:hover { background-color: #dceaff !important; }
+
+html.dark button.bg-slate-100,
+html.dark button.bg-gray-100,
+html.dark button.bg-slate-200 {
+  background-color: #1a2236 !important;
+  color: #e2e8f0 !important;
+  border: 1px solid rgba(255,255,255,0.09) !important;
+}
+html.dark button.bg-slate-100:hover,
+html.dark button.bg-gray-100:hover { background-color: #243047 !important; }
 
 /* ==========================================================================
-   FOOTER
+   FOOTER — LIGHT
    ========================================================================== */
 #app-footer {
-  background-color: #070d1a !important;
+  background-color: #0f172a !important;
   border-top: 1px solid rgba(255,255,255,0.06) !important;
 }
 #app-footer h4 {
@@ -312,7 +503,7 @@ button.bg-gray-100:hover { background-color: #243047 !important; }
    ========================================================================== */
 .fixed.inset-0.bg-slate-900\/50,
 .fixed.inset-0.bg-gray-900\/60 {
-  background-color: rgba(7,13,26,0.80) !important;
+  background-color: rgba(15,23,42,0.65) !important;
   backdrop-filter: blur(10px) !important;
 }
 
@@ -320,16 +511,26 @@ button.bg-gray-100:hover { background-color: #243047 !important; }
    TOAST NOTIFICATIONS
    ========================================================================== */
 .fixed.bottom-6.right-6 {
+  background-color: #ffffff !important;
+  border: 1.5px solid #dde8ff !important;
+  box-shadow: 0 12px 40px rgba(0,102,255,0.18) !important;
+  border-radius: 1rem !important;
+  color: #0f172a !important;
+}
+
+html.dark .fixed.bottom-6.right-6 {
   background-color: #111827 !important;
   border: 1px solid rgba(255,255,255,0.08) !important;
   box-shadow: 0 20px 50px rgba(0,0,0,0.6) !important;
-  border-radius: 1rem !important;
 }
 
 /* ==========================================================================
    DIVIDERS
    ========================================================================== */
 .divide-y > :not([hidden]) ~ :not([hidden]) {
+  border-color: #eff5ff !important;
+}
+html.dark .divide-y > :not([hidden]) ~ :not([hidden]) {
   border-color: rgba(255,255,255,0.06) !important;
 }
 
@@ -337,13 +538,19 @@ button.bg-gray-100:hover { background-color: #243047 !important; }
    ALERT BANNERS
    ========================================================================== */
 .bg-amber-500\/10 {
-  background-color: rgba(245,158,11,0.07) !important;
-  border-color: rgba(245,158,11,0.20) !important;
-  color: #fbbf24 !important;
+  background-color: rgba(245,158,11,0.08) !important;
+  border-color: rgba(245,158,11,0.25) !important;
+  color: #92400e !important;
 }
 .bg-blue-500\/10 {
-  background-color: rgba(59,130,246,0.07) !important;
-  border-color: rgba(59,130,246,0.20) !important;
+  background-color: rgba(0,102,255,0.07) !important;
+  border-color: rgba(0,102,255,0.20) !important;
+  color: #0052cc !important;
+}
+html.dark .bg-amber-500\/10 {
+  color: #fbbf24 !important;
+}
+html.dark .bg-blue-500\/10 {
   color: #60a5fa !important;
 }
 
@@ -355,7 +562,6 @@ input[maxlength="1"] {
   font-weight: 700 !important;
   text-align: center !important;
   border-radius: 0.75rem !important;
-  background-color: #0f1e35 !important;
 }
 input[maxlength="6"] {
   letter-spacing: 0.35em !important;
@@ -370,41 +576,79 @@ input[maxlength="6"] {
    GLOW UTILITY
    ========================================================================== */
 .glow-blue {
-  box-shadow: 0 0 30px rgba(59,130,246,0.20), 0 0 60px rgba(37,99,235,0.10);
+  box-shadow: 0 0 30px rgba(0,102,255,0.20), 0 0 60px rgba(0,82,204,0.10);
 }
 .glow-sm {
-  box-shadow: 0 0 14px rgba(59,130,246,0.18);
+  box-shadow: 0 0 14px rgba(0,102,255,0.18);
 }
 
 /* ==========================================================================
-   PREMIUM CARD TREATMENT
+   PREMIUM CARD — LIGHT
    ========================================================================== */
 .premium-card {
-  background: linear-gradient(145deg,#111827,#0f1e35) !important;
-  border: 1px solid rgba(255,255,255,0.07) !important;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.04) !important;
+  background: #ffffff !important;
+  border: 1.5px solid #dde8ff !important;
+  box-shadow: 0 4px 24px rgba(0,102,255,0.08), 0 1px 4px rgba(0,0,0,0.04) !important;
   border-radius: 1rem !important;
 }
 .premium-card:hover {
-  border-color: rgba(59,130,246,0.25) !important;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.50), 0 0 0 1px rgba(59,130,246,0.12), inset 0 1px 0 rgba(255,255,255,0.05) !important;
+  border-color: #0066FF !important;
+  box-shadow: 0 8px 32px rgba(0,102,255,0.16), 0 2px 8px rgba(0,0,0,0.06) !important;
 }
 
-/* stat card standard */
+html.dark .premium-card {
+  background: linear-gradient(145deg,#111827,#0f1e35) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.04) !important;
+}
+html.dark .premium-card:hover {
+  border-color: rgba(0,102,255,0.35) !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.50), 0 0 0 1px rgba(0,102,255,0.15) !important;
+}
+
+/* Rounded cards */
 .rounded-2xl, .rounded-3xl, .rounded-xl {
+  border-color: #dde8ff !important;
+}
+html.dark .rounded-2xl, html.dark .rounded-3xl, html.dark .rounded-xl {
   border-color: rgba(255,255,255,0.07) !important;
 }
-.shadow-sm, .shadow-xs, .shadow-md, .shadow-lg, .shadow {
+
+.shadow-sm, .shadow-xs {
+  box-shadow: 0 2px 12px rgba(0,102,255,0.07), 0 1px 3px rgba(0,0,0,0.05) !important;
+}
+.shadow-md, .shadow-lg, .shadow {
+  box-shadow: 0 4px 20px rgba(0,102,255,0.10), 0 2px 6px rgba(0,0,0,0.05) !important;
+}
+
+html.dark .shadow-sm, html.dark .shadow-xs,
+html.dark .shadow-md, html.dark .shadow-lg, html.dark .shadow {
   box-shadow: 0 8px 32px -8px rgba(0,0,0,0.50) !important;
+}
+
+/* ==========================================================================
+   DARK SURFACE ELEMENTS
+   ========================================================================== */
+html.dark {
+  --surface-base:    #050d1a;
+  --surface-card:    #111827;
+  --surface-raised:  #1a2236;
+  --surface-float:   #1f2d45;
+  --surface-border:  rgba(255,255,255,0.07);
 }
 
 /* ==========================================================================
    PROSE / CONTENT AREAS
    ========================================================================== */
-.prose { color: #cbd5e1 !important; }
-.prose h1,.prose h2,.prose h3 { color: #f1f5f9 !important; }
-.prose a { color: #60a5fa !important; }
-.prose strong { color: #e2e8f0 !important; }
+.prose { color: #334155 !important; }
+.prose h1,.prose h2,.prose h3 { color: #0f172a !important; }
+.prose a { color: #0066FF !important; }
+.prose strong { color: #1e293b !important; }
+
+html.dark .prose { color: #cbd5e1 !important; }
+html.dark .prose h1, html.dark .prose h2, html.dark .prose h3 { color: #f1f5f9 !important; }
+html.dark .prose a { color: #60a5fa !important; }
+html.dark .prose strong { color: #e2e8f0 !important; }
 
 /* ==========================================================================
    ANIMATIONS
@@ -420,7 +664,7 @@ input[maxlength="6"] {
   100% { background-position:  200% 0; }
 }
 .shimmer {
-  background: linear-gradient(90deg,transparent 25%,rgba(59,130,246,0.08) 50%,transparent 75%);
+  background: linear-gradient(90deg,transparent 25%,rgba(0,102,255,0.06) 50%,transparent 75%);
   background-size: 200% 100%;
   animation: shimmer 2.4s ease infinite;
 }
@@ -428,8 +672,8 @@ input[maxlength="6"] {
 /* Hero background grid */
 .hero-grid {
   background-image:
-    linear-gradient(rgba(59,130,246,0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(59,130,246,0.04) 1px, transparent 1px);
+    linear-gradient(rgba(0,102,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,102,255,0.04) 1px, transparent 1px);
   background-size: 48px 48px;
 }
 
@@ -438,13 +682,56 @@ input[maxlength="6"] {
   position: absolute;
   border-radius: 9999px;
   filter: blur(80px);
-  background: radial-gradient(circle, rgba(37,99,235,0.30) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(0,102,255,0.20) 0%, transparent 70%);
   pointer-events: none;
 }
 .glow-orb-indigo {
   position: absolute;
   border-radius: 9999px;
   filter: blur(100px);
-  background: radial-gradient(circle, rgba(99,102,241,0.20) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(79,70,229,0.15) 0%, transparent 70%);
   pointer-events: none;
+}
+
+html.dark .glow-orb-blue {
+  background: radial-gradient(circle, rgba(0,102,255,0.30) 0%, transparent 70%);
+}
+
+/* ==========================================================================
+   PROFILE PHOTO UPLOAD WIDGET
+   ========================================================================== */
+.photo-upload-ring {
+  border: 3px solid #dde8ff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.photo-upload-ring:hover {
+  border-color: #0066FF;
+  box-shadow: 0 0 0 4px rgba(0,102,255,0.12);
+}
+html.dark .photo-upload-ring {
+  border-color: rgba(255,255,255,0.12);
+}
+html.dark .photo-upload-ring:hover {
+  border-color: #0066FF;
+  box-shadow: 0 0 0 4px rgba(0,102,255,0.20);
+}
+
+/* ==========================================================================
+   STAT CARDS — LIGHT PREMIUM
+   ========================================================================== */
+.stat-card {
+  background: #ffffff;
+  border: 1.5px solid #dde8ff;
+  border-radius: 1rem;
+  box-shadow: 0 2px 12px rgba(0,102,255,0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0,102,255,0.12);
+}
+html.dark .stat-card {
+  background: #111827;
+  border-color: rgba(255,255,255,0.07);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.30);
 }

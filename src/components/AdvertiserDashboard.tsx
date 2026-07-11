@@ -1,36 +1,43 @@
 import React from "react";
-import { 
-  User, 
-  Task, 
-  TaskSubmission, 
-  Transaction, 
-  TaskStatus, 
+import {
+  User,
+  Task,
+  TaskSubmission,
+  Transaction,
+  TaskStatus,
   SubmissionStatus,
   TransactionStatus,
-  TransactionType,
   TASK_ACTIONS
 } from "../types";
 import { usePlatforms } from "../lib/platformsStore";
 import PlatformIcon from "./PlatformIcon";
-import { 
-  LayoutDashboard, 
-  PlusCircle, 
-  Briefcase, 
-  CheckSquare, 
-  History, 
-  Wallet, 
-  DollarSign, 
-  Play, 
-  Pause, 
-  Trash2, 
-  Check, 
-  X, 
-  ArrowUpRight, 
-  Info, 
-  Layers, 
-  ExternalLink,
+import {
+  LayoutDashboard,
+  PlusCircle,
+  Briefcase,
+  CheckSquare,
+  History,
+  Wallet,
+  Play,
+  Pause,
+  Trash2,
+  Check,
+  X,
+  Info,
   ChevronRight,
-  ZoomIn
+  ZoomIn,
+  UserCircle,
+  Camera,
+  Bell,
+  Shield,
+  LogOut,
+  Save,
+  Eye,
+  EyeOff,
+  TrendingUp,
+  Target,
+  ArrowUpRight,
+  RefreshCw
 } from "lucide-react";
 
 interface AdvertiserDashboardProps {
@@ -41,10 +48,24 @@ interface AdvertiserDashboardProps {
   apiFetch: (endpoint: string, options?: RequestInit) => Promise<any>;
 }
 
-export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, onOpenDeposit, apiFetch }: AdvertiserDashboardProps) {
-  const [activeTab, setActiveTab] = React.useState<"overview" | "create" | "manage" | "audit" | "transactions">("overview");
+type Tab = "overview" | "create" | "manage" | "audit" | "transactions" | "profile";
 
-  // Dashboard Stats State
+const COUNTRIES = [
+  "Nigeria", "Ghana", "Kenya", "South Africa", "Uganda", "Tanzania", "Rwanda",
+  "Cameroon", "Senegal", "Ivory Coast", "United States", "United Kingdom",
+  "Canada", "Australia", "India", "Germany", "France", "Netherlands", "Other"
+];
+
+export default function AdvertiserDashboard({
+  user,
+  onRefreshUser,
+  onNavigate,
+  onOpenDeposit,
+  apiFetch
+}: AdvertiserDashboardProps) {
+  const [activeTab, setActiveTab] = React.useState<Tab>("overview");
+
+  // ── Dashboard Stats ──────────────────────────────────────────────────────
   const [stats, setStats] = React.useState({
     walletBalance: 0,
     totalSpent: 0,
@@ -56,98 +77,141 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
     recentTasks: [] as Task[]
   });
 
-  // Campaigns & Submissions list
+  // ── Campaigns, Submissions, Transactions ─────────────────────────────────
   const [campaigns, setCampaigns] = React.useState<Task[]>([]);
   const [submissions, setSubmissions] = React.useState<TaskSubmission[]>([]);
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
   const [pricingList, setPricingList] = React.useState<any[]>([]);
 
-  // Selected Submission for active auditing
+  // ── Audit ─────────────────────────────────────────────────────────────────
   const [auditingSub, setAuditingSub] = React.useState<TaskSubmission | null>(null);
   const [auditFeedback, setAuditFeedback] = React.useState("");
   const [auditSubmitting, setAuditSubmitting] = React.useState(false);
 
-  // Dynamic, admin-managed social media platforms (DB-driven, no hardcoding)
+  // ── Platforms ─────────────────────────────────────────────────────────────
   const { platforms } = usePlatforms();
 
-  // New Campaign Form State
+  // ── Campaign Form ─────────────────────────────────────────────────────────
   const [campaignForm, setCampaignForm] = React.useState({
     title: "",
     description: "",
-    platform: "", // populated once dynamic platforms load
+    platform: "",
     action: TASK_ACTIONS[0] as string,
     link: "",
     proofRequirements: "",
-    earningPerSlot: "15", // Default
+    earningPerSlot: "15",
     totalSlots: "100"
   });
   const [formError, setFormError] = React.useState("");
   const [formSuccess, setFormSuccess] = React.useState(false);
   const [formSubmitting, setFormSubmitting] = React.useState(false);
 
-  // Default the platform selector to the first active platform once loaded
+  // ── Profile Form ──────────────────────────────────────────────────────────
+  const [profileForm, setProfileForm] = React.useState({
+    name: user.name || "",
+    username: user.username || "",
+    email: user.email || "",
+    phone: user.phone || "",
+    country: user.country || "",
+    businessName: user.businessName || "",
+    photoUrl: user.photoUrl || "",
+    twoFactorEnabled: user.twoFactorEnabled || false,
+    notificationPrefs: user.notificationPrefs || {
+      emailNotifications: true,
+      campaignUpdates: true,
+      transactionAlerts: true
+    }
+  });
+  const [profileSaving, setProfileSaving] = React.useState(false);
+  const [profileSuccess, setProfileSuccess] = React.useState("");
+  const [profileError, setProfileError] = React.useState("");
+
+  // Password change form
+  const [pwForm, setPwForm] = React.useState({ current: "", next: "", confirm: "" });
+  const [showPw, setShowPw] = React.useState({ current: false, next: false, confirm: false });
+  const [pwSaving, setPwSaving] = React.useState(false);
+  const [pwError, setPwError] = React.useState("");
+  const [pwSuccess, setPwSuccess] = React.useState("");
+
+  // Delete account
+  const [deleteConfirmPw, setDeleteConfirmPw] = React.useState("");
+  const [showDeleteModal, setShowDeleteModal] = React.useState(false);
+  const [deleteLoading, setDeleteLoading] = React.useState(false);
+
+  // Photo preview
+  const photoInputRef = React.useRef<HTMLInputElement>(null);
+
+  // ── Calculations ──────────────────────────────────────────────────────────
+  const category = campaignForm.platform
+    ? `${campaignForm.platform} ${campaignForm.action}`
+    : "";
+  const matchingPricing = pricingList.find(p => p.platform === campaignForm.platform);
+  const earningVal = matchingPricing
+    ? matchingPricing.earningPerSlot
+    : (parseFloat(campaignForm.earningPerSlot) || 0);
+  const slotsVal = parseInt(campaignForm.totalSlots) || 0;
+  const costPerSlot = matchingPricing
+    ? matchingPricing.costPerSlot
+    : Math.ceil(earningVal * 1.35);
+  const totalCost = costPerSlot * slotsVal;
+
+  // ── Default platform once loaded ──────────────────────────────────────────
   React.useEffect(() => {
     if (!campaignForm.platform && platforms.length > 0) {
-      setCampaignForm((f) => ({ ...f, platform: platforms[0].name }));
+      setCampaignForm(f => ({ ...f, platform: platforms[0].name }));
     }
   }, [platforms]);
 
-  // Auto Calculations
-  const category = campaignForm.platform ? `${campaignForm.platform} ${campaignForm.action}` : "";
-  const matchingPricing = pricingList.find(p => p.platform === campaignForm.platform);
-  const earningVal = matchingPricing ? matchingPricing.earningPerSlot : (parseFloat(campaignForm.earningPerSlot) || 0);
-  const slotsVal = parseInt(campaignForm.totalSlots) || 0;
-  const costPerSlot = matchingPricing ? matchingPricing.costPerSlot : Math.ceil(earningVal * 1.35); // 35% commission markup
-  const totalCost = costPerSlot * slotsVal;
+  // ── Sync profile form when user updates ───────────────────────────────────
+  React.useEffect(() => {
+    setProfileForm(prev => ({
+      ...prev,
+      name: user.name || "",
+      username: user.username || "",
+      email: user.email || "",
+      phone: user.phone || "",
+      country: user.country || "",
+      businessName: user.businessName || "",
+      photoUrl: user.photoUrl || "",
+      twoFactorEnabled: user.twoFactorEnabled || false,
+      notificationPrefs: user.notificationPrefs || prev.notificationPrefs
+    }));
+  }, [user]);
 
-  // Fetch stats & data
+  // ── API Fetchers ──────────────────────────────────────────────────────────
   const fetchStats = async () => {
     try {
       const data = await apiFetch("/api/advertiser/dashboard");
-      if (data && !data.error) {
-        setStats(data);
-      }
-    } catch (e) {
-      console.error(e);
-    }
+      if (data && !data.error) setStats(data);
+    } catch (e) { console.error(e); }
   };
 
   const fetchCampaigns = async () => {
     try {
       const data = await apiFetch("/api/advertiser/tasks");
-      if (Array.isArray(data)) {
-        setCampaigns(data);
-      }
+      if (Array.isArray(data)) setCampaigns(data);
     } catch (e) {}
   };
 
   const fetchSubmissions = async () => {
     try {
       const data = await apiFetch("/api/advertiser/submissions");
-      if (Array.isArray(data)) {
-        setSubmissions(data);
-      }
+      if (Array.isArray(data)) setSubmissions(data);
     } catch (e) {}
   };
 
   const fetchTransactions = async () => {
     try {
       const data = await apiFetch("/api/user/transactions");
-      if (Array.isArray(data)) {
-        setTransactions(data);
-      }
+      if (Array.isArray(data)) setTransactions(data);
     } catch (e) {}
   };
 
   const fetchPricing = async () => {
     try {
       const data = await apiFetch("/api/pricing");
-      if (Array.isArray(data)) {
-        setPricingList(data);
-      }
-    } catch (e) {
-      console.error(e);
-    }
+      if (Array.isArray(data)) setPricingList(data);
+    } catch (e) {}
   };
 
   React.useEffect(() => {
@@ -163,23 +227,20 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
     if (activeTab === "transactions") fetchTransactions();
   }, [activeTab]);
 
-  // Campaign create handler
+  // ── Campaign Create ───────────────────────────────────────────────────────
   const handleCreateCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!campaignForm.title || !campaignForm.description || !campaignForm.link || !campaignForm.proofRequirements) {
-      setFormError("All campaign builder fields are required.");
+      setFormError("All campaign fields are required.");
       return;
     }
-
     if (totalCost > user.walletBalance) {
-      setFormError(`Insufficient balance. This campaign costs ₦${totalCost.toLocaleString()}. Please fund your advertiser wallet.`);
+      setFormError(`Insufficient balance. This campaign costs ₦${totalCost.toLocaleString()}. Please fund your wallet.`);
       return;
     }
-
     setFormSubmitting(true);
     setFormError("");
     setFormSuccess(false);
-
     try {
       const res = await apiFetch("/api/advertiser/tasks", {
         method: "POST",
@@ -187,16 +248,15 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
         body: JSON.stringify({
           title: campaignForm.title,
           description: campaignForm.description,
-          category: category,
+          category,
           proofRequirements: campaignForm.proofRequirements,
           link: campaignForm.link,
-          costPerSlot: costPerSlot,
+          costPerSlot,
           earningPerSlot: earningVal,
           totalSlots: campaignForm.totalSlots
         })
       });
-
-      if (res && res.error) {
+      if (res?.error) {
         setFormError(res.error);
       } else {
         setFormSuccess(true);
@@ -211,201 +271,301 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
           totalSlots: "100"
         });
         onRefreshUser();
-        setTimeout(() => {
-          setFormSuccess(false);
-          setActiveTab("manage");
-        }, 3000);
+        setTimeout(() => { setFormSuccess(false); setActiveTab("manage"); }, 3000);
       }
     } catch (e) {
-      setFormError("Platform error. Failed to create advertiser campaign.");
+      setFormError("Failed to create campaign. Please try again.");
     } finally {
       setFormSubmitting(false);
     }
   };
 
-  // Toggle Campaign status Active/Paused
+  // ── Campaign Toggle & Delete ──────────────────────────────────────────────
   const handleToggleStatus = async (taskId: string) => {
     try {
-      const res = await apiFetch(`/api/advertiser/tasks/${taskId}/toggle`, {
-        method: "POST"
-      });
-      if (res && res.success) {
-        fetchCampaigns();
-      }
+      const res = await apiFetch(`/api/advertiser/tasks/${taskId}/toggle`, { method: "POST" });
+      if (res?.success) fetchCampaigns();
     } catch (e) {}
   };
 
-  // Delete Campaign with refund
   const handleDeleteCampaign = async (taskId: string) => {
-    if (!window.confirm("Are you sure you want to delete this campaign? Unused slots will be immediately refunded back to your wallet!")) return;
+    if (!window.confirm("Delete this campaign? Unused budget will be refunded to your wallet.")) return;
     try {
-      const res = await apiFetch(`/api/advertiser/tasks/${taskId}`, {
-        method: "DELETE"
-      });
-      if (res && res.success) {
+      const res = await apiFetch(`/api/advertiser/tasks/${taskId}`, { method: "DELETE" });
+      if (res?.success) {
         onRefreshUser();
         fetchCampaigns();
-        alert(`Campaign deleted! Refund of ₦${res.refundedAmount.toLocaleString()} credited to your wallet.`);
+        alert(`Campaign deleted. ₦${res.refundedAmount?.toLocaleString() || 0} refunded to wallet.`);
       }
     } catch (e) {}
   };
 
-  // Audit review (Approve / Reject)
+  // ── Audit Review ──────────────────────────────────────────────────────────
   const handleReviewSubmission = async (status: "Approved" | "Rejected") => {
     if (!auditingSub) return;
     setAuditSubmitting(true);
-
     try {
       const res = await apiFetch(`/api/advertiser/submissions/${auditingSub.id}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status,
-          feedback: auditFeedback
-        })
+        body: JSON.stringify({ status, feedback: auditFeedback })
       });
-
-      if (res && res.success) {
+      if (res?.success) {
         setAuditingSub(null);
         setAuditFeedback("");
         fetchSubmissions();
         fetchStats();
       } else {
-        alert(res.error || "Review audit failed");
+        alert(res?.error || "Review failed");
       }
     } catch (e) {
-      alert("Error submitting review audit.");
+      alert("Error submitting review.");
     } finally {
       setAuditSubmitting(false);
     }
   };
 
+  // ── Profile Save ──────────────────────────────────────────────────────────
+  const handleSaveProfile = async () => {
+    setProfileSaving(true);
+    setProfileError("");
+    setProfileSuccess("");
+    try {
+      const res = await apiFetch("/api/user/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profileForm.name,
+          username: profileForm.username || undefined,
+          phone: profileForm.phone || undefined,
+          country: profileForm.country || undefined,
+          businessName: profileForm.businessName || undefined,
+          photoUrl: profileForm.photoUrl || undefined,
+          twoFactorEnabled: profileForm.twoFactorEnabled,
+          notificationPrefs: profileForm.notificationPrefs
+        })
+      });
+      if (res?.error) {
+        setProfileError(res.error);
+      } else {
+        setProfileSuccess("Profile saved successfully.");
+        onRefreshUser();
+        setTimeout(() => setProfileSuccess(""), 3000);
+      }
+    } catch (e) {
+      setProfileError("Failed to save profile. Please try again.");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  // ── Password Change ───────────────────────────────────────────────────────
+  const handleChangePassword = async () => {
+    setPwError("");
+    setPwSuccess("");
+    if (!pwForm.current || !pwForm.next) { setPwError("All password fields are required."); return; }
+    if (pwForm.next !== pwForm.confirm) { setPwError("New passwords do not match."); return; }
+    if (pwForm.next.length < 6) { setPwError("Password must be at least 6 characters."); return; }
+    setPwSaving(true);
+    try {
+      const res = await apiFetch("/api/user/change-password", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next })
+      });
+      if (res?.error) {
+        setPwError(res.error);
+      } else {
+        setPwSuccess("Password changed successfully.");
+        setPwForm({ current: "", next: "", confirm: "" });
+        setTimeout(() => setPwSuccess(""), 3000);
+      }
+    } catch (e) {
+      setPwError("Failed to change password. Please try again.");
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
+  // ── Delete Account ────────────────────────────────────────────────────────
+  const handleDeleteAccount = async () => {
+    if (!deleteConfirmPw) return;
+    setDeleteLoading(true);
+    try {
+      const res = await apiFetch("/api/user/account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deleteConfirmPw })
+      });
+      if (res?.error) {
+        alert(res.error);
+      } else {
+        alert("Account deleted. You will be logged out.");
+        onNavigate("logout");
+      }
+    } catch (e) {
+      alert("Failed to delete account. Please try again.");
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteModal(false);
+    }
+  };
+
+  // ── Photo Upload Handler ──────────────────────────────────────────────────
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setProfileError("Photo must be under 2MB."); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setProfileForm(prev => ({ ...prev, photoUrl: result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ── Sidebar button helper ─────────────────────────────────────────────────
+  const navBtn = (tab: Tab, label: string, icon: React.ReactNode, badge?: string | number) => (
+    <button
+      onClick={() => setActiveTab(tab)}
+      className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
+        activeTab === tab
+          ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500"
+          : "text-slate-500 hover:bg-slate-50/50"
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        {icon}
+        {label}
+        {badge != null && Number(badge) > 0 && (
+          <span className="ml-1 rounded-full bg-blue-500 text-white text-[9px] font-black px-1.5 py-0.5">
+            {badge}
+          </span>
+        )}
+      </span>
+      <ChevronRight className="h-3.5 w-3.5 opacity-50" />
+    </button>
+  );
+
+  // ── Input field helper ────────────────────────────────────────────────────
+  const inputClass = "w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none";
+  const labelClass = "block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1";
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-      
-      {/* Sidebar Nav Panels */}
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+      {/* ── Sidebar ── */}
       <div className="lg:col-span-1 space-y-4">
-        
-        {/* Simple Wallet Widget */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white font-bold font-display text-xl shadow-xs">
-            {user.name.substring(0, 2).toUpperCase()}
+
+        {/* Profile Card */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm text-center">
+          {/* Avatar */}
+          <div className="relative inline-block">
+            {profileForm.photoUrl || user.photoUrl ? (
+              <img
+                src={profileForm.photoUrl || user.photoUrl}
+                alt="Profile"
+                className="mx-auto h-16 w-16 rounded-full object-cover border-4 border-blue-100"
+              />
+            ) : (
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border-4 border-blue-100 font-display text-xl font-black text-white"
+                style={{ background: "linear-gradient(135deg,#0066FF,#4f46e5)" }}>
+                {user.name.substring(0, 2).toUpperCase()}
+              </div>
+            )}
           </div>
           <h3 className="mt-3 text-sm font-bold text-slate-800">{user.name}</h3>
+          {user.businessName && (
+            <p className="text-[10px] text-slate-400 mt-0.5">{user.businessName}</p>
+          )}
           <p className="text-[10px] text-blue-600 font-semibold tracking-wider uppercase mt-1">Campaign Manager</p>
 
-          <div className="mt-4 rounded-2xl bg-slate-50 border border-slate-200 p-4">
-            <span className="block text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">My Ad Wallet Balance</span>
-            <span className="font-mono text-lg font-black text-slate-800">
+          {/* Wallet Balance */}
+          <div className="mt-4 rounded-xl border border-blue-100 p-3"
+            style={{ background: "linear-gradient(135deg,#eff5ff,#f0f4ff)" }}>
+            <span className="block text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">
+              Ad Wallet Balance
+            </span>
+            <span className="font-mono text-lg font-black text-blue-600">
               ₦{user.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </span>
           </div>
 
-          <button 
+          <button
             onClick={onOpenDeposit}
-            className="w-full mt-4 rounded-full bg-blue-500 hover:bg-blue-600 px-4 py-2.5 text-xs font-bold text-white transition-all shadow-xs cursor-pointer"
+            className="w-full mt-3 rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2.5 text-xs font-bold text-white transition-all shadow-sm cursor-pointer"
           >
-            💳 Fund Wallet (Naira)
+            💳 Fund Wallet
           </button>
         </div>
 
-        {/* Navigation buttons */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs space-y-1">
-          <button 
-            onClick={() => setActiveTab("overview")}
-            className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "overview" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-            }`}
-          >
-            <span className="flex items-center gap-2"><LayoutDashboard className="h-4 w-4 text-slate-400" /> Overview & Stats</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-          <button 
-            onClick={() => setActiveTab("create")}
-            className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "create" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-            }`}
-          >
-            <span className="flex items-center gap-2"><PlusCircle className="h-4 w-4 text-slate-400" /> Build Ad Campaign</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-          <button 
-            onClick={() => setActiveTab("manage")}
-            className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "manage" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-            }`}
-          >
-            <span className="flex items-center gap-2"><Briefcase className="h-4 w-4 text-slate-400" /> Manage Campaigns ({campaigns.length || stats.campaignsCount})</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-          <button 
-            onClick={() => setActiveTab("audit")}
-            className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "audit" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-            }`}
-          >
-            <span className="flex items-center gap-2"><CheckSquare className="h-4 w-4 text-slate-400" /> Auditing Desk ({stats.pendingSubmissionsCount})</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-          <button 
-            onClick={() => setActiveTab("transactions")}
-            className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "transactions" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-            }`}
-          >
-            <span className="flex items-center gap-2"><History className="h-4 w-4 text-slate-400" /> Ad Payment Records</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
+        {/* Navigation */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm space-y-1">
+          {navBtn("overview", "Overview & Stats", <LayoutDashboard className="h-4 w-4 text-slate-400" />)}
+          {navBtn("create", "Build Campaign", <PlusCircle className="h-4 w-4 text-slate-400" />)}
+          {navBtn("manage", `Manage Campaigns (${campaigns.length || stats.campaignsCount})`, <Briefcase className="h-4 w-4 text-slate-400" />)}
+          {navBtn("audit", "Auditing Desk", <CheckSquare className="h-4 w-4 text-slate-400" />, stats.pendingSubmissionsCount)}
+          {navBtn("transactions", "Payment Records", <History className="h-4 w-4 text-slate-400" />)}
+          {navBtn("profile", "Profile Settings", <UserCircle className="h-4 w-4 text-slate-400" />)}
         </div>
 
       </div>
 
-      {/* Main Panel Content Area */}
+      {/* ── Main Content ── */}
       <div className="lg:col-span-3 space-y-6">
-        
-        {/* TAB 1: OVERVIEW */}
+
+        {/* ─── TAB: OVERVIEW ─────────────────────────────────────────────── */}
         {activeTab === "overview" && (
           <div className="space-y-6">
-            
-            {/* Quick Metrics */}
+
+            {/* Stat Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Campaigns</span>
-                <span className="block font-mono text-xl font-extrabold text-gray-800 mt-1">{stats.campaignsCount}</span>
-              </div>
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <span className="block text-[10px] font-bold text-gray-400 uppercase">Active Now</span>
-                <span className="block font-mono text-xl font-extrabold text-blue-600 mt-1">{stats.activeCount}</span>
-              </div>
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Ad Spent</span>
-                <span className="block font-mono text-xl font-extrabold text-indigo-600 mt-1">₦{stats.totalSpent.toLocaleString()}</span>
-              </div>
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <span className="block text-[10px] font-bold text-gray-400 uppercase">Pending Audits</span>
-                <span className={`block font-mono text-xl font-extrabold mt-1 ${stats.pendingSubmissionsCount > 0 ? "text-amber-500 animate-pulse" : "text-gray-500"}`}>
-                  {stats.pendingSubmissionsCount}
-                </span>
+              {[
+                { label: "Total Campaigns", value: stats.campaignsCount, color: "text-slate-800", icon: <Briefcase className="h-5 w-5 text-blue-400" /> },
+                { label: "Active Now", value: stats.activeCount, color: "text-blue-600", icon: <Target className="h-5 w-5 text-blue-500" /> },
+                { label: "Total Ad Spend", value: `₦${stats.totalSpent.toLocaleString()}`, color: "text-blue-700", icon: <Wallet className="h-5 w-5 text-indigo-500" /> },
+                { label: "Pending Audits", value: stats.pendingSubmissionsCount, color: stats.pendingSubmissionsCount > 0 ? "text-amber-500" : "text-slate-400", icon: <CheckSquare className="h-5 w-5 text-amber-400" /> }
+              ].map((s, i) => (
+                <div key={i} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    {s.icon}
+                    <TrendingUp className="h-3 w-3 text-slate-300" />
+                  </div>
+                  <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide">{s.label}</span>
+                  <span className={`block font-mono text-xl font-extrabold mt-0.5 ${s.color}`}>{s.value}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Advertiser guidelines banner */}
+            <div className="rounded-2xl p-5 relative overflow-hidden"
+              style={{ background: "linear-gradient(135deg,#0066FF,#4f46e5)" }}>
+              <div className="absolute inset-0 opacity-10"
+                style={{ backgroundImage: "radial-gradient(circle at 80% 50%,white 0%,transparent 60%)" }} />
+              <div className="relative">
+                <h3 className="font-display text-sm font-bold text-white/80 uppercase tracking-widest flex items-center gap-2">
+                  <Info className="h-4 w-4" /> Submission Review Guidelines
+                </h3>
+                <p className="mt-2 text-xs text-white/70 leading-relaxed max-w-xl">
+                  Review incoming proofs within <strong className="text-white">48 hours</strong>. Submissions not reviewed within 72 hours are automatically approved and credited to earners by the system.
+                </p>
               </div>
             </div>
 
-            {/* Platform announcements / tips */}
-            <div className="rounded-2xl bg-indigo-900 text-white p-6 relative overflow-hidden">
-              <h3 className="font-display text-sm font-bold text-indigo-200 uppercase tracking-widest flex items-center gap-2">
-                <Info className="h-4 w-4" /> Advertiser Payout Guidelines
-              </h3>
-              <p className="mt-2 text-xs text-indigo-100 leading-relaxed max-w-xl">
-                Please audit incoming submission proofs within 48 hours. Submissions not reviewed within 72 hours will be automatically <strong>Approved and credited</strong> to earners by the system.
-              </p>
-            </div>
-
-            {/* Recent Campaigns Overview */}
+            {/* Recent Campaigns */}
             <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">My Recent Ad Campaigns</h3>
-              
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display text-sm font-bold text-gray-900">Recent Campaigns</h3>
+                <button
+                  onClick={() => setActiveTab("manage")}
+                  className="text-[10px] font-bold text-blue-600 flex items-center gap-1"
+                >
+                  View all <ArrowUpRight className="h-3 w-3" />
+                </button>
+              </div>
               {stats.recentTasks.length === 0 ? (
-                <div className="text-center py-6 text-xs text-gray-400">
-                  You haven't built any advertising campaigns yet. Click "Build Ad Campaign" to target organic users!
+                <div className="text-center py-8 text-xs text-gray-400">
+                  No campaigns yet. Click "Build Campaign" to get started.
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -415,15 +575,17 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                         <PlatformIcon category={task.category} size={14} showBg className="shrink-0" />
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-gray-800 line-clamp-1">{task.title}</p>
-                          <p className="text-[10px] text-gray-400 mt-0.5">{task.category} • Cost per action: ₦{task.costPerSlot}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            {task.category} · Budget: ₦{(task.costPerSlot * task.totalSlots).toLocaleString()}
+                          </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-gray-400 font-mono">Slots: {task.filledSlots}/{task.totalSlots}</span>
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] text-gray-400 font-mono">{task.filledSlots}/{task.totalSlots} slots</span>
                         <div className="mt-1">
                           <span className={`inline-block rounded-full px-2.5 py-0.5 text-[9px] font-black tracking-wider uppercase ${
                             task.status === TaskStatus.ACTIVE ? "bg-blue-50 text-blue-700" :
-                            task.status === TaskStatus.PAUSED ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-700"
+                            task.status === TaskStatus.PAUSED ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-500"
                           }`}>
                             {task.status}
                           </span>
@@ -438,243 +600,230 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
           </div>
         )}
 
-        {/* TAB 2: CREATE CAMPAIGN */}
+        {/* ─── TAB: CREATE CAMPAIGN ──────────────────────────────────────── */}
         {activeTab === "create" && (
           <div className="space-y-6">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-              <h3 className="font-display text-sm font-bold text-gray-900 mb-2">Build New Social Media Campaign</h3>
-              <p className="text-xs text-gray-400 mb-6">Create micro-engagement jobs targetting real Nigerian social media profiles.</p>
+              <h3 className="font-display text-sm font-bold text-gray-900 mb-1">Build New Ad Campaign</h3>
+              <p className="text-xs text-gray-400 mb-6">Create micro-engagement tasks targeting real Nigerian social media users.</p>
 
               {formSuccess ? (
-                <div className="rounded-xl bg-blue-50 border border-blue-100 p-6 text-center animate-fadeIn space-y-2">
+                <div className="rounded-xl border border-blue-100 p-6 text-center animate-fadeIn space-y-2"
+                  style={{ background: "#eff5ff" }}>
                   <p className="text-sm font-bold text-blue-800">🎉 Campaign Launched Successfully!</p>
-                  <p className="text-xs text-blue-600">The total cost has been deducted from your wallet, and tasks are live on earners dashboards immediately.</p>
+                  <p className="text-xs text-blue-600">Budget deducted from wallet. Tasks are now live on the platform.</p>
                 </div>
               ) : (
                 <form onSubmit={handleCreateCampaign} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
-                  {formError && <div className="md:col-span-2 text-xs font-bold text-red-600">{formError}</div>}
-                  
-                  {/* Left Column Inputs */}
+                  {formError && (
+                    <div className="md:col-span-2 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-xs font-bold text-red-600">
+                      {formError}
+                    </div>
+                  )}
+
+                  {/* Left Column */}
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Campaign Title</label>
-                      <input 
-                        type="text"
-                        required
-                        value={campaignForm.title}
-                        onChange={(e) => setCampaignForm({ ...campaignForm, title: e.target.value })}
-                        placeholder="e.g. Subscribe to TechNaija YouTube Channel"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none"
-                      />
+                      <label className={labelClass}>Campaign Title</label>
+                      <input type="text" required value={campaignForm.title}
+                        onChange={e => setCampaignForm({ ...campaignForm, title: e.target.value })}
+                        placeholder="e.g. Subscribe to TechNaija YouTube"
+                        className={inputClass} />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Social Media Platform</label>
+                        <label className={labelClass}>Platform</label>
                         <select
                           value={campaignForm.platform}
-                          onChange={(e) => {
+                          onChange={e => {
                             const plat = e.target.value;
-                            const matching = pricingList.find(p => p.platform === plat);
+                            const match = pricingList.find(p => p.platform === plat);
                             setCampaignForm({
                               ...campaignForm,
                               platform: plat,
-                              earningPerSlot: matching ? matching.earningPerSlot.toString() : campaignForm.earningPerSlot
+                              earningPerSlot: match ? match.earningPerSlot.toString() : campaignForm.earningPerSlot
                             });
                           }}
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none bg-white"
+                          className={inputClass}
                         >
-                          {platforms.length === 0 && <option value="">Loading platforms...</option>}
-                          {platforms.map((p) => (
-                            <option key={p.id} value={p.name}>{p.name}</option>
-                          ))}
+                          {platforms.length === 0 && <option value="">Loading...</option>}
+                          {platforms.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Action Type</label>
-                        <select
-                          value={campaignForm.action}
-                          onChange={(e) => setCampaignForm({ ...campaignForm, action: e.target.value })}
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none bg-white"
-                        >
-                          {TASK_ACTIONS.map((a) => (
-                            <option key={a} value={a}>{a}</option>
-                          ))}
+                        <label className={labelClass}>Action Type</label>
+                        <select value={campaignForm.action}
+                          onChange={e => setCampaignForm({ ...campaignForm, action: e.target.value })}
+                          className={inputClass}>
+                          {TASK_ACTIONS.map(a => <option key={a} value={a}>{a}</option>)}
                         </select>
                       </div>
                       <p className="col-span-2 text-[10px] text-slate-400 -mt-1">
-                        Task category will be listed as: <strong className="text-slate-600">{category || "—"}</strong>. New platforms added by the admin appear here automatically.
+                        Category: <strong className="text-slate-600">{category || "—"}</strong>
                       </p>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Target Account/Content Link</label>
-                      <input 
-                        type="url"
-                        required
-                        value={campaignForm.link}
-                        onChange={(e) => setCampaignForm({ ...campaignForm, link: e.target.value })}
-                        placeholder="https://youtube.com/c/technaija"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none font-mono"
-                      />
+                      <label className={labelClass}>Target Link / URL</label>
+                      <input type="url" required value={campaignForm.link}
+                        onChange={e => setCampaignForm({ ...campaignForm, link: e.target.value })}
+                        placeholder="https://youtube.com/c/channelname"
+                        className={`${inputClass} font-mono`} />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Instructions for Earner</label>
-                      <textarea
-                        required
-                        rows={4}
-                        value={campaignForm.description}
-                        onChange={(e) => setCampaignForm({ ...campaignForm, description: e.target.value })}
-                        placeholder="Step 1: Click YouTube link above. Step 2: Click subscribe. Step 3: Do not unsubscribe or your account will be penalised..."
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none"
-                      ></textarea>
+                      <label className={labelClass}>Task Instructions (for earners)</label>
+                      <textarea required rows={4} value={campaignForm.description}
+                        onChange={e => setCampaignForm({ ...campaignForm, description: e.target.value })}
+                        placeholder="Step 1: Open the link. Step 2: Click Subscribe. Step 3: Take a screenshot..."
+                        className={inputClass} />
                     </div>
                   </div>
 
-                  {/* Right Column Estimates & Costs */}
+                  {/* Right Column */}
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Proof Verification Required</label>
-                      <textarea
-                        required
-                        rows={3}
-                        value={campaignForm.proofRequirements}
-                        onChange={(e) => setCampaignForm({ ...campaignForm, proofRequirements: e.target.value })}
-                        placeholder="Specify: your channel name and screenshot showing subscribed status clearly."
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none"
-                      ></textarea>
+                      <label className={labelClass}>Proof Requirements</label>
+                      <textarea required rows={3} value={campaignForm.proofRequirements}
+                        onChange={e => setCampaignForm({ ...campaignForm, proofRequirements: e.target.value })}
+                        placeholder="Specify what proof earners must submit (e.g. screenshot showing subscribed status)."
+                        className={inputClass} />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
-                          Earner Payout (₦) {matchingPricing && "(Fixed)"}
+                        <label className={labelClass}>
+                          Task Reward (₦/slot) {matchingPricing && <span className="text-blue-500">· Fixed</span>}
                         </label>
-                        <input 
-                          type="number"
-                          required
-                          min={5}
+                        <input type="number" required min={5}
                           value={matchingPricing ? matchingPricing.earningPerSlot : campaignForm.earningPerSlot}
                           disabled={!!matchingPricing}
-                          onChange={(e) => setCampaignForm({ ...campaignForm, earningPerSlot: e.target.value })}
-                          className={`w-full rounded-xl border px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none font-mono ${
-                            matchingPricing ? "bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed" : "border-gray-200"
-                          }`}
-                        />
+                          onChange={e => setCampaignForm({ ...campaignForm, earningPerSlot: e.target.value })}
+                          className={`${inputClass} font-mono ${matchingPricing ? "opacity-60 cursor-not-allowed" : ""}`} />
+                        <p className="text-[9px] text-slate-400 mt-1">Automatically set by platform pricing</p>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Target Actions Slots</label>
-                        <input 
-                          type="number"
-                          required
-                          min={10}
-                          value={campaignForm.totalSlots}
-                          onChange={(e) => setCampaignForm({ ...campaignForm, totalSlots: e.target.value })}
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none font-mono"
-                        />
+                        <label className={labelClass}>Total Slots</label>
+                        <input type="number" required min={10} value={campaignForm.totalSlots}
+                          onChange={e => setCampaignForm({ ...campaignForm, totalSlots: e.target.value })}
+                          className={`${inputClass} font-mono`} />
+                        <p className="text-[9px] text-slate-400 mt-1">Min. 10 slots per campaign</p>
                       </div>
                     </div>
 
-                    {/* Estimator Card */}
-                    <div className="rounded-2xl bg-indigo-50 border border-indigo-100 p-4 space-y-3 font-mono text-xs text-indigo-900">
-                      <div className="flex justify-between">
-                        <span>Earner Payout per slot:</span>
-                        <span>₦{earningVal.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Platform Cost per slot (with ad tax):</span>
+                    {/* Budget Estimator */}
+                    <div className="rounded-xl border border-blue-100 p-4 space-y-2.5 font-mono text-xs"
+                      style={{ background: "#eff5ff" }}>
+                      <p className="font-sans text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">
+                        Campaign Budget Estimate
+                      </p>
+                      <div className="flex justify-between text-blue-700">
+                        <span>Platform cost per slot:</span>
                         <span className="font-bold">₦{costPerSlot.toLocaleString()}</span>
                       </div>
-                      <div className="border-t border-indigo-200/50 pt-2 flex justify-between font-bold text-sm">
-                        <span>Total Campaign Budget:</span>
-                        <span className="text-indigo-700">₦{totalCost.toLocaleString()}</span>
+                      <div className="flex justify-between text-blue-700">
+                        <span>Total slots:</span>
+                        <span className="font-bold">× {slotsVal.toLocaleString()}</span>
                       </div>
-                      <div className="text-[10px] text-indigo-500 font-sans leading-relaxed pt-1">
-                        *Wallet Balance after launch: <strong>₦{(user.walletBalance - totalCost).toLocaleString()}</strong>
+                      <div className="border-t border-blue-200/60 pt-2 flex justify-between font-bold text-sm text-blue-800">
+                        <span>Total Campaign Cost:</span>
+                        <span>₦{totalCost.toLocaleString()}</span>
+                      </div>
+                      <div className="text-[10px] text-blue-500 font-sans pt-0.5">
+                        Wallet after launch: <strong>₦{(user.walletBalance - totalCost).toLocaleString()}</strong>
                       </div>
                     </div>
 
                     <button
                       type="submit"
                       disabled={formSubmitting}
-                      className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 py-3 text-sm font-semibold text-white shadow hover:shadow-lg transition-all"
+                      className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-3 text-sm font-bold text-white shadow-sm hover:shadow-md transition-all disabled:opacity-60"
                     >
-                      {formSubmitting ? "Deducting Budget & Loading Tasks..." : `Authorize & Launch Campaign (₦${totalCost.toLocaleString()})`}
+                      {formSubmitting
+                        ? "Launching campaign..."
+                        : `Launch Campaign — ₦${totalCost.toLocaleString()}`}
                     </button>
                   </div>
-
                 </form>
               )}
             </div>
           </div>
         )}
 
-        {/* TAB 3: MANAGE CAMPAIGNS */}
+        {/* ─── TAB: MANAGE CAMPAIGNS ─────────────────────────────────────── */}
         {activeTab === "manage" && (
-          <div className="space-y-6">
+          <div className="space-y-4">
             <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">My Campaigns List</h3>
-              
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display text-sm font-bold text-gray-900">My Campaigns</h3>
+                <button onClick={fetchCampaigns} className="p-1.5 rounded-lg border border-gray-100 hover:bg-gray-50 text-gray-400 transition-colors">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
               {campaigns.length === 0 ? (
                 <div className="text-center py-12 text-xs text-gray-400">
-                  You haven't launched any ad campaigns yet.
+                  No campaigns yet. Click "Build Campaign" to launch your first ad.
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {campaigns.map((task, idx) => (
-                    <div key={idx} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                      <div>
-                        <span className="rounded bg-indigo-50 text-[9px] font-bold text-indigo-700 px-2 py-1 uppercase inline-flex items-center gap-1.5">
+                    <div key={idx} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:border-blue-100 transition-colors">
+                      <div className="min-w-0">
+                        <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase"
+                          style={{ background: "#eff5ff", color: "#0052cc" }}>
                           <PlatformIcon category={task.category} size={11} />
-                          <span>{task.category}</span>
+                          {task.category}
                         </span>
-                        <h4 className="font-display text-xs font-bold text-gray-800 mt-2">{task.title}</h4>
-                        <div className="flex items-center gap-4 text-[10px] text-gray-400 mt-1 font-mono">
-                          <span>Cost/Slot: ₦{task.costPerSlot}</span>
-                          <span>Earn/Slot: ₦{task.earningPerSlot}</span>
-                          <span>Budget: ₦{(task.costPerSlot * task.totalSlots).toLocaleString()}</span>
+                        <h4 className="font-display text-xs font-bold text-gray-800 mt-2 line-clamp-1">{task.title}</h4>
+                        <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-400 mt-1 font-mono">
+                          <span>Cost/slot: ₦{task.costPerSlot}</span>
+                          <span>Total budget: ₦{(task.costPerSlot * task.totalSlots).toLocaleString()}</span>
+                          <span>Slots: {task.filledSlots}/{task.totalSlots}</span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 shrink-0">
-                        
-                        {/* Progress */}
-                        <div className="text-right">
-                          <span className="block text-[10px] text-gray-400">Progress:</span>
-                          <span className="font-mono text-xs font-bold text-gray-800">
-                            {task.filledSlots} / {task.totalSlots}
-                          </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Progress bar */}
+                        <div className="hidden sm:block w-20">
+                          <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-blue-500 transition-all"
+                              style={{ width: `${task.totalSlots > 0 ? Math.min(100, (task.filledSlots / task.totalSlots) * 100) : 0}%` }}
+                            />
+                          </div>
+                          <p className="text-[9px] text-gray-400 text-right mt-0.5">
+                            {task.totalSlots > 0 ? Math.round((task.filledSlots / task.totalSlots) * 100) : 0}%
+                          </p>
                         </div>
 
-                        {/* Status badge */}
-                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                        <span className={`rounded-full px-2.5 py-0.5 text-[9px] font-bold ${
                           task.status === TaskStatus.ACTIVE ? "bg-blue-50 text-blue-700" :
-                          task.status === TaskStatus.PAUSED ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-700"
+                          task.status === TaskStatus.PAUSED ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"
                         }`}>
                           {task.status}
                         </span>
 
-                        {/* Action buttons (Pause/Play, Delete) */}
                         {task.status !== TaskStatus.COMPLETED && (
                           <button
                             onClick={() => handleToggleStatus(task.id)}
-                            className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-700"
-                            title={task.status === TaskStatus.ACTIVE ? "Pause Campaign" : "Resume Campaign"}
+                            className="p-1.5 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors"
+                            title={task.status === TaskStatus.ACTIVE ? "Pause" : "Resume"}
                           >
-                            {task.status === TaskStatus.ACTIVE ? <Pause className="h-4 w-4 text-amber-500" /> : <Play className="h-4 w-4 text-blue-500" />}
+                            {task.status === TaskStatus.ACTIVE
+                              ? <Pause className="h-3.5 w-3.5 text-amber-500" />
+                              : <Play className="h-3.5 w-3.5 text-blue-500" />}
                           </button>
                         )}
 
                         <button
                           onClick={() => handleDeleteCampaign(task.id)}
-                          className="p-1.5 rounded-lg border border-gray-200 hover:bg-red-50 text-red-600"
-                          title="Delete & Refund Unused Slots"
+                          className="p-1.5 rounded-lg border border-red-100 hover:bg-red-50 transition-colors"
+                          title="Delete & Refund"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5 text-red-500" />
                         </button>
-
                       </div>
                     </div>
                   ))}
@@ -684,119 +833,113 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
           </div>
         )}
 
-        {/* TAB 4: AUDITING DESK */}
+        {/* ─── TAB: AUDITING DESK ────────────────────────────────────────── */}
         {activeTab === "audit" && (
           <div className="space-y-6">
-            
-            {/* Auditing Modal overlay */}
+
+            {/* Audit Modal */}
             {auditingSub && (
-              <div className="rounded-2xl border border-indigo-200 bg-indigo-50/20 p-5 shadow-sm space-y-4 animate-fadeIn border-2">
+              <div className="rounded-2xl border-2 border-blue-200 bg-white p-5 shadow-sm space-y-4 animate-fadeIn">
                 <div className="flex justify-between items-start">
                   <div>
-                    <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[9px] font-bold text-indigo-800">
-                      Verification Auditing Portal
+                    <span className="rounded-full px-2.5 py-0.5 text-[9px] font-bold text-blue-700"
+                      style={{ background: "#dceaff" }}>
+                      Verification Portal
                     </span>
                     <h4 className="font-display text-sm font-bold text-gray-900 mt-1.5">{auditingSub.taskTitle}</h4>
-                    <p className="text-xs text-gray-400 mt-0.5">Submitted by Earner: <strong>{auditingSub.earnerName}</strong></p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Submitted by: <strong className="text-gray-600">{auditingSub.earnerName}</strong>
+                    </p>
                   </div>
-                  <button 
+                  <button
                     onClick={() => { setAuditingSub(null); setAuditFeedback(""); }}
-                    className="rounded-full bg-gray-200 hover:bg-gray-300 p-1 text-gray-700"
+                    className="rounded-full p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
                   >
-                    ✕
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Left Column Text proofs */}
-                  <div className="bg-white rounded-xl border border-gray-100 p-4 text-xs space-y-3.5">
+                  {/* Text proof */}
+                  <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 text-xs space-y-3">
                     <div>
-                      <p className="text-gray-400 uppercase font-bold text-[9px]">Submitted Proof Text Details:</p>
-                      <p className="font-mono bg-gray-50 rounded-lg p-3 text-gray-700 font-semibold mt-1">{auditingSub.proofText}</p>
+                      <p className="text-gray-400 uppercase font-bold text-[9px] mb-1">Submitted Proof:</p>
+                      <p className="font-mono bg-white rounded-lg p-3 text-gray-700 border border-gray-100 leading-relaxed">{auditingSub.proofText}</p>
                     </div>
-
-                    <div>
-                      <p className="text-gray-400 uppercase font-bold text-[9px]">Proof Actions Reward Payout:</p>
-                      <p className="font-mono text-sm font-bold text-blue-600 mt-0.5">₦{auditingSub.reward}</p>
-                    </div>
-
                     <div className="space-y-1.5">
                       <label className="block text-[10px] font-bold text-gray-500 uppercase">
-                        Audit Review Feedback Comment (Optional for rejections)
+                        Feedback (optional for rejections)
                       </label>
-                      <input 
-                        type="text"
-                        value={auditFeedback}
-                        onChange={(e) => setAuditFeedback(e.target.value)}
-                        placeholder="e.g. Follow was verified! / Unsubscribed detected."
-                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-indigo-500"
+                      <input
+                        type="text" value={auditFeedback}
+                        onChange={e => setAuditFeedback(e.target.value)}
+                        placeholder="e.g. Verified! / Proof doesn't match."
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
                       />
                     </div>
-
-                    <div className="flex gap-2 pt-2">
+                    <div className="flex gap-2 pt-1">
                       <button
                         onClick={() => handleReviewSubmission("Approved")}
                         disabled={auditSubmitting}
-                        className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white shadow flex items-center justify-center gap-1.5 cursor-pointer"
+                        className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all disabled:opacity-60"
                       >
-                        <Check className="h-4 w-4" /> Approve & Release Cash
+                        <Check className="h-3.5 w-3.5" /> Approve
                       </button>
                       <button
                         onClick={() => handleReviewSubmission("Rejected")}
                         disabled={auditSubmitting}
-                        className="w-full rounded-xl bg-red-600 hover:bg-red-700 py-2.5 text-xs font-bold text-white shadow flex items-center justify-center gap-1.5 cursor-pointer"
+                        className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 py-2.5 text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all disabled:opacity-60"
                       >
-                        <X className="h-4 w-4" /> Reject Proof Slot
+                        <X className="h-3.5 w-3.5" /> Reject
                       </button>
                     </div>
                   </div>
 
-                  {/* Right Column Screenshot Proof */}
-                  <div className="bg-white rounded-xl border border-gray-100 p-4 flex flex-col justify-between">
-                    <div>
-                      <p className="text-gray-400 uppercase font-bold text-[9px] mb-2">Submitted Screenshot Proof Image:</p>
-                      <div className="rounded-lg overflow-hidden border border-gray-100 h-44 relative bg-gray-50">
-                        <img 
-                          src={auditingSub.proofScreenshot} 
-                          alt="Screenshot Proof" 
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
+                  {/* Screenshot */}
+                  <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 flex flex-col gap-2">
+                    <p className="text-gray-400 uppercase font-bold text-[9px] mb-1">Screenshot Proof:</p>
+                    <div className="rounded-lg overflow-hidden border border-gray-100 h-44 bg-gray-100">
+                      <img
+                        src={auditingSub.proofScreenshot}
+                        alt="Proof"
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-contain"
+                      />
                     </div>
-                    <div className="text-[10px] text-gray-400 leading-relaxed mt-2 italic flex items-center gap-1">
-                      <ZoomIn className="h-3 w-3 text-indigo-500" /> Use standard inspection to verify social profile names match handle.
-                    </div>
+                    <p className="text-[10px] text-gray-400 italic flex items-center gap-1">
+                      <ZoomIn className="h-3 w-3 text-blue-400" />
+                      Verify social profile names match the submission handle.
+                    </p>
                   </div>
                 </div>
-
               </div>
             )}
 
-            {/* Submissions queue table */}
+            {/* Pending Queue */}
             <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Pending Proof Audit Requests</h3>
-              
+              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">
+                Pending Proofs ({submissions.filter(s => s.status === SubmissionStatus.PENDING).length})
+              </h3>
               {submissions.filter(s => s.status === SubmissionStatus.PENDING).length === 0 ? (
-                <div className="text-center py-12 text-xs text-gray-400">
-                  Excellent work! No pending earner proofs are awaiting your validation.
+                <div className="text-center py-10 text-xs text-gray-400">
+                  🎉 No pending proofs awaiting review.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-gray-100 text-gray-400 uppercase text-[9px] font-bold">
-                        <th className="py-2.5 px-1">Campaign Title</th>
-                        <th className="py-2.5 px-1">Earner Name</th>
-                        <th className="py-2.5 px-1">Submitted Date</th>
-                        <th className="py-2.5 px-1">Verification Text</th>
-                        <th className="py-2.5 px-1 text-right">Audit Action</th>
+                        <th className="py-2.5 px-1">Campaign</th>
+                        <th className="py-2.5 px-1">Submitted By</th>
+                        <th className="py-2.5 px-1">Date</th>
+                        <th className="py-2.5 px-1">Proof Summary</th>
+                        <th className="py-2.5 px-1 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {submissions.filter(s => s.status === SubmissionStatus.PENDING).map((sub, idx) => (
-                        <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50/50">
-                          <td className="py-3 px-1 font-bold text-gray-800 max-w-xs truncate">
+                        <tr key={idx} className="border-b border-gray-50 hover:bg-blue-50/30">
+                          <td className="py-3 px-1 font-bold text-gray-800 max-w-xs">
                             <div className="flex items-center gap-1.5">
                               <PlatformIcon category={sub.category} size={13} className="shrink-0" />
                               <span className="truncate">{sub.taskTitle}</span>
@@ -807,15 +950,11 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                           <td className="py-3 px-1 font-mono text-gray-500 max-w-xs truncate">{sub.proofText}</td>
                           <td className="py-3 px-1 text-right">
                             <button
-                              onClick={() => {
-                                setAuditingSub(sub);
-                                setTimeout(() => {
-                                  window.scrollBy({ top: 120, behavior: "smooth" });
-                                }, 100);
-                              }}
-                              className="rounded-lg bg-indigo-600 hover:bg-indigo-700 text-[10px] font-bold text-white px-2.5 py-1"
+                              onClick={() => { setAuditingSub(sub); setTimeout(() => window.scrollBy({ top: 120, behavior: "smooth" }), 100); }}
+                              className="rounded-lg px-2.5 py-1 text-[10px] font-bold text-white transition-all"
+                              style={{ background: "#0066FF" }}
                             >
-                              Audit Proof
+                              Review
                             </button>
                           </td>
                         </tr>
@@ -826,14 +965,11 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
               )}
             </div>
 
-            {/* Past Audited Submissions */}
+            {/* Audit History */}
             <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Past Audited History Logs</h3>
-              
+              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Audit History</h3>
               {submissions.filter(s => s.status !== SubmissionStatus.PENDING).length === 0 ? (
-                <div className="text-center py-6 text-xs text-gray-400">
-                  No historical audits are registered.
-                </div>
+                <div className="text-center py-6 text-xs text-gray-400">No past audits yet.</div>
               ) : (
                 <div className="space-y-2.5 max-h-80 overflow-y-auto">
                   {submissions.filter(s => s.status !== SubmissionStatus.PENDING).map((sub, idx) => (
@@ -842,11 +978,11 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                         <PlatformIcon category={sub.category} size={14} showBg className="shrink-0" />
                         <div className="min-w-0">
                           <p className="font-bold text-gray-800 line-clamp-1">{sub.taskTitle}</p>
-                          <p className="text-[10px] text-gray-400">Earner: {sub.earnerName} • Reviewed: {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                          <p className="text-[10px] text-gray-400">{sub.earnerName} · {new Date(sub.submittedAt).toLocaleDateString()}</p>
                         </div>
                       </div>
-                      <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                        sub.status === SubmissionStatus.APPROVED ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-700"
+                      <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${
+                        sub.status === SubmissionStatus.APPROVED ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-600"
                       }`}>
                         {sub.status}
                       </span>
@@ -859,15 +995,14 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
           </div>
         )}
 
-        {/* TAB 5: ADVERTISER TRANSACTIONS */}
+        {/* ─── TAB: TRANSACTIONS ─────────────────────────────────────────── */}
         {activeTab === "transactions" && (
           <div className="space-y-6">
             <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Wallet Transactions & Payment History</h3>
-              
+              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Payment & Transaction History</h3>
               {transactions.length === 0 ? (
                 <div className="text-center py-12 text-xs text-gray-400">
-                  No payment deposits or budget spendings registered in transaction logs.
+                  No transactions recorded yet.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -875,7 +1010,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                     <thead>
                       <tr className="border-b border-gray-100 text-gray-400 uppercase text-[9px] font-bold">
                         <th className="py-2.5 px-1">Description</th>
-                        <th className="py-2.5 px-1">Transaction Ref</th>
+                        <th className="py-2.5 px-1">Reference</th>
                         <th className="py-2.5 px-1">Type</th>
                         <th className="py-2.5 px-1">Amount</th>
                         <th className="py-2.5 px-1">Date</th>
@@ -884,16 +1019,19 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                     </thead>
                     <tbody>
                       {transactions.map((tx, idx) => (
-                        <tr key={idx} className="border-b border-gray-50">
+                        <tr key={idx} className="border-b border-gray-50 hover:bg-blue-50/20">
                           <td className="py-3 px-1 font-bold text-gray-800">{tx.description}</td>
                           <td className="py-3 px-1 font-mono text-[10px] text-gray-400">{tx.reference}</td>
                           <td className="py-3 px-1 text-gray-500">{tx.type}</td>
                           <td className="py-3 px-1 font-mono font-bold text-gray-800">₦{tx.amount.toLocaleString()}</td>
                           <td className="py-3 px-1 text-gray-400">{new Date(tx.createdAt).toLocaleDateString()}</td>
                           <td className="py-3 px-1">
-                            <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                              tx.status === TransactionStatus.SUCCESS || tx.status === TransactionStatus.APPROVED ? "bg-blue-50 text-blue-700" :
-                              tx.status === TransactionStatus.PENDING ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"
+                            <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${
+                              tx.status === TransactionStatus.SUCCESS || tx.status === TransactionStatus.APPROVED
+                                ? "bg-blue-50 text-blue-700"
+                                : tx.status === TransactionStatus.PENDING
+                                  ? "bg-amber-50 text-amber-700"
+                                  : "bg-red-50 text-red-600"
                             }`}>
                               {tx.status}
                             </span>
@@ -908,7 +1046,373 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
           </div>
         )}
 
+        {/* ─── TAB: PROFILE SETTINGS ─────────────────────────────────────── */}
+        {activeTab === "profile" && (
+          <div className="space-y-6">
+
+            {/* Profile Photo & Basic Info */}
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-5">
+                <UserCircle className="h-5 w-5 text-blue-500" />
+                <h3 className="font-display text-sm font-bold text-gray-900">Profile Information</h3>
+              </div>
+
+              {profileSuccess && (
+                <div className="mb-4 rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs font-bold text-blue-700 flex items-center gap-2">
+                  <Check className="h-4 w-4" /> {profileSuccess}
+                </div>
+              )}
+              {profileError && (
+                <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-xs font-bold text-red-600">
+                  {profileError}
+                </div>
+              )}
+
+              {/* Photo Upload */}
+              <div className="flex items-center gap-5 mb-6 pb-6 border-b border-gray-50">
+                <div className="relative shrink-0">
+                  {profileForm.photoUrl ? (
+                    <img
+                      src={profileForm.photoUrl}
+                      alt="Profile"
+                      className="h-20 w-20 rounded-full object-cover photo-upload-ring"
+                    />
+                  ) : (
+                    <div className="h-20 w-20 rounded-full flex items-center justify-center text-white font-display text-2xl font-black photo-upload-ring"
+                      style={{ background: "linear-gradient(135deg,#0066FF,#4f46e5)" }}>
+                      {user.name.substring(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => photoInputRef.current?.click()}
+                    className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-blue-600 flex items-center justify-center shadow-md hover:bg-blue-700 transition-colors"
+                    title="Change photo"
+                  >
+                    <Camera className="h-3.5 w-3.5 text-white" />
+                  </button>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoChange}
+                  />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-800">{user.name}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{user.email}</p>
+                  <button
+                    onClick={() => photoInputRef.current?.click()}
+                    className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700"
+                  >
+                    Change profile photo
+                  </button>
+                  <p className="text-[10px] text-gray-400 mt-0.5">JPG, PNG · Max 2MB</p>
+                </div>
+              </div>
+
+              {/* Form Fields */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className={labelClass}>Full Name *</label>
+                  <input
+                    type="text"
+                    value={profileForm.name}
+                    onChange={e => setProfileForm({ ...profileForm, name: e.target.value })}
+                    placeholder="Your full name"
+                    className={inputClass}
+                  />
+                </div>
+
+                <div>
+                  <label className={labelClass}>Username</label>
+                  <input
+                    type="text"
+                    value={profileForm.username}
+                    onChange={e => setProfileForm({ ...profileForm, username: e.target.value })}
+                    placeholder="e.g. technaija"
+                    className={inputClass}
+                  />
+                </div>
+
+                <div>
+                  <label className={labelClass}>Business / Company Name (optional)</label>
+                  <input
+                    type="text"
+                    value={profileForm.businessName}
+                    onChange={e => setProfileForm({ ...profileForm, businessName: e.target.value })}
+                    placeholder="e.g. TechNaija Digital"
+                    className={inputClass}
+                  />
+                </div>
+
+                <div>
+                  <label className={labelClass}>Email Address</label>
+                  <input
+                    type="email"
+                    value={profileForm.email}
+                    disabled
+                    className={`${inputClass} opacity-60 cursor-not-allowed`}
+                    title="Email cannot be changed directly"
+                  />
+                  <p className="text-[9px] text-gray-400 mt-1">Contact support to change email</p>
+                </div>
+
+                <div>
+                  <label className={labelClass}>Phone Number</label>
+                  <input
+                    type="tel"
+                    value={profileForm.phone}
+                    onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
+                    placeholder="e.g. +234 801 234 5678"
+                    className={inputClass}
+                  />
+                </div>
+
+                <div>
+                  <label className={labelClass}>Country</label>
+                  <select
+                    value={profileForm.country}
+                    onChange={e => setProfileForm({ ...profileForm, country: e.target.value })}
+                    className={inputClass}
+                  >
+                    <option value="">Select country</option>
+                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-5 flex justify-end">
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={profileSaving}
+                  className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-all disabled:opacity-60"
+                >
+                  <Save className="h-4 w-4" />
+                  {profileSaving ? "Saving…" : "Save Changes"}
+                </button>
+              </div>
+            </div>
+
+            {/* Security: 2FA */}
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-5">
+                <Shield className="h-5 w-5 text-blue-500" />
+                <h3 className="font-display text-sm font-bold text-gray-900">Security Settings</h3>
+              </div>
+
+              {/* 2FA Toggle */}
+              <div className="flex items-center justify-between p-4 rounded-xl border border-gray-100 bg-gray-50 mb-5">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Two-Factor Authentication</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Add an extra layer of security to your account</p>
+                </div>
+                <button
+                  onClick={() => setProfileForm(p => ({ ...p, twoFactorEnabled: !p.twoFactorEnabled }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    profileForm.twoFactorEnabled ? "bg-blue-600" : "bg-gray-200"
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    profileForm.twoFactorEnabled ? "translate-x-6" : "translate-x-1"
+                  }`} />
+                </button>
+              </div>
+
+              {/* Password Change */}
+              <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Change Password</h4>
+
+              {pwSuccess && (
+                <div className="mb-3 rounded-xl bg-blue-50 border border-blue-100 px-4 py-2.5 text-xs font-bold text-blue-700 flex items-center gap-2">
+                  <Check className="h-3.5 w-3.5" /> {pwSuccess}
+                </div>
+              )}
+              {pwError && (
+                <div className="mb-3 rounded-xl bg-red-50 border border-red-100 px-4 py-2.5 text-xs font-bold text-red-600">
+                  {pwError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {([
+                  { key: "current" as const, label: "Current Password", placeholder: "Enter current password" },
+                  { key: "next" as const, label: "New Password", placeholder: "Min. 6 characters" },
+                  { key: "confirm" as const, label: "Confirm New Password", placeholder: "Repeat new password" }
+                ] as const).map(field => (
+                  <div key={field.key}>
+                    <label className={labelClass}>{field.label}</label>
+                    <div className="relative">
+                      <input
+                        type={showPw[field.key] ? "text" : "password"}
+                        value={pwForm[field.key]}
+                        onChange={e => setPwForm(p => ({ ...p, [field.key]: e.target.value }))}
+                        placeholder={field.placeholder}
+                        className={`${inputClass} pr-10`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPw(p => ({ ...p, [field.key]: !p[field.key] }))}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        {showPw[field.key] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={handleChangePassword}
+                  disabled={pwSaving}
+                  className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2.5 text-xs font-bold text-white transition-all disabled:opacity-60"
+                >
+                  <Shield className="h-3.5 w-3.5" />
+                  {pwSaving ? "Updating…" : "Update Password"}
+                </button>
+              </div>
+            </div>
+
+            {/* Notifications */}
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-5">
+                <Bell className="h-5 w-5 text-blue-500" />
+                <h3 className="font-display text-sm font-bold text-gray-900">Notification Preferences</h3>
+              </div>
+              <div className="space-y-3">
+                {([
+                  { key: "emailNotifications" as const, label: "Email Notifications", desc: "Receive important updates by email" },
+                  { key: "campaignUpdates" as const, label: "Campaign Updates", desc: "Alerts when your campaigns change status" },
+                  { key: "transactionAlerts" as const, label: "Transaction Alerts", desc: "Notifications for deposits and spending" }
+                ] as const).map(pref => (
+                  <div key={pref.key} className="flex items-center justify-between p-4 rounded-xl border border-gray-100 bg-gray-50">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">{pref.label}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{pref.desc}</p>
+                    </div>
+                    <button
+                      onClick={() => setProfileForm(p => ({
+                        ...p,
+                        notificationPrefs: {
+                          ...p.notificationPrefs,
+                          [pref.key]: !p.notificationPrefs[pref.key]
+                        }
+                      }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        profileForm.notificationPrefs[pref.key] ? "bg-blue-600" : "bg-gray-200"
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        profileForm.notificationPrefs[pref.key] ? "translate-x-6" : "translate-x-1"
+                      }`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={profileSaving}
+                  className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2.5 text-xs font-bold text-white transition-all disabled:opacity-60"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  {profileSaving ? "Saving…" : "Save Preferences"}
+                </button>
+              </div>
+            </div>
+
+            {/* Wallet History (quick view) */}
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-5 w-5 text-blue-500" />
+                  <h3 className="font-display text-sm font-bold text-gray-900">Wallet Transaction History</h3>
+                </div>
+                <button
+                  onClick={() => setActiveTab("transactions")}
+                  className="text-xs font-bold text-blue-600 hover:underline"
+                >
+                  View all →
+                </button>
+              </div>
+              {transactions.length === 0 ? (
+                <p className="text-center py-6 text-xs text-gray-400">No transactions yet.</p>
+              ) : (
+                <div className="space-y-2 max-h-56 overflow-y-auto">
+                  {transactions.slice(0, 8).map((tx, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs py-2 border-b border-gray-50">
+                      <div>
+                        <p className="font-semibold text-gray-700 line-clamp-1">{tx.description}</p>
+                        <p className="text-[10px] text-gray-400">{new Date(tx.createdAt).toLocaleDateString()} · {tx.type}</p>
+                      </div>
+                      <span className={`font-mono font-bold ${
+                        tx.type === "Campaign Spend" ? "text-red-500" : "text-blue-600"
+                      }`}>
+                        {tx.type === "Campaign Spend" ? "-" : "+"}₦{tx.amount.toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Danger Zone: Delete Account */}
+            <div className="rounded-2xl border border-red-100 bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <LogOut className="h-5 w-5 text-red-500" />
+                <h3 className="font-display text-sm font-bold text-red-700">Danger Zone</h3>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">
+                Permanently delete your advertiser account and all associated data. This action <strong>cannot be undone</strong>.
+                Active campaigns will be stopped and unused budget may be forfeited.
+              </p>
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="rounded-xl border border-red-200 px-5 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
+              >
+                Delete My Account
+              </button>
+            </div>
+
+          </div>
+        )}
+
       </div>
+
+      {/* ── Delete Account Modal ── */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl border border-red-100 p-6 w-full max-w-sm mx-4 shadow-xl">
+            <h3 className="font-display text-base font-bold text-gray-900 mb-1">Delete Account</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Enter your password to confirm. This is permanent and cannot be reversed.
+            </p>
+            <input
+              type="password"
+              value={deleteConfirmPw}
+              onChange={e => setDeleteConfirmPw(e.target.value)}
+              placeholder="Confirm your password"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-4 focus:outline-none focus:border-red-400"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowDeleteModal(false); setDeleteConfirmPw(""); }}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteLoading || !deleteConfirmPw}
+                className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 py-2.5 text-xs font-bold text-white transition-all disabled:opacity-60"
+              >
+                {deleteLoading ? "Deleting…" : "Yes, Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

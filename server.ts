@@ -55,6 +55,10 @@ function mapUser(row: any) {
   const isActivated = role !== "Earner"
     ? true
     : (row.is_activated === true || row.is_activated === "true");
+  let notificationPrefs = row.notification_prefs;
+  if (typeof notificationPrefs === "string") {
+    try { notificationPrefs = JSON.parse(notificationPrefs); } catch (e) {}
+  }
   return {
     id: row.id,
     name: row.name,
@@ -77,7 +81,19 @@ function mapUser(row: any) {
       ? (row.verification_code_last_sent instanceof Date
           ? row.verification_code_last_sent.toISOString()
           : row.verification_code_last_sent)
-      : undefined
+      : undefined,
+    // Extended profile fields
+    username: row.username || undefined,
+    phone: row.phone || undefined,
+    country: row.country || undefined,
+    businessName: row.business_name || undefined,
+    photoUrl: row.photo_url || undefined,
+    twoFactorEnabled: row.two_factor_enabled === true || row.two_factor_enabled === "true" || false,
+    notificationPrefs: notificationPrefs || {
+      emailNotifications: true,
+      campaignUpdates: true,
+      transactionAlerts: true
+    }
   };
 }
 
@@ -497,6 +513,15 @@ async function bootstrapTables() {
     await client.query(`
       ALTER TABLE social_platforms ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL
     `);
+
+    // 17. Migrate: extended profile columns for users
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100) NULL`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30) NULL`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS country VARCHAR(100) NULL`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_name VARCHAR(200) NULL`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT NULL`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs JSONB NULL`);
 
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
@@ -2256,6 +2281,107 @@ app.get("/api/user/transactions", async (req, res) => {
     const result = await pool.query("SELECT * FROM transactions WHERE user_id=$1 ORDER BY created_at DESC", [user.id]);
     res.json(result.rows.map(mapTransaction));
   } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// ─── User Profile API ──────────────────────────────────────────────────────
+
+app.put("/api/user/profile", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+    const { name, username, phone, country, businessName, photoUrl, twoFactorEnabled, notificationPrefs } = req.body;
+
+    // Validate username uniqueness if provided
+    if (username && username !== user.username) {
+      const existing = await pool.query("SELECT id FROM users WHERE username=$1 AND id!=$2", [username.trim(), user.id]);
+      if (existing.rows.length > 0) return res.status(400).json({ error: "Username is already taken." });
+    }
+
+    const notifJson = notificationPrefs ? JSON.stringify(notificationPrefs) : null;
+
+    await pool.query(
+      `UPDATE users SET
+        name = COALESCE($1, name),
+        username = COALESCE($2, username),
+        phone = COALESCE($3, phone),
+        country = COALESCE($4, country),
+        business_name = COALESCE($5, business_name),
+        photo_url = COALESCE($6, photo_url),
+        two_factor_enabled = COALESCE($7, two_factor_enabled),
+        notification_prefs = COALESCE($8::jsonb, notification_prefs)
+      WHERE id = $9`,
+      [
+        name?.trim() || null,
+        username?.trim() || null,
+        phone?.trim() || null,
+        country?.trim() || null,
+        businessName?.trim() || null,
+        photoUrl?.trim() || null,
+        typeof twoFactorEnabled === "boolean" ? twoFactorEnabled : null,
+        notifJson,
+        user.id
+      ]
+    );
+
+    const updated = await pool.query("SELECT * FROM users WHERE id=$1", [user.id]);
+    const mappedUser = mapUser(updated.rows[0]);
+    const { password: _, verificationCode: __, verificationCodeExpires: ___, verificationCodeLastSent: ____, ...safe } = mappedUser;
+    res.json({ success: true, user: safe });
+  } catch (err) {
+    console.error("Profile update error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.put("/api/user/change-password", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: "Both current and new password are required." });
+    if (newPassword.length < 6) return res.status(400).json({ error: "New password must be at least 6 characters." });
+
+    if (user.password !== hashPassword(currentPassword)) {
+      return res.status(400).json({ error: "Current password is incorrect." });
+    }
+
+    await pool.query("UPDATE users SET password=$1 WHERE id=$2", [hashPassword(newPassword), user.id]);
+    res.json({ success: true, message: "Password updated successfully." });
+  } catch (err) {
+    console.error("Change password error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.delete("/api/user/account", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    if (user.role === "Admin") return res.status(403).json({ error: "Admin accounts cannot be deleted." });
+
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ error: "Password confirmation required." });
+
+    if (user.password !== hashPassword(password)) {
+      return res.status(400).json({ error: "Password is incorrect." });
+    }
+
+    // Clean up user data
+    await pool.query("DELETE FROM submissions WHERE earner_id=$1", [user.id]);
+    await pool.query("DELETE FROM transactions WHERE user_id=$1", [user.id]);
+    await pool.query("DELETE FROM referrals WHERE referrer_id=$1 OR referee_id=$1", [user.id]);
+    if (user.role === "Advertiser") {
+      await pool.query("UPDATE tasks SET status='Completed' WHERE advertiser_id=$1 AND status='Active'", [user.id]);
+    }
+    await pool.query("DELETE FROM users WHERE id=$1", [user.id]);
+
+    res.json({ success: true, message: "Account deleted successfully." });
+  } catch (err) {
+    console.error("Delete account error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // ─── Admin API ────────────────────────────────────────────────────────────────

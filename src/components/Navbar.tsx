@@ -18,8 +18,8 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
   const navLinkClass = (view: string) =>
     `text-sm font-medium transition-all cursor-pointer px-1 py-0.5 ${
       currentView === view
-        ? "text-[#60a5fa] font-semibold"
-        : "text-slate-400 hover:text-white"
+        ? isDarkMode ? "text-[#60a5fa] font-semibold" : "text-[#0066FF] font-semibold"
+        : isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-[#0066FF]"
     }`;
 
   const isActive = (view: string) => currentView === view;
@@ -29,11 +29,11 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
       id="app-header"
       className="sticky top-0 z-50 w-full"
       style={{
-        background: "rgba(11,18,32,0.94)",
+        background: isDarkMode ? "rgba(11,18,32,0.94)" : "rgba(255,255,255,0.96)",
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
-        boxShadow: "0 1px 40px rgba(0,0,0,0.50)"
+        borderBottom: isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1.5px solid #dde8ff",
+        boxShadow: isDarkMode ? "0 1px 40px rgba(0,0,0,0.50)" : "0 1px 20px rgba(0,102,255,0.08)"
       }}
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -71,8 +71,8 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
           <div className="flex flex-col justify-center">
             <div className="flex items-baseline gap-0">
               <span
-                className="font-bold text-white"
-                style={{ fontFamily: "var(--font-display)", fontSize: "1.0625rem", letterSpacing: "-0.03em", lineHeight: 1 }}
+                className="font-bold"
+                style={{ fontFamily: "var(--font-display)", fontSize: "1.0625rem", letterSpacing: "-0.03em", lineHeight: 1, color: isDarkMode ? "#ffffff" : "#0f172a" }}
               >
                 Tasks
               </span>
