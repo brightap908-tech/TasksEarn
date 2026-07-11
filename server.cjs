@@ -1279,6 +1279,12 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user.isActive) {
+      return res.status(403).json({
+        error: "ACCOUNT_NOT_ACTIVATED",
+        message: "Your account is not activated. Pay \u20A6500 once to activate your account and start earning."
+      });
+    }
     const taskId = req.params.id;
     const { proofText, proofScreenshot } = req.body;
     if (!proofText) return res.status(400).json({ error: "Proof details are required" });
