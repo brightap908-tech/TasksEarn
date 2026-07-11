@@ -48,6 +48,23 @@ The server starts on port **5000** and serves both the Express API and the Vite 
 | `PAYSTACK_SECRET_KEY` | Optional | Required to accept real deposits |
 | `GEMINI_API_KEY` | Optional | AI features |
 
+## Theme
+
+- **Default**: Blue (#0066FF) and White light theme
+- **Dark Mode**: Available via the moon/sun toggle in the navbar; stored in `localStorage` as `"dark"/"light"`.
+- Theme is applied via `html.dark` class on the document root (set by `App.tsx`).
+
+## Advertiser Profile API
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/user/profile` | PUT | Update profile (name, username, phone, country, businessName, photoUrl, twoFactorEnabled, notificationPrefs) |
+| `/api/user/change-password` | PUT | Change password with current password verification |
+| `/api/user/account` | DELETE | Delete account with password confirmation |
+
+New user profile columns (auto-migrated on boot):
+`username`, `phone`, `country`, `business_name`, `photo_url`, `two_factor_enabled`, `notification_prefs` (JSONB)
+
 ## Demo Credentials
 
 | Role | Email | Password |
