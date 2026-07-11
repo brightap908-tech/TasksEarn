@@ -5,74 +5,79 @@
   --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Space Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  
-  --color-brand-50: rgba(59, 130, 246, 0.05);
-  --color-brand-100: rgba(59, 130, 246, 0.1);
+
+  /* Brand palette */
+  --color-brand-50:  rgba(59, 130, 246, 0.05);
+  --color-brand-100: rgba(59, 130, 246, 0.12);
   --color-brand-500: #3b82f6;
   --color-brand-600: #2563eb;
   --color-brand-700: #1d4ed8;
   --color-brand-900: #1e3a8a;
+
+  /* Surface tokens */
+  --surface-base:    #0b1220;
+  --surface-card:    #111827;
+  --surface-raised:  #1a2236;
+  --surface-float:   #1f2d45;
+  --surface-border:  rgba(255,255,255,0.07);
 }
 
-/* Base Body Design styling */
-body {
-  font-family: var(--font-sans);
-  background-color: #0b1220 !important;
-  color: #f9fafb !important;
-  overflow-x: hidden;
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-}
+/* ==========================================================================
+   BASE RESETS
+   ========================================================================== */
+*, *::before, *::after { box-sizing: border-box; }
 
-/* Force dark theme layout consistently across light state too */
 html, :root {
   background-color: #0b1220 !important;
   color-scheme: dark !important;
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: #0b1220;
-}
-::-webkit-scrollbar-thumb {
-  background: #1f2937;
-  border-radius: 9999px;
-  border: 2px solid #0b1220;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #374151;
+body {
+  font-family: var(--font-sans);
+  background-color: #0b1220 !important;
+  color: #f1f5f9 !important;
+  overflow-x: hidden;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* ==========================================================================
-   PREMIUM FINTECH DARK DESIGN SYSTEM (GLOBAL COMPONENT OVERRIDES)
+   SCROLLBAR
+   ========================================================================== */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0b1220; }
+::-webkit-scrollbar-thumb { background: #1e3a5f; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #2563eb; }
+
+/* ==========================================================================
+   SURFACE OVERRIDES — turn every white/light class dark
    ========================================================================== */
 
-/* Cards, Sections, and Modals */
-.bg-white, 
+/* Cards, panels, modals */
+.bg-white,
 [class*="bg-white"],
-.bg-slate-50, 
-.bg-gray-50, 
-.bg-slate-100\/50, 
+.bg-slate-50,
+.bg-gray-50,
+.bg-slate-100\/50,
+.bg-gray-50\/50,
+.bg-slate-50\/80,
+.bg-gray-50\/80,
+.bg-slate-50\/50,
 .bg-gray-50\/50,
 .rounded-2xl.border.bg-white,
 .rounded-3xl.border.bg-white {
   background-color: #111827 !important;
-  color: #f9fafb !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #f1f5f9 !important;
+  border-color: rgba(255,255,255,0.07) !important;
 }
 
-/* Cards Elevation and Subtle Borders */
-.rounded-2xl, .rounded-3xl, .rounded-xl {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-}
-.shadow-sm, .shadow-xs, .shadow-md, .shadow-lg, .shadow {
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5) !important;
+/* Sections with light backgrounds */
+.bg-slate-50,
+.bg-gray-50 {
+  background-color: #0d1626 !important;
 }
 
-/* Accent Containers (Deep Surfaces) */
+/* Inset accent surfaces */
 .bg-slate-100,
 .bg-gray-100,
 .bg-slate-200,
@@ -85,35 +90,11 @@ html, :root {
 .hover\:bg-gray-50:hover,
 .hover\:bg-slate-100:hover,
 .hover\:bg-gray-100:hover {
-  background-color: #1f2937 !important;
-  color: #f9fafb !important;
+  background-color: #1a2236 !important;
+  color: #f1f5f9 !important;
 }
 
-/* Primary text headings & labels */
-.text-slate-900,
-.text-gray-900,
-.text-slate-800,
-.text-gray-800,
-.text-slate-700,
-.text-gray-700 {
-  color: #f9fafb !important;
-}
-
-/* Secondary & caption texts */
-.text-slate-500,
-.text-gray-500,
-.text-slate-400,
-.text-gray-400 {
-  color: #9ca3af !important;
-}
-
-/* Tertiary & body text */
-.text-slate-600,
-.text-gray-600 {
-  color: #e5e7eb !important;
-}
-
-/* Universal Borders */
+/* Borders */
 .border-slate-200,
 .border-gray-200,
 .border-slate-100,
@@ -122,270 +103,348 @@ html, :root {
 .border-gray-300,
 .border-slate-100\/50,
 .border-slate-100/50,
-.border-slate-200\/80 {
-  border-color: rgba(255, 255, 255, 0.08) !important;
+.border-slate-200\/80,
+.border-gray-50,
+.border-slate-50 {
+  border-color: rgba(255,255,255,0.07) !important;
 }
 
-/* Inputs, Textareas, Select fields styling */
-input, 
-textarea, 
+/* ==========================================================================
+   TYPOGRAPHY
+   ========================================================================== */
+.text-slate-900, .text-gray-900,
+.text-slate-800, .text-gray-800,
+.text-slate-700, .text-gray-700 {
+  color: #f1f5f9 !important;
+}
+.text-slate-600, .text-gray-600 {
+  color: #cbd5e1 !important;
+}
+.text-slate-500, .text-gray-500,
+.text-slate-400, .text-gray-400 {
+  color: #94a3b8 !important;
+}
+
+/* ==========================================================================
+   INPUTS & FORMS
+   ========================================================================== */
+input,
+textarea,
 select {
-  background-color: #1f2937 !important;
-  color: #f9fafb !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background-color: #0f1e35 !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
   border-radius: 0.75rem !important;
   padding: 0.625rem 1rem !important;
   font-size: 0.875rem !important;
   outline: none !important;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transition: all 0.2s cubic-bezier(0.4,0,0.2,1) !important;
 }
-
-input:focus, 
-textarea:focus, 
-select:focus {
+input:focus, textarea:focus, select:focus {
   border-color: #3b82f6 !important;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15) !important;
-  background-color: #111827 !important;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important;
+  background-color: #0d1a2e !important;
+}
+input::placeholder, textarea::placeholder {
+  color: #475569 !important;
 }
 
-/* Modern Headers & Navigation Overrides */
+/* ==========================================================================
+   NAVIGATION HEADER
+   ========================================================================== */
 #app-header {
-  background-color: rgba(17, 24, 39, 0.8) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background-color: rgba(11,18,32,0.92) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+  box-shadow: 0 1px 40px rgba(0,0,0,0.4) !important;
 }
-
-#app-header span.text-slate-900 {
-  color: #f9fafb !important;
-}
-
-#brand-logo div {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
-}
-
-/* Navigation link enhancements */
+#app-header span.text-slate-900 { color: #f1f5f9 !important; }
 #app-header nav span {
   font-weight: 500 !important;
   transition: color 0.15s ease-in-out !important;
 }
 
+/* Mobile drawer */
 #mobile-nav-drawer {
-  background-color: #111827 !important;
-  border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background-color: #0e1729 !important;
+  border-left: 1px solid rgba(255,255,255,0.07) !important;
 }
+#mobile-nav-drawer span { color: #e2e8f0 !important; border-radius: 0.5rem !important; }
+#mobile-nav-drawer span:hover { background-color: #1a2236 !important; color: #60a5fa !important; }
 
-#mobile-nav-drawer span {
-  color: #e5e7eb !important;
-  border-radius: 0.5rem !important;
-}
-
-#mobile-nav-drawer span:hover {
-  background-color: #1f2937 !important;
-  color: #3b82f6 !important;
-}
-
-/* Sidebar Tab buttons styling (e.g. in Earner, Advertiser, Admin Dashboards) */
+/* ==========================================================================
+   SIDEBAR NAV BUTTONS (Dashboards)
+   ========================================================================== */
 button[class*="text-slate-500 hover:bg-slate-50"] {
-  color: #9ca3af !important;
+  color: #94a3b8 !important;
   border-radius: 0.75rem !important;
 }
-
 button[class*="text-slate-500 hover:bg-slate-50"]:hover {
-  background-color: rgba(255, 255, 255, 0.03) !important;
-  color: #f9fafb !important;
+  background-color: rgba(255,255,255,0.03) !important;
+  color: #f1f5f9 !important;
 }
 
-/* Active tabs inside menus */
-.bg-blue-50, 
-.bg-blue-50\/50, 
-.bg-blue-50/50, 
+/* Active sidebar tabs */
+.bg-blue-50,
+.bg-blue-50\/50,
+.bg-blue-50/50,
 [class*="bg-blue-50"] {
-  background-color: rgba(59, 130, 246, 0.08) !important;
-  color: #3b82f6 !important;
+  background-color: rgba(59,130,246,0.10) !important;
+  color: #60a5fa !important;
   border-right-color: #3b82f6 !important;
 }
 
-/* Dropdown menus & popovers */
-[class*="absolute right-0 mt-2 w-"], 
+/* ==========================================================================
+   DROPDOWN MENUS
+   ========================================================================== */
+[class*="absolute right-0 mt-2 w-"],
 [class*="dropdown-menu"] {
   background-color: #111827 !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6) !important;
-  border-radius: 0.75rem !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.7) !important;
+  border-radius: 0.875rem !important;
 }
 
-/* Tables Formatting */
-table {
-  border-collapse: collapse !important;
-  width: 100% !important;
-}
-
+/* ==========================================================================
+   TABLES
+   ========================================================================== */
+table { border-collapse: collapse !important; width: 100% !important; }
 th {
-  background-color: rgba(255, 255, 255, 0.02) !important;
-  color: #9ca3af !important;
+  background-color: rgba(255,255,255,0.02) !important;
+  color: #64748b !important;
   font-weight: 600 !important;
   text-transform: uppercase !important;
-  font-size: 0.75rem !important;
-  letter-spacing: 0.05em !important;
+  font-size: 0.7rem !important;
+  letter-spacing: 0.08em !important;
   padding: 0.875rem 1rem !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.07) !important;
 }
-
 td {
   padding: 1rem !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
-  color: #f9fafb !important;
+  border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+  color: #e2e8f0 !important;
   font-size: 0.875rem !important;
 }
+tr:hover td { background-color: rgba(59,130,246,0.03) !important; }
 
-tr:hover td {
-  background-color: rgba(255, 255, 255, 0.02) !important;
-}
-
-/* Badges / Pill styling overrides */
+/* ==========================================================================
+   BADGES / PILLS
+   ========================================================================== */
 .bg-blue-50, .bg-blue-100 {
-  background-color: rgba(59, 130, 246, 0.1) !important;
-  color: #3b82f6 !important;
-  border: 1px solid rgba(59, 130, 246, 0.15) !important;
-}
-
-.bg-amber-50, .bg-amber-100 {
-  background-color: rgba(245, 158, 11, 0.1) !important;
-  color: #f59e0b !important;
-  border: 1px solid rgba(245, 158, 11, 0.15) !important;
-}
-
-.bg-indigo-50, .bg-indigo-100 {
-  background-color: rgba(99, 102, 241, 0.1) !important;
-  color: #818cf8 !important;
-  border: 1px solid rgba(99, 102, 241, 0.15) !important;
-}
-
-.bg-rose-50, .bg-rose-100 {
-  background-color: rgba(244, 63, 94, 0.1) !important;
-  color: #f43f5e !important;
-  border: 1px solid rgba(244, 63, 94, 0.15) !important;
-}
-
-.bg-blue-50, .bg-blue-100 {
-  background-color: rgba(59, 130, 246, 0.1) !important;
+  background-color: rgba(59,130,246,0.10) !important;
   color: #60a5fa !important;
-  border: 1px solid rgba(59, 130, 246, 0.15) !important;
+  border: 1px solid rgba(59,130,246,0.15) !important;
+}
+.bg-amber-50, .bg-amber-100 {
+  background-color: rgba(245,158,11,0.10) !important;
+  color: #fbbf24 !important;
+  border: 1px solid rgba(245,158,11,0.15) !important;
+}
+.bg-indigo-50, .bg-indigo-100 {
+  background-color: rgba(99,102,241,0.10) !important;
+  color: #818cf8 !important;
+  border: 1px solid rgba(99,102,241,0.15) !important;
+}
+.bg-rose-50, .bg-rose-100 {
+  background-color: rgba(244,63,94,0.10) !important;
+  color: #fb7185 !important;
+  border: 1px solid rgba(244,63,94,0.15) !important;
 }
 
-/* Buttons Enhancement */
+/* ==========================================================================
+   BUTTONS
+   ========================================================================== */
+
+/* Primary blue buttons */
 button.bg-blue-500,
+button.bg-blue-600,
 button.bg-brand-500,
 .bg-blue-500,
 .bg-blue-600 {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+  background: linear-gradient(135deg,#3b82f6 0%,#2563eb 100%) !important;
   color: #ffffff !important;
   border: none !important;
   font-weight: 600 !important;
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.2) !important;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow: 0 4px 16px rgba(37,99,235,0.30) !important;
+  transition: all 0.25s cubic-bezier(0.4,0,0.2,1) !important;
 }
-
 button.bg-blue-500:hover,
+button.bg-blue-600:hover,
 button.bg-brand-500:hover,
 .bg-blue-500:hover {
-  opacity: 0.95 !important;
+  opacity: 0.92 !important;
   transform: translateY(-1px) !important;
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.35) !important;
+  box-shadow: 0 8px 24px rgba(37,99,235,0.40) !important;
 }
-
 button.bg-blue-500:active,
-button.bg-brand-500:active {
-  transform: translateY(0px) !important;
-}
+button.bg-blue-600:active { transform: translateY(0) !important; }
 
-/* Secondary / Dark Buttons */
+/* Ghost / secondary buttons */
 button.bg-slate-100,
 button.bg-gray-100,
 button.bg-slate-200 {
-  background-color: #1f2937 !important;
-  color: #f9fafb !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background-color: #1a2236 !important;
+  color: #e2e8f0 !important;
+  border: 1px solid rgba(255,255,255,0.09) !important;
   transition: all 0.2s ease !important;
 }
-
 button.bg-slate-100:hover,
-button.bg-gray-100:hover {
-  background-color: #374151 !important;
-}
+button.bg-gray-100:hover { background-color: #243047 !important; }
 
-/* App Footer styles */
+/* ==========================================================================
+   FOOTER
+   ========================================================================== */
 #app-footer {
-  background-color: #070c16 !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background-color: #070d1a !important;
+  border-top: 1px solid rgba(255,255,255,0.06) !important;
 }
-
 #app-footer h4 {
-  color: #f9fafb !important;
+  color: #f1f5f9 !important;
   font-family: var(--font-display) !important;
-  letter-spacing: 0.05em !important;
+  letter-spacing: 0.04em !important;
+}
+#app-footer a, #app-footer span { color: #64748b !important; transition: color 0.15s ease !important; }
+#app-footer a:hover, #app-footer span:hover { color: #60a5fa !important; }
+
+/* ==========================================================================
+   MODALS & OVERLAYS
+   ========================================================================== */
+.fixed.inset-0.bg-slate-900\/50,
+.fixed.inset-0.bg-gray-900\/60 {
+  background-color: rgba(7,13,26,0.80) !important;
+  backdrop-filter: blur(10px) !important;
 }
 
-#app-footer a, 
-#app-footer span {
-  color: #9ca3af !important;
-  transition: color 0.15s ease !important;
-}
-
-#app-footer a:hover, 
-#app-footer span:hover {
-  color: #3b82f6 !important;
-}
-
-/* Search bar and Filters container */
-.bg-slate-50\/80, .bg-gray-50\/80 {
-  background-color: #111827 !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
-
-/* Modal Dialog overlay background */
-.fixed.inset-0.bg-slate-900\/50 {
-  background-color: rgba(7, 12, 22, 0.75) !important;
-  backdrop-filter: blur(8px) !important;
-}
-
-/* Toast alert notification box */
+/* ==========================================================================
+   TOAST NOTIFICATIONS
+   ========================================================================== */
 .fixed.bottom-6.right-6 {
   background-color: #111827 !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.6) !important;
   border-radius: 1rem !important;
 }
 
-/* Admin panel input settings rows */
+/* ==========================================================================
+   DIVIDERS
+   ========================================================================== */
 .divide-y > :not([hidden]) ~ :not([hidden]) {
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255,255,255,0.06) !important;
 }
 
-/* Verification Code Inputs */
+/* ==========================================================================
+   ALERT BANNERS
+   ========================================================================== */
+.bg-amber-500\/10 {
+  background-color: rgba(245,158,11,0.07) !important;
+  border-color: rgba(245,158,11,0.20) !important;
+  color: #fbbf24 !important;
+}
+.bg-blue-500\/10 {
+  background-color: rgba(59,130,246,0.07) !important;
+  border-color: rgba(59,130,246,0.20) !important;
+  color: #60a5fa !important;
+}
+
+/* ==========================================================================
+   OTP / VERIFICATION INPUTS
+   ========================================================================== */
 input[maxlength="1"] {
   font-size: 1.5rem !important;
   font-weight: 700 !important;
   text-align: center !important;
-  border-radius: 0.5rem !important;
+  border-radius: 0.75rem !important;
+  background-color: #0f1e35 !important;
+}
+input[maxlength="6"] {
+  letter-spacing: 0.35em !important;
 }
 
-/* Interactive hover scales */
-.hover\:scale-102:hover {
-  transform: scale(1.02) !important;
+/* ==========================================================================
+   INTERACTIVE STATES
+   ========================================================================== */
+.hover\:scale-102:hover { transform: scale(1.02) !important; }
+
+/* ==========================================================================
+   GLOW UTILITY
+   ========================================================================== */
+.glow-blue {
+  box-shadow: 0 0 30px rgba(59,130,246,0.20), 0 0 60px rgba(37,99,235,0.10);
+}
+.glow-sm {
+  box-shadow: 0 0 14px rgba(59,130,246,0.18);
 }
 
-/* Alert Boxes and Info Banners */
-.bg-amber-500\/10 {
-  background-color: rgba(245, 158, 11, 0.06) !important;
-  border-color: rgba(245, 158, 11, 0.2) !important;
-  color: #f59e0b !important;
+/* ==========================================================================
+   PREMIUM CARD TREATMENT
+   ========================================================================== */
+.premium-card {
+  background: linear-gradient(145deg,#111827,#0f1e35) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.04) !important;
+  border-radius: 1rem !important;
+}
+.premium-card:hover {
+  border-color: rgba(59,130,246,0.25) !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.50), 0 0 0 1px rgba(59,130,246,0.12), inset 0 1px 0 rgba(255,255,255,0.05) !important;
 }
 
-.bg-blue-500\/10 {
-  background-color: rgba(59, 130, 246, 0.06) !important;
-  border-color: rgba(59, 130, 246, 0.2) !important;
-  color: #3b82f6 !important;
+/* stat card standard */
+.rounded-2xl, .rounded-3xl, .rounded-xl {
+  border-color: rgba(255,255,255,0.07) !important;
+}
+.shadow-sm, .shadow-xs, .shadow-md, .shadow-lg, .shadow {
+  box-shadow: 0 8px 32px -8px rgba(0,0,0,0.50) !important;
+}
+
+/* ==========================================================================
+   PROSE / CONTENT AREAS
+   ========================================================================== */
+.prose { color: #cbd5e1 !important; }
+.prose h1,.prose h2,.prose h3 { color: #f1f5f9 !important; }
+.prose a { color: #60a5fa !important; }
+.prose strong { color: #e2e8f0 !important; }
+
+/* ==========================================================================
+   ANIMATIONS
+   ========================================================================== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn { animation: fadeIn 0.3s ease forwards; }
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg,transparent 25%,rgba(59,130,246,0.08) 50%,transparent 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2.4s ease infinite;
+}
+
+/* Hero background grid */
+.hero-grid {
+  background-image:
+    linear-gradient(rgba(59,130,246,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59,130,246,0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Glow orb decorations */
+.glow-orb-blue {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  background: radial-gradient(circle, rgba(37,99,235,0.30) 0%, transparent 70%);
+  pointer-events: none;
+}
+.glow-orb-indigo {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(100px);
+  background: radial-gradient(circle, rgba(99,102,241,0.20) 0%, transparent 70%);
+  pointer-events: none;
 }

@@ -1,9 +1,9 @@
 import React from "react";
-import { Mail, Phone, MapPin, Send, HelpCircle, ArrowRight, Shield, FileText } from "lucide-react";
+import { Mail, Phone, MapPin, Send, HelpCircle, ArrowRight, Shield, FileText, CheckCircle } from "lucide-react";
 import PlatformIcon from "./PlatformIcon";
 
 interface PublicPagesProps {
-  view: string; // "about" | "faq" | "contact" | "terms" | "privacy"
+  view: string;
   pagesContent: { [key: string]: { title: string; content: string } };
   settings: {
     contactEmail: string;
@@ -13,13 +13,30 @@ interface PublicPagesProps {
   };
 }
 
+const card: React.CSSProperties = {
+  background: "linear-gradient(145deg,#111827,#0f1e35)",
+  border: "1px solid rgba(255,255,255,0.07)",
+  boxShadow: "0 8px 32px rgba(0,0,0,0.40)",
+  borderRadius: "1rem",
+};
+
+const inputStyle: React.CSSProperties = {
+  background: "#0f1e35",
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: "0.75rem",
+  color: "#f1f5f9",
+  padding: "0.625rem 1rem",
+  fontSize: "0.875rem",
+  width: "100%",
+  outline: "none",
+};
+
 export default function PublicPages({ view, pagesContent, settings }: PublicPagesProps) {
   const page = pagesContent[view] || {
     title: view.toUpperCase(),
-    content: "Content is loading or not yet configured..."
+    content: "Content is loading or not yet configured...",
   };
 
-  // State for Contact Us form submission
   const [contactForm, setContactForm] = React.useState({ name: "", email: "", subject: "", message: "" });
   const [submitted, setSubmitted] = React.useState(false);
 
@@ -33,129 +50,157 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
     }, 4000);
   };
 
-  // FAQ List rendering
-  const getFaqs = () => {
-    return [
-      {
-        q: "What is TasksEarn and how does it work?",
-        a: "TasksEarn is a digital micro-job marketplace connecting advertisers with earners in Nigeria. Advertisers pay to get actions (follows, subscriptions, likes, shares, custom jobs), and Earners get paid in Nigerian Naira (₦) for completing those simple social media actions and uploading proof."
-      },
-      {
-        q: "How can I fund my Advertiser wallet?",
-        a: "Advertisers can instantly fund their wallets with secure payment gateways like Paystack or Flutterwave. We support Naira Debit cards, Bank Transfers, OPay, PalmPay, and Moniepoint payments. The minimum deposit is ₦1,000."
-      },
-      {
-        q: "What is the minimum withdrawal for Earners?",
-        a: "Earners can request a withdrawal to any Nigerian bank once their balance reaches ₦2,000. There is a standard flat gateway processing fee of ₦100 per withdrawal."
-      },
-      {
-        q: "How does the referral system work?",
-        a: "You get a custom referral code on your dashboard. When someone registers with your code and verifies their email, you immediately receive a ₦200 bonus in your wallet! There is no limit to how many referrals you can make."
-      },
-      {
-        q: "Why was my task proof rejected?",
-        a: "Task proofs are audited by advertisers and admins. A proof will be rejected if the username provided is wrong, if the screenshot is blurred/blank, or if you didn't complete the required action. Repeated fake submissions will result in account suspension."
-      }
-    ];
-  };
+  const faqs = [
+    {
+      q: "What is TasksEarn and how does it work?",
+      a: "TasksEarn is a digital micro-job marketplace connecting advertisers with earners in Nigeria. Advertisers pay to get actions (follows, subscriptions, likes, shares), and Earners get paid in Nigerian Naira (₦) for completing those social media actions and uploading proof.",
+    },
+    {
+      q: "How can I fund my Advertiser wallet?",
+      a: "Advertisers can instantly fund their wallets via Paystack or Flutterwave. We support Naira Debit cards, Bank Transfers, OPay, PalmPay, and Moniepoint. The minimum deposit is ₦1,000.",
+    },
+    {
+      q: "What is the minimum withdrawal for Earners?",
+      a: "Earners can request a withdrawal to any Nigerian bank once their balance reaches ₦2,000. There is a flat ₦100 gateway fee per withdrawal.",
+    },
+    {
+      q: "How does the referral system work?",
+      a: "Share your unique referral code. When someone registers with your code and verifies their email, you immediately receive ₦200 in your wallet. There is no referral limit.",
+    },
+    {
+      q: "Why was my task proof rejected?",
+      a: "Proofs are audited by advertisers and admins. Rejections occur if the username is wrong, the screenshot is blurred or blank, or the required action wasn't completed. Repeated fake submissions may result in account suspension.",
+    },
+  ];
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
-      
-      {/* Visual Header Banner */}
+
+      {/* Page header */}
       <div className="mb-10 text-center">
-        <h1 className="font-display text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
+        <h1
+          className="font-bold tracking-tight text-white sm:text-4xl"
+          style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.75rem,4vw,2.5rem)" }}
+        >
           {page.title}
         </h1>
-        <div className="mx-auto mt-2 h-1 w-16 rounded bg-blue-500"></div>
-        <p className="mt-3 text-sm text-gray-500 max-w-xl mx-auto">
-          Learn more about our social media task exchange regulations, contact details, and platforms guidelines.
+        <div
+          className="mx-auto mt-3 h-0.5 w-16 rounded-full"
+          style={{ background: "linear-gradient(90deg,#2563eb,#60a5fa)" }}
+        />
+        <p className="mt-4 text-sm max-w-xl mx-auto leading-relaxed" style={{ color: "#64748b" }}>
+          Learn more about our social media task exchange platform — regulations, contact details, and guidelines.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Main Content Area */}
-        <div className="lg:col-span-2 space-y-6">
-          
-          {/* Detailed View Options */}
+
+        {/* Main content */}
+        <div className="lg:col-span-2 space-y-5">
+
           {view === "faq" ? (
-            <div className="space-y-4">
-              {getFaqs().map((faq, idx) => (
-                <div key={idx} className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
-                  <h3 className="flex items-start gap-2.5 font-display text-base font-bold text-gray-900">
-                    <HelpCircle className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+            <div className="space-y-3">
+              {faqs.map((faq, idx) => (
+                <div key={idx} style={card} className="p-5">
+                  <h3
+                    className="flex items-start gap-3 font-bold text-white"
+                    style={{ fontFamily: "var(--font-display)", fontSize: "0.9375rem" }}
+                  >
+                    <HelpCircle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#3b82f6" }} />
                     <span>{faq.q}</span>
                   </h3>
-                  <p className="mt-3 text-sm text-gray-600 leading-relaxed pl-7 border-l-2 border-blue-50">
+                  <p
+                    className="mt-3 text-sm leading-relaxed pl-8"
+                    style={{
+                      color: "#94a3b8",
+                      borderLeft: "2px solid rgba(59,130,246,0.20)",
+                      paddingLeft: "1rem",
+                      marginLeft: "1.25rem",
+                    }}
+                  >
                     {faq.a}
                   </p>
                 </div>
               ))}
             </div>
           ) : view === "contact" ? (
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 sm:p-8 shadow-sm">
-              <h2 className="font-display text-xl font-bold text-gray-900 mb-6">Send Us a Direct Message</h2>
-              
+            <div style={card} className="p-6 sm:p-8">
+              <h2
+                className="font-bold text-white mb-6"
+                style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}
+              >
+                Send Us a Direct Message
+              </h2>
+
               {submitted ? (
-                <div className="rounded-xl bg-blue-50 p-4 border border-blue-100 text-center animate-fadeIn">
-                  <p className="text-sm font-bold text-blue-800">✉ Message Received Successfully!</p>
-                  <p className="text-xs text-blue-600 mt-1">Our support managers will audit your message and reply back within 12 hours via email.</p>
+                <div
+                  className="rounded-xl p-5 text-center animate-fadeIn"
+                  style={{
+                    background: "rgba(59,130,246,0.08)",
+                    border: "1px solid rgba(59,130,246,0.20)"
+                  }}
+                >
+                  <CheckCircle className="h-8 w-8 mx-auto mb-3" style={{ color: "#60a5fa" }} />
+                  <p className="text-sm font-bold text-white">Message Received Successfully!</p>
+                  <p className="text-xs mt-1" style={{ color: "#60a5fa" }}>
+                    Our support team will reply within 12 hours via email.
+                  </p>
                 </div>
               ) : (
                 <form onSubmit={handleContactSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Your Name</label>
-                      <input 
-                        type="text" 
-                        required
-                        value={contactForm.name}
-                        onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none" 
-                        placeholder="John Doe"
+                      <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b", letterSpacing: "0.06em" }}>
+                        Your Name
+                      </label>
+                      <input
+                        type="text" required value={contactForm.name}
+                        onChange={e => setContactForm({ ...contactForm, name: e.target.value })}
+                        style={inputStyle} placeholder="John Doe"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Your Email Address</label>
-                      <input 
-                        type="email" 
-                        required
-                        value={contactForm.email}
-                        onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none" 
-                        placeholder="john@example.com"
+                      <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b", letterSpacing: "0.06em" }}>
+                        Email Address
+                      </label>
+                      <input
+                        type="email" required value={contactForm.email}
+                        onChange={e => setContactForm({ ...contactForm, email: e.target.value })}
+                        style={inputStyle} placeholder="john@example.com"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Subject</label>
-                    <input 
-                      type="text" 
-                      required
-                      value={contactForm.subject}
-                      onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none" 
-                      placeholder="Dispute Task / Advertiser Query / General"
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b", letterSpacing: "0.06em" }}>
+                      Subject
+                    </label>
+                    <input
+                      type="text" required value={contactForm.subject}
+                      onChange={e => setContactForm({ ...contactForm, subject: e.target.value })}
+                      style={inputStyle} placeholder="Task Dispute / General Query"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Detailed Message</label>
-                    <textarea 
-                      required
-                      rows={5}
-                      value={contactForm.message}
-                      onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none" 
-                      placeholder="Write your query in details..."
-                    ></textarea>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b", letterSpacing: "0.06em" }}>
+                      Detailed Message
+                    </label>
+                    <textarea
+                      required rows={5} value={contactForm.message}
+                      onChange={e => setContactForm({ ...contactForm, message: e.target.value })}
+                      style={{ ...inputStyle, resize: "none" }}
+                      placeholder="Describe your query in detail..."
+                    />
                   </div>
 
-                  <button 
+                  <button
                     type="submit"
-                    className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 py-3 text-sm font-semibold text-white shadow-md hover:shadow-lg hover:shadow-blue-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full rounded-xl py-3 text-sm font-bold text-white flex items-center justify-center gap-2 cursor-pointer transition-all"
+                    style={{
+                      background: "linear-gradient(135deg,#3b82f6,#2563eb)",
+                      boxShadow: "0 4px 16px rgba(37,99,235,0.30)"
+                    }}
                   >
                     <Send className="h-4 w-4" /> Send Message
                   </button>
@@ -163,81 +208,75 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
               )}
             </div>
           ) : (
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 sm:p-8 shadow-sm">
-              <div className="prose prose-blue max-w-none text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+            <div style={card} className="p-6 sm:p-8">
+              <div
+                className="prose max-w-none text-sm leading-relaxed whitespace-pre-wrap"
+                style={{ color: "#94a3b8" }}
+              >
                 {page.content}
               </div>
             </div>
           )}
         </div>
 
-        {/* Sidebar Info Panel */}
-        <div className="lg:col-span-1 space-y-6">
-          
-          {/* Quick Contact Widget */}
-          <div className="rounded-2xl border border-gray-100 bg-gradient-to-br from-gray-50 to-white p-6 shadow-sm">
-            <h3 className="font-display text-base font-bold text-gray-900 mb-4">Official Channels</h3>
-            
-            <div className="space-y-4 text-xs">
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-blue-100 p-2 text-blue-700 shrink-0">
-                  <Mail className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="font-semibold text-gray-700">Support Email</p>
-                  <p className="text-gray-500 mt-0.5">{settings.contactEmail}</p>
-                </div>
-              </div>
+        {/* Sidebar */}
+        <div className="lg:col-span-1 space-y-5">
 
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-blue-100 p-2 text-blue-700 shrink-0">
-                  <Phone className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="font-semibold text-gray-700">Hotline Center</p>
-                  <p className="text-gray-500 mt-0.5">{settings.contactPhone}</p>
-                </div>
-              </div>
+          {/* Contact widget */}
+          <div style={card} className="p-6">
+            <h3
+              className="font-bold text-white mb-5"
+              style={{ fontFamily: "var(--font-display)", fontSize: "0.9375rem" }}
+            >
+              Official Channels
+            </h3>
 
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-blue-100 p-2 text-blue-700 shrink-0">
-                  <MapPin className="h-4 w-4" />
+            <div className="space-y-4">
+              {[
+                { icon: <Mail className="h-4 w-4" style={{ color: "#60a5fa" }} />, label: "Support Email", value: settings.contactEmail },
+                { icon: <Phone className="h-4 w-4" style={{ color: "#60a5fa" }} />, label: "Hotline", value: settings.contactPhone },
+                { icon: <MapPin className="h-4 w-4" style={{ color: "#60a5fa" }} />, label: "Headquarters", value: "Yaba Tech Corridor, Lagos, Nigeria" },
+              ].map((item, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <div
+                    className="rounded-lg p-2 shrink-0"
+                    style={{ background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.15)" }}
+                  >
+                    {item.icon}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-white">{item.label}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "#64748b" }}>{item.value}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-semibold text-gray-700">Headquarters</p>
-                  <p className="text-gray-500 mt-0.5">Yaba Tech Corridor, Lagos, Nigeria.</p>
-                </div>
-              </div>
+              ))}
             </div>
 
-            {/* Social Telegram/WA handles */}
             {(settings.telegramChannel || settings.whatsappGroup) && (
-              <div className="border-t border-gray-100 mt-6 pt-5 space-y-3">
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Social Chatrooms</p>
+              <div className="mt-6 pt-5 space-y-2.5" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#475569" }}>Social Chatrooms</p>
                 {settings.telegramChannel && (
-                  <a 
-                    href={settings.telegramChannel} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="flex items-center justify-between rounded-xl bg-blue-50 hover:bg-blue-100 px-3.5 py-2.5 text-xs text-blue-800 transition-colors"
+                  <a
+                    href={settings.telegramChannel} target="_blank" rel="noreferrer"
+                    className="flex items-center justify-between rounded-xl px-3.5 py-2.5 text-xs transition-colors"
+                    style={{ background: "rgba(34,158,217,0.08)", border: "1px solid rgba(34,158,217,0.15)", color: "#7dd3fc" }}
                   >
                     <span className="flex items-center gap-2">
                       <PlatformIcon platform="Telegram" size={14} />
-                      <span>Join Official Telegram Channel</span>
+                      <span>Join Official Telegram</span>
                     </span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </a>
                 )}
                 {settings.whatsappGroup && (
-                  <a 
-                    href={settings.whatsappGroup} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="flex items-center justify-between rounded-xl bg-blue-50 hover:bg-blue-100 px-3.5 py-2.5 text-xs text-blue-800 transition-colors"
+                  <a
+                    href={settings.whatsappGroup} target="_blank" rel="noreferrer"
+                    className="flex items-center justify-between rounded-xl px-3.5 py-2.5 text-xs transition-colors"
+                    style={{ background: "rgba(37,211,102,0.07)", border: "1px solid rgba(37,211,102,0.15)", color: "#4ade80" }}
                   >
                     <span className="flex items-center gap-2">
                       <PlatformIcon platform="WhatsApp" size={14} />
-                      <span>Join WhatsApp Helpdesk</span>
+                      <span>WhatsApp Helpdesk</span>
                     </span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </a>
@@ -246,19 +285,37 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
             )}
           </div>
 
-          {/* Quick Stats Banner */}
-          <div className="rounded-2xl bg-gradient-to-tr from-blue-600 to-blue-700 p-6 text-white shadow-md">
-            <h4 className="font-display text-sm font-semibold text-blue-100 uppercase tracking-widest">Platform Status</h4>
-            <p className="font-display text-2xl font-black mt-2">Active & Secure</p>
-            <p className="text-xs text-blue-100 mt-1 leading-relaxed">
-              We verify and audit all deposits, referral clicks, and payouts inside Nigerian Naira instantly.
+          {/* Status card */}
+          <div
+            className="rounded-2xl p-6 text-white"
+            style={{
+              background: "linear-gradient(135deg,#1d4ed8 0%,#1e3a8a 100%)",
+              border: "1px solid rgba(96,165,250,0.20)",
+              boxShadow: "0 8px 32px rgba(29,78,216,0.25)"
+            }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <Shield className="h-4 w-4" style={{ color: "#93c5fd" }} />
+              <span
+                className="text-xs font-bold uppercase tracking-widest"
+                style={{ color: "#93c5fd", fontFamily: "var(--font-display)" }}
+              >
+                Platform Status
+              </span>
+            </div>
+            <p
+              className="font-bold text-white"
+              style={{ fontFamily: "var(--font-display)", fontSize: "1.5rem" }}
+            >
+              Active &amp; Secure
+            </p>
+            <p className="text-xs mt-2 leading-relaxed" style={{ color: "#93c5fd" }}>
+              All deposits, referral clicks, and payouts verified inside Nigerian Naira instantly.
             </p>
           </div>
 
         </div>
-
       </div>
-
     </div>
   );
 }

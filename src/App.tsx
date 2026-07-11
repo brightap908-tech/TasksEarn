@@ -660,7 +660,7 @@ export default function App() {
   ];
 
   return (
-    <div className={`flex min-h-screen flex-col font-sans transition-colors duration-300 ${isDarkMode ? "dark bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"}`}>
+    <div className="flex min-h-screen flex-col font-sans" style={{ background: "#0b1220", color: "#f1f5f9" }}>
       
       {/* Navigation Header */}
       <Navbar 
@@ -681,95 +681,141 @@ export default function App() {
           <div className="space-y-16 pb-16">
             
             {/* Hero Section */}
-            <section className="relative overflow-hidden bg-white py-16 sm:py-24 border-b border-slate-200">
-              <div className="absolute inset-0 bg-slate-50/50" />
+            <section className="relative overflow-hidden hero-grid" style={{ background: "linear-gradient(180deg,#0b1220 0%,#0d1626 100%)", borderBottom: "1px solid rgba(255,255,255,0.06)", paddingTop: "5rem", paddingBottom: "6rem" }}>
+              {/* Glow orbs */}
+              <div className="glow-orb-blue" style={{ width: "500px", height: "500px", top: "-120px", left: "-100px", opacity: 0.6 }} />
+              <div className="glow-orb-indigo" style={{ width: "400px", height: "400px", bottom: "-80px", right: "-60px", opacity: 0.5 }} />
+
               <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                
+
                 {/* Left Pitch */}
-                <div className="space-y-6 max-w-xl">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3.5 py-1 text-xs font-bold text-blue-700 border border-blue-100">
-                    <Zap className="h-3.5 w-3.5 text-blue-500" /> Nigeria's Most Trusted Micro-Job Exchange
+                <div className="space-y-7 max-w-xl">
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold"
+                    style={{ background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.20)", color: "#60a5fa" }}
+                  >
+                    <Zap className="h-3.5 w-3.5" style={{ color: "#60a5fa" }} />
+                    Nigeria's Most Trusted Micro-Job Exchange
                   </span>
-                  
-                  <h1 className="font-display text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl leading-tight">
-                    Get Paid Weekly for <span className="text-blue-500">Simple Tasks</span>
+
+                  <h1
+                    className="font-extrabold tracking-tight leading-tight"
+                    style={{ fontFamily: "var(--font-display)", fontSize: "clamp(2.25rem,5vw,3.5rem)", color: "#f1f5f9" }}
+                  >
+                    Get Paid Weekly for{" "}
+                    <span style={{ background: "linear-gradient(135deg,#60a5fa,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                      Simple Tasks
+                    </span>
                   </h1>
 
-                  <p className="text-sm text-slate-500 leading-relaxed">
+                  <p className="text-sm leading-relaxed" style={{ color: "#64748b" }}>
                     Join over 45,000+ active Nigerians working from home. Earn wallet payouts instantly in Nigerian Naira (₦) for likes, subscribes, follows, reviews, and app downloads. Advertisers get 100% organic, verified growth.
                   </p>
 
-                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                    <button 
+                  <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                    <button
                       onClick={() => setCurrentView("register")}
-                      className="rounded-full bg-blue-500 px-6 py-3.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-600 transition-all text-center cursor-pointer"
-                    >
-                      Sign Up & Start Earning
-                    </button>
-                    <button 
-                      onClick={() => {
-                        setAuthRole(UserRole.ADVERTISER);
-                        setCurrentView("register");
+                      className="rounded-full px-7 py-3.5 text-sm font-bold text-white text-center cursor-pointer transition-all active:scale-95"
+                      style={{
+                        background: "linear-gradient(135deg,#3b82f6,#2563eb)",
+                        boxShadow: "0 4px 20px rgba(37,99,235,0.40)"
                       }}
-                      className="rounded-full border border-slate-200 hover:bg-slate-50 px-6 py-3.5 text-sm font-semibold text-slate-700 bg-white shadow-xs text-center cursor-pointer transition-colors"
+                    >
+                      Sign Up &amp; Start Earning
+                    </button>
+                    <button
+                      onClick={() => { setAuthRole(UserRole.ADVERTISER); setCurrentView("register"); }}
+                      className="rounded-full px-7 py-3.5 text-sm font-bold text-center cursor-pointer transition-all"
+                      style={{
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        color: "#cbd5e1"
+                      }}
                     >
                       Promote My Business
                     </button>
                   </div>
                 </div>
 
-                {/* Right Hero Graphics Display */}
-                <div className="relative rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Active Live Ticker</span>
-                    <span className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-ping inline-block"></span>
+                {/* Right Hero — Live Ticker Card */}
+                <div
+                  className="relative rounded-2xl p-6 space-y-4"
+                  style={{
+                    background: "linear-gradient(145deg,#111827,#0f1e35)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    boxShadow: "0 24px 60px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.05)"
+                  }}
+                >
+                  {/* Top glow strip */}
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-2/3 rounded-full" style={{ background: "linear-gradient(90deg,transparent,rgba(59,130,246,0.40),transparent)" }} />
+
+                  <div className="flex justify-between items-center pb-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                    <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#475569", fontFamily: "var(--font-mono)" }}>
+                      Active Live Ticker
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full inline-block animate-pulse" style={{ background: "#22c55e", boxShadow: "0 0 6px #22c55e" }} />
+                      <span className="text-[10px] font-semibold" style={{ color: "#22c55e" }}>LIVE</span>
+                    </span>
                   </div>
 
-                  <div className="space-y-3.5 text-xs">
-                    <div className="rounded-xl bg-blue-50/50 border border-blue-50 p-3.5 flex justify-between items-center">
+                  <div className="space-y-3 text-xs">
+                    <div
+                      className="rounded-xl p-3.5 flex justify-between items-center"
+                      style={{ background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.12)" }}
+                    >
                       <div>
-                        <p className="font-bold text-gray-800">
-                          {publicStats.latestWithdrawal ? `${publicStats.latestWithdrawal.userName} (${publicStats.latestWithdrawal.bankName})` : "Tunde B. (Guaranty Trust Bank)"}
+                        <p className="font-bold text-white">
+                          {publicStats.latestWithdrawal
+                            ? `${publicStats.latestWithdrawal.userName} (${publicStats.latestWithdrawal.bankName})`
+                            : "Tunde Bakare (Guaranty Trust Bank)"}
                         </p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">Withdrawal requested successfully</p>
+                        <p className="mt-0.5" style={{ color: "#475569" }}>Withdrawal requested successfully</p>
                       </div>
-                      <span className="font-mono font-black text-blue-700">
-                        ₦{publicStats.latestWithdrawal ? publicStats.latestWithdrawal.amount.toLocaleString() : "7,450.00"}
+                      <span className="font-mono font-black" style={{ color: "#60a5fa" }}>
+                        ₦{publicStats.latestWithdrawal ? publicStats.latestWithdrawal.amount.toLocaleString() : "7,450"}
                       </span>
                     </div>
 
-                    <div className="rounded-xl bg-indigo-50/50 border border-indigo-50 p-3.5 flex justify-between items-center">
+                    <div
+                      className="rounded-xl p-3.5 flex justify-between items-center"
+                      style={{ background: "rgba(99,102,241,0.07)", border: "1px solid rgba(99,102,241,0.12)" }}
+                    >
                       <div>
-                        <p className="font-bold text-gray-800">
-                          {publicStats.latestCampaign ? `New Campaign: ${publicStats.latestCampaign.title}` : "New Campaign: IG Follow GossipMill"}
+                        <p className="font-bold text-white">
+                          {publicStats.latestCampaign
+                            ? `New Campaign: ${publicStats.latestCampaign.title}`
+                            : "New Campaign: Telegram Group Join – Crypto Signals NG"}
                         </p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">
-                          {publicStats.latestCampaign ? `Budget: ₦${publicStats.latestCampaign.cost.toLocaleString()} allocated` : "Budget: ₦15,000 allocated"}
+                        <p className="mt-0.5" style={{ color: "#475569" }}>
+                          {publicStats.latestCampaign
+                            ? `Budget: ₦${publicStats.latestCampaign.cost.toLocaleString()} allocated`
+                            : "Budget: ₦1,800 allocated"}
                         </p>
                       </div>
-                      <span className="rounded-lg bg-indigo-100 px-2.5 py-1 text-[9px] font-bold text-indigo-700">LIVE NOW</span>
+                      <span
+                        className="rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase"
+                        style={{ background: "rgba(99,102,241,0.15)", color: "#a5b4fc", border: "1px solid rgba(99,102,241,0.25)" }}
+                      >
+                        LIVE NOW
+                      </span>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 border-t border-gray-50 pt-4 text-center font-mono text-[10px] text-gray-400">
-                    <div>
-                      <p className="text-base font-black text-gray-800">
-                        {publicStats.earnersCount > 0 ? publicStats.earnersCount.toLocaleString() : "0"}
-                      </p>
-                      <p className="mt-0.5">Earners</p>
-                    </div>
-                    <div>
-                      <p className="text-base font-black text-gray-800">
-                        {publicStats.tasksCount > 0 ? publicStats.tasksCount.toLocaleString() : "0"}
-                      </p>
-                      <p className="mt-0.5">Campaigns Created</p>
-                    </div>
-                    <div>
-                      <p className="text-base font-black text-gray-800">
-                        ₦{publicStats.totalPaidOut > 0 ? publicStats.totalPaidOut.toLocaleString() : "0"}
-                      </p>
-                      <p className="mt-0.5">Paid Out</p>
-                    </div>
+                  <div
+                    className="grid grid-cols-3 gap-2 pt-4 text-center"
+                    style={{ borderTop: "1px solid rgba(255,255,255,0.05)", fontFamily: "var(--font-mono)" }}
+                  >
+                    {[
+                      { val: publicStats.earnersCount > 0 ? publicStats.earnersCount.toLocaleString() : "0", label: "Earners" },
+                      { val: publicStats.tasksCount > 0 ? publicStats.tasksCount.toLocaleString() : "0", label: "Campaigns" },
+                      { val: `₦${publicStats.totalPaidOut > 0 ? (publicStats.totalPaidOut / 1000000).toFixed(1) + "M" : "0"}`, label: "Paid Out" },
+                    ].map((s, i) => (
+                      <div key={i}>
+                        <p className="text-base font-black text-white">{s.val}</p>
+                        <p className="mt-0.5 text-[10px]" style={{ color: "#475569" }}>{s.label}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -810,24 +856,61 @@ export default function App() {
             {/* Microtask Category List Grid */}
             <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
               <div className="text-center">
-                <h2 className="font-display text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+                <h2
+                  className="font-bold tracking-tight text-white sm:text-3xl"
+                  style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.5rem,3vw,1.875rem)" }}
+                >
                   Micro-Job Engagement Categories
                 </h2>
-                <p className="mt-2 text-xs text-gray-400">Choose from thousands of fresh daily tasks matching your active social media handles.</p>
+                <p className="mt-2 text-xs" style={{ color: "#475569" }}>
+                  Choose from thousands of fresh daily tasks matching your social media handles.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {getPublicCategories().map((cat, idx) => (
-                  <div key={idx} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md hover:border-blue-500/20 transition-all group cursor-pointer" onClick={() => setCurrentView("register")}>
+                  <div
+                    key={idx}
+                    className="group cursor-pointer transition-all"
+                    onClick={() => setCurrentView("register")}
+                    style={{
+                      background: "linear-gradient(145deg,#111827,#0f1e35)",
+                      border: "1px solid rgba(255,255,255,0.07)",
+                      borderRadius: "1rem",
+                      padding: "1.25rem",
+                      boxShadow: "0 4px 20px rgba(0,0,0,0.30)"
+                    }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLElement).style.borderColor = "rgba(59,130,246,0.30)";
+                      (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 32px rgba(0,0,0,0.40), 0 0 0 1px rgba(59,130,246,0.15)";
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)";
+                      (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 20px rgba(0,0,0,0.30)";
+                    }}
+                  >
                     <div className="flex justify-between items-start">
-                      <div className="rounded-xl bg-gray-50 group-hover:bg-blue-50 p-2.5 transition-colors">
+                      <div
+                        className="rounded-xl p-2.5"
+                        style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.12)" }}
+                      >
                         {getCategoryIcon(cat.title.substring(0, cat.title.length - 1))}
                       </div>
-                      <span className="text-[10px] text-gray-400 font-mono">{cat.count}</span>
+                      <span className="text-[10px] font-mono" style={{ color: "#374151" }}>{cat.count}</span>
                     </div>
-                    <h3 className="font-display text-xs font-bold text-gray-800 mt-4">{cat.title}</h3>
-                    <p className="text-[11px] font-mono text-blue-600 mt-1 font-bold">{cat.payout}</p>
-                    <div className="mt-3 text-[10px] text-gray-400 font-semibold group-hover:text-blue-600 flex items-center gap-1 transition-colors justify-end">
+                    <h3
+                      className="font-bold text-white mt-4"
+                      style={{ fontFamily: "var(--font-display)", fontSize: "0.8125rem" }}
+                    >
+                      {cat.title}
+                    </h3>
+                    <p className="text-[11px] font-bold mt-1" style={{ fontFamily: "var(--font-mono)", color: "#60a5fa" }}>
+                      {cat.payout}
+                    </p>
+                    <div
+                      className="mt-3 text-[10px] font-semibold flex items-center gap-1 justify-end transition-colors"
+                      style={{ color: "#374151" }}
+                    >
                       Claim Task <ArrowRight className="h-3 w-3" />
                     </div>
                   </div>
@@ -836,44 +919,92 @@ export default function App() {
             </section>
 
             {/* How It Works Timeline */}
-            <section className="bg-white py-16 border-t border-b border-gray-100">
+            <section style={{ background: "#0d1626", borderTop: "1px solid rgba(255,255,255,0.05)", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "5rem 0" }}>
               <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-12">
                 <div className="text-center">
-                  <h2 className="font-display text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">How TasksEarn Works</h2>
-                  <p className="mt-2 text-xs text-gray-400">Three simple steps to start earning Naira on our decentralized microtask network.</p>
+                  <h2
+                    className="font-bold tracking-tight text-white sm:text-3xl"
+                    style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.5rem,3vw,1.875rem)" }}
+                  >
+                    How TasksEarn Works
+                  </h2>
+                  <p className="mt-2 text-xs" style={{ color: "#475569" }}>Three simple steps to start earning Naira on our microtask network.</p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                  <div className="text-center space-y-4">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 font-bold text-lg border border-blue-100">1</div>
-                    <h3 className="font-display text-sm font-bold text-gray-800">Register Secure Account</h3>
-                    <p className="text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">Sign up as an Earner or Advertiser. Complete email validation inside 1 minute to lock verification code logs.</p>
-                  </div>
-                  <div className="text-center space-y-4">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 font-bold text-lg border border-blue-100">2</div>
-                    <h3 className="font-display text-sm font-bold text-gray-800">Perform Social Actions</h3>
-                    <p className="text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">Follow accounts, subscribe channels, join groups, or download apps. Take a snapshot proving your action.</p>
-                  </div>
-                  <div className="text-center space-y-4">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 font-bold text-lg border border-blue-100">3</div>
-                    <h3 className="font-display text-sm font-bold text-gray-800">Withdraw Naira (₦)</h3>
-                    <p className="text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">Get accredited. Withdraw immediately to OPay, PalmPay, GTBank, Zenith, or any local Nigerian bank instantly!</p>
-                  </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {[
+                    { n: "1", title: "Register Secure Account", desc: "Sign up as an Earner or Advertiser. Complete email validation in under 1 minute to unlock your dashboard." },
+                    { n: "2", title: "Perform Social Actions", desc: "Follow accounts, subscribe to channels, join groups, or download apps. Upload a screenshot as proof." },
+                    { n: "3", title: "Withdraw Naira (₦)", desc: "Get paid. Withdraw instantly to OPay, PalmPay, GTBank, Zenith, or any Nigerian bank account." },
+                  ].map((step, i) => (
+                    <div
+                      key={i}
+                      className="text-center space-y-4 rounded-2xl p-7"
+                      style={{
+                        background: "linear-gradient(145deg,#111827,#0f1e35)",
+                        border: "1px solid rgba(255,255,255,0.07)",
+                        boxShadow: "0 4px 24px rgba(0,0,0,0.30)"
+                      }}
+                    >
+                      <div
+                        className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl font-bold text-lg"
+                        style={{
+                          background: "linear-gradient(135deg,rgba(59,130,246,0.20),rgba(37,99,235,0.10))",
+                          border: "1px solid rgba(59,130,246,0.25)",
+                          color: "#60a5fa",
+                          fontFamily: "var(--font-display)",
+                          boxShadow: "0 4px 16px rgba(59,130,246,0.12)"
+                        }}
+                      >
+                        {step.n}
+                      </div>
+                      <h3
+                        className="font-bold text-white"
+                        style={{ fontFamily: "var(--font-display)", fontSize: "0.9375rem" }}
+                      >
+                        {step.title}
+                      </h3>
+                      <p className="text-xs max-w-xs mx-auto leading-relaxed" style={{ color: "#475569" }}>{step.desc}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
             </section>
 
             {/* Bottom Call To Action Banner */}
             <section className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-              <div className="rounded-3xl bg-gradient-to-tr from-blue-600 to-blue-800 p-8 sm:p-12 text-white text-center space-y-6 shadow-xl shadow-blue-50">
-                <h2 className="font-display text-3xl font-black tracking-tight sm:text-4xl">Ready to Monetize Your Spare Time?</h2>
-                <p className="text-xs text-blue-100 max-w-lg mx-auto leading-relaxed">
+              <div
+                className="relative rounded-3xl p-8 sm:p-12 text-white text-center space-y-6 overflow-hidden"
+                style={{
+                  background: "linear-gradient(135deg,#1d4ed8 0%,#1e3a8a 60%,#0f172a 100%)",
+                  border: "1px solid rgba(96,165,250,0.25)",
+                  boxShadow: "0 20px 60px rgba(29,78,216,0.35)"
+                }}
+              >
+                {/* Decorative glow */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-3/4 rounded-full" style={{ background: "linear-gradient(90deg,transparent,rgba(96,165,250,0.60),transparent)" }} />
+                <div className="glow-orb-blue" style={{ width: "300px", height: "300px", top: "-100px", right: "-80px", opacity: 0.4 }} />
+
+                <h2
+                  className="relative font-black tracking-tight sm:text-4xl"
+                  style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.75rem,4vw,2.5rem)" }}
+                >
+                  Ready to Monetize Your Spare Time?
+                </h2>
+                <p className="relative text-sm max-w-lg mx-auto leading-relaxed" style={{ color: "#93c5fd" }}>
                   Join our verified ecosystem of online earners. Advertisers can build custom campaign budgets starting at ₦1,000 only. Let's grow together!
                 </p>
-                <div className="pt-2 flex justify-center">
-                  <button 
+                <div className="relative pt-2 flex justify-center">
+                  <button
                     onClick={() => setCurrentView("register")}
-                    className="rounded-xl bg-white text-blue-800 hover:bg-blue-50 px-8 py-4 text-sm font-bold shadow-lg transition-all cursor-pointer"
+                    className="rounded-xl px-8 py-4 text-sm font-bold cursor-pointer transition-all active:scale-95"
+                    style={{
+                      background: "#ffffff",
+                      color: "#1d4ed8",
+                      boxShadow: "0 8px 24px rgba(0,0,0,0.25)"
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "#eff6ff")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "#ffffff")}
                   >
                     Create Free TasksEarn Account
                   </button>
@@ -887,14 +1018,14 @@ export default function App() {
         {/* AUTHENTICATION SECURE VIEW (LOGIN) */}
         {currentView === "login" && (
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6">
+            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
               
               <div className="text-center">
-                <h2 className="font-display text-xl font-bold text-slate-900">Welcome Back to TasksEarn</h2>
-                <p className="text-xs text-slate-400 mt-1">Sign in to your dashboard to complete tasks or fund campaigns.</p>
+                <h2 className="font-bold text-white" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Welcome Back to TasksEarn</h2>
+                <p className="text-xs mt-1" style={{ color: "#64748b" }}>Sign in to your dashboard to complete tasks or fund campaigns.</p>
               </div>
 
-              {authError && <p className="rounded-2xl bg-rose-50 p-3 text-xs font-bold text-rose-600 border border-rose-100 text-center">{authError}</p>}
+              {authError && <p className="rounded-xl p-3 text-xs font-bold text-center" style={{ background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.20)", color: "#fb7185" }}>{authError}</p>}
 
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
@@ -942,126 +1073,81 @@ export default function App() {
                 </button>
               </form>
 
-              <div className="flex flex-col gap-3 text-center text-xs border-t border-slate-100 pt-4">
-                <div className="text-slate-400">
+              <div className="flex flex-col gap-3 text-center text-xs pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ color: "#64748b" }}>
                   Don't have an account?{" "}
-                  <button 
-                    onClick={() => setCurrentView("register")}
-                    className="font-bold text-blue-500 hover:text-blue-600 hover:underline"
-                  >
+                  <button onClick={() => setCurrentView("register")} className="font-bold cursor-pointer" style={{ color: "#60a5fa" }}>
                     Create one now
                   </button>
                 </div>
-                <div className="text-slate-400">
+                <div style={{ color: "#64748b" }}>
                   Are you an Advertiser?{" "}
-                  <button 
-                    onClick={() => {
-                      setAuthError("");
-                      setCurrentView("advertiser-login");
-                    }}
-                    className="font-bold text-blue-500 hover:text-blue-600 hover:underline"
-                  >
+                  <button onClick={() => { setAuthError(""); setCurrentView("advertiser-login"); }} className="font-bold cursor-pointer" style={{ color: "#60a5fa" }}>
                     Go to Advertiser Portal
                   </button>
                 </div>
               </div>
 
-              {/* Demo accounts quick helper */}
-              <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 text-[11px] text-slate-500 space-y-2">
-                <p className="font-bold text-slate-700">🔑 Secure Demo Accounts Password Gates:</p>
+              {/* Demo accounts */}
+              <div className="rounded-2xl p-4 text-[11px] space-y-2" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                <p className="font-bold" style={{ color: "#e2e8f0" }}>🔑 Secure Demo Account Access:</p>
                 <div className="flex flex-col gap-1.5 mt-1">
-                  
-                  {/* Demo Earner Password Gate */}
+
                   {!showEarnerPasswordPrompt ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowEarnerPasswordPrompt(true)}
-                      className="flex justify-between items-center bg-white border border-slate-200 hover:border-blue-500 hover:bg-blue-50 rounded-xl px-3 py-1.5 transition-all text-left cursor-pointer"
+                    <button type="button" onClick={() => setShowEarnerPasswordPrompt(true)}
+                      className="flex justify-between items-center rounded-xl px-3 py-2 transition-all text-left cursor-pointer w-full"
+                      style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.15)", color: "#94a3b8" }}
                     >
                       <span>👥 Demo Earner</span>
-                      <span className="font-semibold text-blue-600 font-mono text-[9px] bg-blue-50 px-2 py-0.5 rounded-full">Enter Password</span>
+                      <span className="font-semibold font-mono text-[9px] rounded-full px-2 py-0.5" style={{ background: "rgba(59,130,246,0.15)", color: "#60a5fa" }}>Enter Password</span>
                     </button>
                   ) : (
-                    <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-3 space-y-2.5">
+                    <div className="rounded-xl p-3 space-y-2.5" style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.20)" }}>
                       <div className="flex justify-between items-center">
-                        <span className="font-semibold text-[10px] text-blue-950 flex items-center gap-1">👥 Demo Earner Password Check</span>
-                        <button 
-                          type="button" 
-                          onClick={() => {
-                            setShowEarnerPasswordPrompt(false);
-                            setEarnerPasswordPromptValue("");
-                          }}
-                          className="text-[9px] text-gray-400 hover:text-blue-600 font-semibold cursor-pointer"
-                        >
-                          Cancel
-                        </button>
+                        <span className="font-semibold text-[10px]" style={{ color: "#60a5fa" }}>👥 Demo Earner Password</span>
+                        <button type="button" onClick={() => { setShowEarnerPasswordPrompt(false); setEarnerPasswordPromptValue(""); }}
+                          className="text-[9px] font-semibold cursor-pointer" style={{ color: "#64748b" }}>Cancel</button>
                       </div>
                       <div className="flex gap-1.5">
-                        <input 
-                          type="password"
-                          required
-                          value={earnerPasswordPromptValue}
+                        <input type="password" required value={earnerPasswordPromptValue}
                           onChange={(e) => setEarnerPasswordPromptValue(e.target.value)}
-                          placeholder="Enter earner password..."
-                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs bg-white focus:outline-none"
+                          placeholder="Enter earner password..." className="flex-1 rounded-lg px-3 py-1.5 text-xs"
+                          style={{ background: "#0f1e35", border: "1px solid rgba(255,255,255,0.10)", color: "#f1f5f9" }}
                         />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!earnerPasswordPromptValue) return;
-                            handleDemoLogin("earner@tasksearn.com", earnerPasswordPromptValue);
-                          }}
-                          className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 text-[10px] transition-all cursor-pointer shrink-0"
-                        >
-                          Verify & Login
+                        <button type="button" onClick={() => { if (!earnerPasswordPromptValue) return; handleDemoLogin("earner@tasksearn.com", earnerPasswordPromptValue); }}
+                          className="rounded-lg text-white font-bold px-3 py-1.5 text-[10px] cursor-pointer shrink-0"
+                          style={{ background: "linear-gradient(135deg,#3b82f6,#2563eb)" }}>
+                          Verify
                         </button>
                       </div>
                     </div>
                   )}
 
                   {!showAdminPasswordPrompt ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowAdminPasswordPrompt(true)}
-                      className="flex justify-between items-center bg-white border border-indigo-200 hover:border-indigo-500 hover:bg-indigo-50 rounded-xl px-3 py-1.5 transition-all text-left cursor-pointer w-full"
-                      id="admin-demo-login-btn"
+                    <button type="button" id="admin-demo-login-btn" onClick={() => setShowAdminPasswordPrompt(true)}
+                      className="flex justify-between items-center rounded-xl px-3 py-2 transition-all text-left cursor-pointer w-full"
+                      style={{ background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.15)", color: "#94a3b8" }}
                     >
-                      <span className="font-medium text-indigo-950">🛡️ Super Admin Portal</span>
-                      <span className="font-semibold text-indigo-600 font-mono text-[9px] bg-indigo-50 px-2 py-0.5 rounded-full">Enter Password</span>
+                      <span>🛡️ Super Admin Portal</span>
+                      <span className="font-semibold font-mono text-[9px] rounded-full px-2 py-0.5" style={{ background: "rgba(99,102,241,0.15)", color: "#818cf8" }}>Enter Password</span>
                     </button>
                   ) : (
-                    <div className="rounded-xl border border-indigo-200 bg-indigo-50/30 p-3 space-y-2.5">
+                    <div className="rounded-xl p-3 space-y-2.5" style={{ background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.20)" }}>
                       <div className="flex justify-between items-center">
-                        <span className="font-semibold text-[10px] text-indigo-950 flex items-center gap-1">🛡️ Super Admin Password Check</span>
-                        <button 
-                          type="button" 
-                          onClick={() => {
-                            setShowAdminPasswordPrompt(false);
-                            setAdminPasswordPromptValue("");
-                          }}
-                          className="text-[9px] text-gray-400 hover:text-indigo-600 font-semibold cursor-pointer"
-                        >
-                          Cancel
-                        </button>
+                        <span className="font-semibold text-[10px]" style={{ color: "#818cf8" }}>🛡️ Super Admin Password</span>
+                        <button type="button" onClick={() => { setShowAdminPasswordPrompt(false); setAdminPasswordPromptValue(""); }}
+                          className="text-[9px] font-semibold cursor-pointer" style={{ color: "#64748b" }}>Cancel</button>
                       </div>
                       <div className="flex gap-1.5">
-                        <input 
-                          type="password"
-                          required
-                          value={adminPasswordPromptValue}
+                        <input type="password" required value={adminPasswordPromptValue}
                           onChange={(e) => setAdminPasswordPromptValue(e.target.value)}
-                          placeholder="Enter admin password..."
-                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs bg-white focus:outline-none"
+                          placeholder="Enter admin password..." className="flex-1 rounded-lg px-3 py-1.5 text-xs"
+                          style={{ background: "#0f1e35", border: "1px solid rgba(255,255,255,0.10)", color: "#f1f5f9" }}
                         />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!adminPasswordPromptValue) return;
-                            handleDemoLogin("admin@tasksearn.com", adminPasswordPromptValue);
-                          }}
-                          className="rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 text-[10px] transition-all cursor-pointer shrink-0"
-                        >
-                          Verify & Login
+                        <button type="button" onClick={() => { if (!adminPasswordPromptValue) return; handleDemoLogin("admin@tasksearn.com", adminPasswordPromptValue); }}
+                          className="rounded-lg text-white font-bold px-3 py-1.5 text-[10px] cursor-pointer shrink-0"
+                          style={{ background: "linear-gradient(135deg,#6366f1,#4f46e5)" }}>
+                          Verify
                         </button>
                       </div>
                     </div>
@@ -1076,17 +1162,17 @@ export default function App() {
         {/* AUTHENTICATION SECURE VIEW (ADVERTISER LOGIN) */}
         {currentView === "advertiser-login" && (
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24 animate-fadeIn">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6">
+            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
               
               <div className="text-center">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5 text-[10px] font-bold text-blue-800 uppercase">
+                <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase" style={{ background: "rgba(99,102,241,0.10)", border: "1px solid rgba(99,102,241,0.20)", color: "#818cf8" }}>
                   Advertiser Portal
                 </span>
-                <h2 className="font-display text-xl font-bold text-slate-900 mt-2">Welcome Back, Advertiser!</h2>
-                <p className="text-xs text-slate-400 mt-1">Sign in to manage your campaigns, track submissions, and check your ad budget.</p>
+                <h2 className="font-bold text-white mt-2" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Welcome Back, Advertiser!</h2>
+                <p className="text-xs mt-1" style={{ color: "#64748b" }}>Sign in to manage your campaigns, track submissions, and check your ad budget.</p>
               </div>
 
-              {authError && <p className="rounded-2xl bg-rose-50 p-3 text-xs font-bold text-rose-600 border border-rose-100 text-center">{authError}</p>}
+              {authError && <p className="rounded-xl p-3 text-xs font-bold text-center" style={{ background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.20)", color: "#fb7185" }}>{authError}</p>}
 
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
@@ -1134,86 +1220,54 @@ export default function App() {
                 </button>
               </form>
 
-              <div className="flex flex-col gap-2 text-center text-xs border-t border-slate-100 pt-4">
-                <div className="text-slate-400">
+              <div className="flex flex-col gap-2 text-center text-xs pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ color: "#64748b" }}>
                   Not registered as an Advertiser?{" "}
-                  <button 
-                    onClick={() => {
-                      setAuthRole(UserRole.ADVERTISER);
-                      setCurrentView("register");
-                    }}
-                    className="font-bold text-blue-500 hover:text-blue-600 hover:underline"
-                  >
+                  <button onClick={() => { setAuthRole(UserRole.ADVERTISER); setCurrentView("register"); }} className="font-bold cursor-pointer" style={{ color: "#60a5fa" }}>
                     Register here
                   </button>
                 </div>
-                <div className="text-slate-400">
+                <div style={{ color: "#64748b" }}>
                   Are you an Earner?{" "}
-                  <button 
-                    onClick={() => {
-                      setAuthError("");
-                      setCurrentView("login");
-                    }}
-                    className="font-bold text-blue-500 hover:text-blue-600 hover:underline"
-                  >
+                  <button onClick={() => { setAuthError(""); setCurrentView("login"); }} className="font-bold cursor-pointer" style={{ color: "#60a5fa" }}>
                     Go to Earner Sign In
                   </button>
                 </div>
               </div>
 
-              {/* Demo accounts quick helper */}
-              <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 text-[11px] text-slate-500 space-y-2">
-                <p className="font-bold text-slate-700">🔑 Secure Demo Advertiser Access:</p>
+              {/* Demo Advertiser */}
+              <div className="rounded-2xl p-4 text-[11px] space-y-2" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                <p className="font-bold" style={{ color: "#e2e8f0" }}>🔑 Secure Demo Advertiser Access:</p>
                 <div className="flex flex-col gap-1.5 mt-1">
-                  
-                  {/* Demo Advertiser Password Gate */}
                   {!showAdvertiserPasswordPrompt ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowAdvertiserPasswordPrompt(true)}
-                      className="flex justify-between items-center bg-white border border-slate-200 hover:border-blue-500 hover:bg-blue-50 rounded-xl px-3 py-1.5 transition-all text-left cursor-pointer"
+                    <button type="button" onClick={() => setShowAdvertiserPasswordPrompt(true)}
+                      className="flex justify-between items-center rounded-xl px-3 py-2 transition-all text-left cursor-pointer w-full"
+                      style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.15)", color: "#94a3b8" }}
                     >
                       <span>📢 Demo Advertiser</span>
-                      <span className="font-semibold text-blue-600 font-mono text-[9px] bg-blue-50 px-2 py-0.5 rounded-full">Enter Password</span>
+                      <span className="font-semibold font-mono text-[9px] rounded-full px-2 py-0.5" style={{ background: "rgba(59,130,246,0.15)", color: "#60a5fa" }}>Enter Password</span>
                     </button>
                   ) : (
-                    <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-3 space-y-2.5">
+                    <div className="rounded-xl p-3 space-y-2.5" style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.20)" }}>
                       <div className="flex justify-between items-center">
-                        <span className="font-semibold text-[10px] text-blue-950 flex items-center gap-1">📢 Demo Advertiser Password Check</span>
-                        <button 
-                          type="button" 
-                          onClick={() => {
-                            setShowAdvertiserPasswordPrompt(false);
-                            setAdvertiserPasswordPromptValue("");
-                          }}
-                          className="text-[9px] text-gray-400 hover:text-blue-600 font-semibold cursor-pointer"
-                        >
-                          Cancel
-                        </button>
+                        <span className="font-semibold text-[10px]" style={{ color: "#60a5fa" }}>📢 Demo Advertiser Password</span>
+                        <button type="button" onClick={() => { setShowAdvertiserPasswordPrompt(false); setAdvertiserPasswordPromptValue(""); }}
+                          className="text-[9px] font-semibold cursor-pointer" style={{ color: "#64748b" }}>Cancel</button>
                       </div>
                       <div className="flex gap-1.5">
-                        <input 
-                          type="password"
-                          required
-                          value={advertiserPasswordPromptValue}
+                        <input type="password" required value={advertiserPasswordPromptValue}
                           onChange={(e) => setAdvertiserPasswordPromptValue(e.target.value)}
-                          placeholder="Enter advertiser password..."
-                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs bg-white focus:outline-none"
+                          placeholder="Enter advertiser password..." className="flex-1 rounded-lg px-3 py-1.5 text-xs"
+                          style={{ background: "#0f1e35", border: "1px solid rgba(255,255,255,0.10)", color: "#f1f5f9" }}
                         />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!advertiserPasswordPromptValue) return;
-                            handleDemoLogin("advertiser@tasksearn.com", advertiserPasswordPromptValue);
-                          }}
-                          className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 text-[10px] transition-all cursor-pointer shrink-0"
-                        >
-                          Verify & Login
+                        <button type="button" onClick={() => { if (!advertiserPasswordPromptValue) return; handleDemoLogin("advertiser@tasksearn.com", advertiserPasswordPromptValue); }}
+                          className="rounded-lg text-white font-bold px-3 py-1.5 text-[10px] cursor-pointer shrink-0"
+                          style={{ background: "linear-gradient(135deg,#3b82f6,#2563eb)" }}>
+                          Verify
                         </button>
                       </div>
                     </div>
                   )}
-
                 </div>
               </div>
 
@@ -1224,32 +1278,27 @@ export default function App() {
         {/* AUTHENTICATION SECURE VIEW (FORGOT PASSWORD) */}
         {currentView === "forgot-password" && (
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6">
+            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
               
               <div className="text-center">
-                <h2 className="font-display text-xl font-bold text-slate-900">Account Recovery</h2>
-                <p className="text-xs text-slate-400 mt-1">Enter your registered email address below to receive password recovery instructions.</p>
+                <h2 className="font-bold text-white" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Account Recovery</h2>
+                <p className="text-xs mt-1" style={{ color: "#64748b" }}>Enter your registered email address to receive password recovery instructions.</p>
               </div>
 
-              {authError && <p className="rounded-2xl bg-rose-50 p-3 text-xs font-bold text-rose-600 border border-rose-100 text-center">{authError}</p>}
+              {authError && <p className="rounded-xl p-3 text-xs font-bold text-center" style={{ background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.20)", color: "#fb7185" }}>{authError}</p>}
               
               {forgotSuccess ? (
-                <div className="rounded-2xl bg-blue-50 border border-blue-100 p-5 text-center space-y-3">
-                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
-                    <CheckCircle className="h-5 w-5" />
+                <div className="rounded-xl p-5 text-center space-y-3" style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.20)" }}>
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full" style={{ background: "rgba(59,130,246,0.15)" }}>
+                    <CheckCircle className="h-5 w-5" style={{ color: "#60a5fa" }} />
                   </div>
-                  <h3 className="font-display text-sm font-bold text-blue-950">Instructions Sent</h3>
-                  <p className="text-xs text-blue-700 leading-relaxed">
+                  <h3 className="font-bold text-white" style={{ fontFamily: "var(--font-display)", fontSize: "0.9375rem" }}>Instructions Sent</h3>
+                  <p className="text-xs leading-relaxed" style={{ color: "#60a5fa" }}>
                     Check your email inbox for instructions to reset your secure credentials.
                   </p>
                   <div className="pt-2">
-                    <button 
-                      onClick={() => {
-                        setForgotSuccess(false);
-                        setCurrentView("login");
-                      }}
-                      className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline"
-                    >
+                    <button onClick={() => { setForgotSuccess(false); setCurrentView("login"); }}
+                      className="text-xs font-bold cursor-pointer" style={{ color: "#60a5fa" }}>
                       Return to Secure Sign In
                     </button>
                   </div>
@@ -1257,37 +1306,25 @@ export default function App() {
               ) : (
                 <form onSubmit={handleForgotPassword} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Email Address</label>
-                    <input 
-                      type="email"
-                      required
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b", letterSpacing: "0.06em" }}>Email Address</label>
+                    <input type="email" required value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)}
                       placeholder="e.g. yourname@example.com"
-                      className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                      className="w-full rounded-xl px-4 py-2.5 text-sm"
+                      style={{ background: "#0f1e35", border: "1px solid rgba(255,255,255,0.10)", color: "#f1f5f9" }}
                     />
                   </div>
-
-                  <button 
-                    type="submit"
-                    disabled={authLoading}
-                    className="w-full rounded-full bg-blue-500 hover:bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
-                  >
+                  <button type="submit" disabled={authLoading}
+                    className="w-full rounded-xl py-3 text-sm font-bold text-white cursor-pointer transition-all"
+                    style={{ background: "linear-gradient(135deg,#3b82f6,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}>
                     {authLoading ? "Verifying Registry..." : "Send Recovery Instructions"}
                   </button>
                 </form>
               )}
 
-              <div className="border-t border-slate-100 pt-4 text-center text-xs text-slate-400">
+              <div className="pt-4 text-center text-xs" style={{ borderTop: "1px solid rgba(255,255,255,0.06)", color: "#64748b" }}>
                 Remember your password?{" "}
-                <button 
-                  onClick={() => {
-                    setAuthError("");
-                    setForgotSuccess(false);
-                    setCurrentView("login");
-                  }}
-                  className="font-bold text-blue-500 hover:text-blue-600 hover:underline"
-                >
+                <button onClick={() => { setAuthError(""); setForgotSuccess(false); setCurrentView("login"); }}
+                  className="font-bold cursor-pointer" style={{ color: "#60a5fa" }}>
                   Sign In
                 </button>
               </div>
@@ -1299,98 +1336,68 @@ export default function App() {
         {/* AUTHENTICATION SECURE VIEW (REGISTER) */}
         {currentView === "register" && (
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6">
+            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
               
               <div className="text-center">
-                <h2 className="font-display text-xl font-bold text-slate-900">Create Free Account</h2>
-                <p className="text-xs text-slate-400 mt-1">Get certified, perform tasks, promote brand awareness.</p>
+                <h2 className="font-bold text-white" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Create Free Account</h2>
+                <p className="text-xs mt-1" style={{ color: "#64748b" }}>Get certified, perform tasks, promote brand awareness.</p>
               </div>
 
-              {/* Role Toggle Selector */}
-              <div className="grid grid-cols-2 gap-2 border border-slate-200 rounded-full p-1 bg-slate-50">
-                <button
-                  type="button"
-                  onClick={() => setAuthRole(UserRole.EARNER)}
-                  className={`py-2 text-xs font-bold rounded-full cursor-pointer transition-all ${authRole === UserRole.EARNER ? "bg-blue-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                >
+              {/* Role Toggle */}
+              <div className="grid grid-cols-2 gap-1.5 rounded-xl p-1" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <button type="button" onClick={() => setAuthRole(UserRole.EARNER)}
+                  className="py-2 text-xs font-bold rounded-lg cursor-pointer transition-all"
+                  style={authRole === UserRole.EARNER
+                    ? { background: "linear-gradient(135deg,#3b82f6,#2563eb)", color: "#fff", boxShadow: "0 2px 8px rgba(37,99,235,0.30)" }
+                    : { color: "#64748b" }}>
                   Register as Earner
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setAuthRole(UserRole.ADVERTISER)}
-                  className={`py-2 text-xs font-bold rounded-full cursor-pointer transition-all ${authRole === UserRole.ADVERTISER ? "bg-blue-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                >
+                <button type="button" onClick={() => setAuthRole(UserRole.ADVERTISER)}
+                  className="py-2 text-xs font-bold rounded-lg cursor-pointer transition-all"
+                  style={authRole === UserRole.ADVERTISER
+                    ? { background: "linear-gradient(135deg,#3b82f6,#2563eb)", color: "#fff", boxShadow: "0 2px 8px rgba(37,99,235,0.30)" }
+                    : { color: "#64748b" }}>
                   Register as Advertiser
                 </button>
               </div>
 
-              {authError && <p className="rounded-2xl bg-rose-50 p-3 text-xs font-bold text-rose-600 border border-rose-100 text-center">{authError}</p>}
+              {authError && <p className="rounded-xl p-3 text-xs font-bold text-center" style={{ background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.20)", color: "#fb7185" }}>{authError}</p>}
 
               <form onSubmit={handleRegister} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Full Name (Legal Bank Name)</label>
-                  <input 
-                    type="text"
-                    required
-                    value={regName}
-                    onChange={(e) => setRegName(e.target.value)}
-                    placeholder="e.g. Sola Bakare"
-                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Email Address</label>
-                  <input 
-                    type="email"
-                    required
-                    value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="e.g. sola@example.com"
-                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Security Password</label>
-                  <input 
-                    type="password"
-                    required
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                  />
-                </div>
+                {[
+                  { label: "Full Name (Legal Bank Name)", type: "text", val: regName, set: setRegName, ph: "e.g. Sola Bakare" },
+                  { label: "Email Address", type: "email", val: regEmail, set: setRegEmail, ph: "e.g. sola@example.com" },
+                  { label: "Security Password", type: "password", val: regPassword, set: setRegPassword, ph: "••••••••" },
+                ].map(f => (
+                  <div key={f.label}>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b", letterSpacing: "0.06em" }}>{f.label}</label>
+                    <input type={f.type} required value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
+                      className="w-full rounded-xl px-4 py-2.5 text-sm"
+                      style={{ background: "#0f1e35", border: "1px solid rgba(255,255,255,0.10)", color: "#f1f5f9" }}
+                    />
+                  </div>
+                ))}
 
                 {authRole === UserRole.EARNER && (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Referral Code (Optional)</label>
-                    <input 
-                      type="text"
-                      value={regReferral}
-                      onChange={(e) => setRegReferral(e.target.value)}
-                      placeholder="e.g. TUNDE887"
-                      className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono text-center uppercase tracking-wider"
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b", letterSpacing: "0.06em" }}>Referral Code (Optional)</label>
+                    <input type="text" value={regReferral} onChange={e => setRegReferral(e.target.value)} placeholder="e.g. TUNDE887"
+                      className="w-full rounded-xl px-4 py-2.5 text-sm font-mono text-center uppercase tracking-wider"
+                      style={{ background: "#0f1e35", border: "1px solid rgba(255,255,255,0.10)", color: "#f1f5f9" }}
                     />
                   </div>
                 )}
 
-                <button 
-                  type="submit"
-                  disabled={authLoading}
-                  className="w-full rounded-full bg-blue-500 hover:bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
-                >
+                <button type="submit" disabled={authLoading}
+                  className="w-full rounded-xl py-3 text-sm font-bold text-white cursor-pointer transition-all"
+                  style={{ background: "linear-gradient(135deg,#3b82f6,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}>
                   {authLoading ? "Initializing Encrypted Vault..." : "Create Account"}
                 </button>
               </form>
 
-              <div className="border-t border-slate-100 pt-4 text-center text-xs text-slate-400">
+              <div className="pt-4 text-center text-xs" style={{ borderTop: "1px solid rgba(255,255,255,0.06)", color: "#64748b" }}>
                 Already registered?{" "}
-                <button 
-                  onClick={() => setCurrentView("login")}
-                  className="font-bold text-blue-500 hover:text-blue-600 hover:underline"
-                >
+                <button onClick={() => setCurrentView("login")} className="font-bold cursor-pointer" style={{ color: "#60a5fa" }}>
                   Sign In
                 </button>
               </div>
@@ -1402,69 +1409,60 @@ export default function App() {
         {/* AUTHENTICATION SECURE VIEW (EMAIL VERIFICATION) */}
         {currentView === "verify-email" && (
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24 animate-fadeIn">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6">
+            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
               
-              <div className="text-center space-y-2">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 border border-blue-100">
-                  <ShieldCheck className="h-6 w-6" />
+              <div className="text-center space-y-3">
+                <div
+                  className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl"
+                  style={{ background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)", boxShadow: "0 0 20px rgba(59,130,246,0.15)" }}
+                >
+                  <ShieldCheck className="h-6 w-6" style={{ color: "#60a5fa" }} />
                 </div>
-                <h2 className="font-display text-xl font-bold text-slate-900">Email Verification Required</h2>
-                <p className="text-xs text-slate-400">
-                  A secure 6-digit verification code has been generated. Please enter the code sent to your email <span className="font-semibold text-slate-700">{verificationEmail}</span>.
+                <h2 className="font-bold text-white" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Email Verification Required</h2>
+                <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>
+                  A secure 6-digit code has been sent to{" "}
+                  <span className="font-semibold text-white">{verificationEmail}</span>.
+                  Enter it below.
                 </p>
               </div>
 
               {authError && (
-                <p className="rounded-2xl bg-rose-50 p-3 text-xs font-bold text-rose-600 border border-rose-100 text-center">
+                <p className="rounded-xl p-3 text-xs font-bold text-center" style={{ background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.20)", color: "#fb7185" }}>
                   {authError}
                 </p>
               )}
 
               <form onSubmit={handleVerifyEmail} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1 text-center">6-Digit Verification Code</label>
-                  <input 
-                    type="text"
-                    required
-                    maxLength={6}
+                  <label className="block text-xs font-semibold uppercase mb-1.5 text-center" style={{ color: "#64748b", letterSpacing: "0.06em" }}>6-Digit Verification Code</label>
+                  <input
+                    type="text" required maxLength={6}
                     value={verificationCode}
                     onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
-                    placeholder="e.g. 123456"
-                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-center text-lg font-bold tracking-widest focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    placeholder="123456"
+                    className="w-full rounded-xl px-4 py-3 text-center text-xl font-bold tracking-widest"
+                    style={{ background: "#0f1e35", border: "1px solid rgba(59,130,246,0.25)", color: "#60a5fa", letterSpacing: "0.35em" }}
                   />
                 </div>
-
-                <button 
-                  type="submit"
-                  disabled={authLoading}
-                  className="w-full rounded-full bg-blue-500 hover:bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
-                >
+                <button type="submit" disabled={authLoading}
+                  className="w-full rounded-xl py-3 text-sm font-bold text-white cursor-pointer transition-all"
+                  style={{ background: "linear-gradient(135deg,#3b82f6,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}>
                   {authLoading ? "Validating Credentials..." : "Verify Code & Log In"}
                 </button>
               </form>
 
-              <div className="flex flex-col gap-3 pt-2 text-center text-xs border-t border-slate-100 pt-4">
-                <p className="text-slate-400">
+              <div className="flex flex-col gap-3 text-center text-xs pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                <p style={{ color: "#64748b" }}>
                   Didn't receive the email?{" "}
-                  <button 
-                    onClick={handleResendCode}
-                    disabled={verificationResent}
-                    className={`font-bold text-blue-500 hover:text-blue-600 hover:underline ${verificationResent ? "opacity-50 cursor-not-allowed" : ""}`}
-                  >
-                    {verificationResent ? "Code Resent Successfully" : "Resend Verification Code"}
+                  <button onClick={handleResendCode} disabled={verificationResent}
+                    className={`font-bold cursor-pointer ${verificationResent ? "opacity-50 cursor-not-allowed" : ""}`}
+                    style={{ color: "#60a5fa" }}>
+                    {verificationResent ? "Code Resent ✓" : "Resend Verification Code"}
                   </button>
                 </p>
-                
-                <button 
-                  onClick={() => {
-                    setAuthError("");
-                    setVerificationEmail("");
-                    setVerificationCode("");
-                    setVerificationResent(false);
-                    setCurrentView("login");
-                  }}
-                  className="font-semibold text-slate-400 hover:text-slate-600"
-                >
+                <button
+                  onClick={() => { setAuthError(""); setVerificationEmail(""); setVerificationCode(""); setVerificationResent(false); setCurrentView("login"); }}
+                  className="font-semibold cursor-pointer transition-colors" style={{ color: "#475569" }}>
                   Return to Secure Sign In
                 </button>
               </div>
@@ -1523,19 +1521,37 @@ export default function App() {
 
       {/* Real Paystack Payment Checkout Popup */}
       {depositOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 p-4 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-sm rounded-2xl border border-gray-100 bg-white p-6 shadow-2xl relative overflow-hidden space-y-5">
-            
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fadeIn" style={{ background: "rgba(7,13,26,0.85)", backdropFilter: "blur(12px)" }}>
+          <div
+            className="w-full max-w-sm rounded-2xl p-6 relative overflow-hidden space-y-5"
+            style={{
+              background: "linear-gradient(145deg,#111827,#0f1e35)",
+              border: "1px solid rgba(255,255,255,0.10)",
+              boxShadow: "0 40px 80px rgba(0,0,0,0.70)"
+            }}
+          >
+            {/* Top glow strip */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-3/4 rounded-full" style={{ background: "linear-gradient(90deg,transparent,rgba(59,130,246,0.50),transparent)" }} />
+
             <div className="flex justify-between items-start">
               <div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-800">
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold"
+                  style={{ background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.20)", color: "#60a5fa" }}
+                >
                   Official Gateway
                 </span>
-                <h3 className="font-display text-base font-bold text-gray-900 mt-1">Fund Advertiser Wallet</h3>
+                <h3
+                  className="font-bold text-white mt-1"
+                  style={{ fontFamily: "var(--font-display)", fontSize: "1rem" }}
+                >
+                  Fund Advertiser Wallet
+                </h3>
               </div>
-              <button 
+              <button
                 onClick={() => { if (!depositProcessing) setDepositOpen(false); }}
-                className="rounded-full bg-gray-100 p-1 hover:bg-gray-200 text-gray-500 cursor-pointer"
+                className="rounded-full p-1.5 cursor-pointer transition-colors"
+                style={{ background: "rgba(255,255,255,0.06)", color: "#64748b", border: "1px solid rgba(255,255,255,0.08)" }}
                 disabled={depositProcessing}
               >
                 ✕
@@ -1544,53 +1560,56 @@ export default function App() {
 
             {depositProcessing ? (
               <div className="text-center py-8 space-y-4">
-                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
+                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4" style={{ borderColor: "rgba(59,130,246,0.20)", borderTopColor: "#3b82f6" }} />
                 <div>
-                  <p className="text-xs font-bold text-gray-800 uppercase tracking-wider">Contacting Paystack...</p>
-                  <p className="text-[10px] text-gray-400 mt-1 font-semibold">Opening secure Paystack checkout portal...</p>
+                  <p className="text-xs font-bold text-white uppercase tracking-wider">Contacting Paystack...</p>
+                  <p className="text-[10px] mt-1 font-semibold" style={{ color: "#475569" }}>Opening secure Paystack checkout portal...</p>
                 </div>
               </div>
             ) : (
               <form onSubmit={triggerDepositPayment} className="space-y-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Payment Method</label>
-                  <div className="rounded-xl border border-blue-100 bg-blue-50/20 p-3 text-xs text-blue-950 flex items-center gap-2">
+                  <label className="block text-[10px] font-bold uppercase mb-1.5" style={{ color: "#475569", letterSpacing: "0.07em" }}>Payment Method</label>
+                  <div
+                    className="rounded-xl p-3 text-xs flex items-center gap-2"
+                    style={{ background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.15)" }}
+                  >
                     <span className="text-lg">🇳🇬</span>
                     <div>
-                      <p className="font-bold">Paystack Secure Checkout</p>
-                      <p className="text-[10px] text-blue-700/80">Supports Cards, Bank Transfer, USSD & more</p>
+                      <p className="font-bold text-white">Paystack Secure Checkout</p>
+                      <p className="text-[10px]" style={{ color: "#60a5fa" }}>Supports Cards, Bank Transfer, USSD &amp; more</p>
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Fund Amount (Naira ₦)</label>
-                  <input 
-                    type="number"
-                    required
-                    min={settings.minDeposit}
-                    value={depositAmount}
-                    onChange={(e) => setDepositAmount(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500 bg-slate-50"
+                  <label className="block text-[10px] font-bold uppercase mb-1.5" style={{ color: "#475569", letterSpacing: "0.07em" }}>Fund Amount (Naira ₦)</label>
+                  <input
+                    type="number" required min={settings.minDeposit}
+                    value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
                     placeholder="Min: 1000"
+                    className="w-full rounded-xl px-3 py-2 text-sm font-mono"
+                    style={{ background: "#0f1e35", border: "1px solid rgba(255,255,255,0.10)", color: "#f1f5f9" }}
                   />
-                  <span className="block text-[10px] text-gray-400 mt-1">Min deposit: ₦{settings.minDeposit.toLocaleString()}</span>
+                  <span className="block text-[10px] mt-1" style={{ color: "#374151" }}>Min deposit: ₦{settings.minDeposit.toLocaleString()}</span>
                 </div>
 
-                <div className="text-[10px] text-gray-400 leading-relaxed font-medium bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                  ⚠️ <strong>Notice:</strong> You will be redirected to Paystack to complete your payment. Please do not close the payment window until redirection is complete.
+                <div
+                  className="text-[10px] leading-relaxed font-medium rounded-lg p-2.5"
+                  style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)", color: "#fbbf24" }}
+                >
+                  ⚠️ <strong>Notice:</strong> You will be redirected to Paystack. Do not close the payment window until redirection completes.
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 py-3 text-xs font-bold text-white shadow-md hover:shadow-lg transition-all cursor-pointer"
+                  className="w-full rounded-xl py-3 text-xs font-bold text-white cursor-pointer transition-all"
+                  style={{ background: "linear-gradient(135deg,#3b82f6,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}
                 >
                   Pay ₦{parseFloat(depositAmount || "0").toLocaleString()} via Paystack
                 </button>
-
               </form>
             )}
-
           </div>
         </div>
       )}
