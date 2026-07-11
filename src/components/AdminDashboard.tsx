@@ -73,7 +73,12 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
     thisMonthRevenue: 0,
     totalWithdrawn: 0,
     pendingWithdrawalAmount: 0,
-    availableBalance: 0
+    availableBalance: 0,
+    // Commission breakdown
+    totalActivationFees: 0,
+    totalCommission: 0,
+    totalWithdrawalFees: 0,
+    activatedEarnersCount: 0
   });
   const [ownerBankAccounts, setOwnerBankAccounts] = React.useState<any[]>([]);
   const [ownerWithdrawals, setOwnerWithdrawals] = React.useState<any[]>([]);
@@ -2029,6 +2034,30 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">This Month's Revenue</span>
                 <span className="block font-mono text-xl font-bold text-slate-700 mt-1">₦{platformStats.thisMonthRevenue.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Commission source breakdown */}
+            <div className="rounded-2xl border border-blue-100 bg-blue-50/20 p-5 shadow-sm space-y-3">
+              <h3 className="text-xs font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Percent className="h-3.5 w-3.5" /> Admin Balance Breakdown (All Commission Sources)
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="rounded-xl bg-white border border-blue-100 p-4 space-y-1">
+                  <span className="block text-[10px] font-bold text-blue-600 uppercase">Earner Activation Fees</span>
+                  <span className="block font-mono text-lg font-black text-blue-700">₦{(platformStats.totalActivationFees || 0).toLocaleString()}</span>
+                  <span className="block text-[10px] text-gray-400">{platformStats.activatedEarnersCount || 0} earners × ₦500</span>
+                </div>
+                <div className="rounded-xl bg-white border border-green-100 p-4 space-y-1">
+                  <span className="block text-[10px] font-bold text-green-700 uppercase">Task Commission</span>
+                  <span className="block font-mono text-lg font-black text-green-700">₦{(platformStats.totalCommission || 0).toLocaleString()}</span>
+                  <span className="block text-[10px] text-gray-400">Cost-per-slot minus earner reward</span>
+                </div>
+                <div className="rounded-xl bg-white border border-amber-100 p-4 space-y-1">
+                  <span className="block text-[10px] font-bold text-amber-700 uppercase">Withdrawal Fees</span>
+                  <span className="block font-mono text-lg font-black text-amber-600">₦{(platformStats.totalWithdrawalFees || 0).toLocaleString()}</span>
+                  <span className="block text-[10px] text-gray-400">₦{100} flat fee per approved withdrawal</span>
+                </div>
               </div>
             </div>
 

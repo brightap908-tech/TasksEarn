@@ -21,6 +21,7 @@ import {
   TaskPricing,
   getPlatformForCategory
 } from "./src/types.js";
+import { isPostgresEnabled, loadFromPostgres, saveToPostgres } from "./src/postgresDb.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 const DB_FILE = path.join(process.cwd(), "db.json");
@@ -134,10 +135,16 @@ function loadDB() {
       if (!db.pages) db.pages = {};
       if (!db.taskPricing || db.taskPricing.length === 0) db.taskPricing = getInitialPricing();
       if (!db.ownerEarnings) {
-        db.ownerEarnings = {
-          bankAccounts: [],
-          withdrawals: []
-        };
+        db.ownerEarnings = { bankAccounts: [], withdrawals: [] };
+      }
+      // Backfill isActivated for users loaded from old db.json snapshots
+      if (db.users) {
+        db.users.forEach((u: any) => {
+          if (u.isActivated === undefined) {
+            // Admin and Advertisers are always activated; Earners need to pay
+            u.isActivated = u.role !== UserRole.EARNER;
+          }
+        });
       }
       if (!db.settings) {
         db.settings = {
@@ -171,6 +178,7 @@ function loadDB() {
       password: hashPassword("password123"),
       role: UserRole.ADMIN,
       isVerified: true,
+      isActivated: true,
       walletBalance: 0,
       createdAt: new Date().toISOString()
     },
@@ -181,6 +189,7 @@ function loadDB() {
       password: hashPassword("password123"),
       role: UserRole.EARNER,
       isVerified: true,
+      isActivated: true, // Demo earner pre-activated
       walletBalance: 2500, // Naira
       referralCode: "TUNDE887",
       createdAt: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString() // 10 days ago
@@ -192,6 +201,7 @@ function loadDB() {
       password: hashPassword("password123"),
       role: UserRole.ADVERTISER,
       isVerified: true,
+      isActivated: true, // Advertisers don't need activation fee
       walletBalance: 35000, // Naira
       createdAt: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString() // 15 days ago
     }
@@ -471,6 +481,10 @@ A submission is rejected if you did not follow the instructions, if you did not 
 
 function saveDB() {
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf-8");
+  // Async sync to Railway PostgreSQL when DATABASE_URL is configured
+  if (isPostgresEnabled()) {
+    saveToPostgres(db).catch(err => console.error("[PostgreSQL Sync Error]", err));
+  }
 }
 
 // Initialize Database on startup
@@ -693,11 +707,13 @@ app.post("/api/auth/register", async (req, res) => {
     email,
     password: hashPassword(password),
     role,
-    isVerified: false, // Starts unverified to enforce email verification
+    isVerified: false, // Starts unverified — enforces email verification
+    // Earners must pay ₦500 activation fee; Advertisers and Admins are pre-activated
+    isActivated: role !== UserRole.EARNER,
     verificationCode,
     verificationCodeExpires,
     verificationCodeLastSent,
-    walletBalance: 0, // Starts at 0
+    walletBalance: 0,
     referralCode: userReferralCode,
     referredBy: referredByUserId,
     createdAt: new Date().toISOString()
@@ -959,6 +975,11 @@ app.get("/api/earner/tasks", (req, res) => {
 app.post("/api/earner/tasks/:id/submit", (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+  // Earners must activate their account (pay ₦500 fee) before submitting tasks
+  if (!user.isActivated) {
+    return res.status(403).json({ error: "ACCOUNT_NOT_ACTIVATED", message: "Your account must be activated before you can submit tasks. Please pay the ₦500 one-time activation fee." });
+  }
 
   const taskId = req.params.id;
   const { proofText, proofScreenshot } = req.body;
@@ -1536,6 +1557,147 @@ app.post("/api/advertiser/deposit/verify", async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
+// EARNER ACCOUNT ACTIVATION — ONE-TIME ₦500 FEE VIA PAYSTACK
+// -----------------------------------------------------------------------------
+app.post("/api/earner/activation/initialize", async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+  if (user.isActivated) {
+    return res.json({ success: true, alreadyActivated: true });
+  }
+
+  const ACTIVATION_FEE = 500; // ₦500 one-time earner activation fee
+  const txId = "tx-" + Math.random().toString(36).substr(2, 9);
+  const ref = "ACT-" + Math.floor(10000000 + Math.random() * 90000000);
+
+  const pendingTx = {
+    id: txId,
+    userId: user.id,
+    userName: user.name,
+    userRole: user.role,
+    amount: ACTIVATION_FEE,
+    type: TransactionType.ACTIVATION,
+    status: TransactionStatus.PENDING,
+    description: "Earner Account Activation Fee (One-Time)",
+    reference: ref,
+    gateway: "Paystack",
+    createdAt: new Date().toISOString()
+  };
+
+  db.transactions.push(pendingTx);
+  saveDB();
+
+  const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+  if (!paystackKey) {
+    db.transactions = db.transactions.filter(t => t.id !== txId);
+    saveDB();
+    return res.status(400).json({ error: "PAYSTACK_SECRET_KEY is not configured. Please set it in your Replit Secrets panel." });
+  }
+
+  try {
+    const origin = req.headers.referer || req.headers.origin || `http://localhost:${PORT}`;
+    const baseOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
+    const callbackUrl = `${baseOrigin}/#paystack_activation_ref=${ref}`;
+
+    const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${paystackKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: user.email, amount: ACTIVATION_FEE * 100, reference: ref, callback_url: callbackUrl })
+    });
+
+    const paystackData: any = await paystackRes.json();
+    if (paystackData && paystackData.status && paystackData.data) {
+      return res.json({ success: true, authorization_url: paystackData.data.authorization_url, reference: ref });
+    } else {
+      db.transactions = db.transactions.filter(t => t.id !== txId);
+      saveDB();
+      return res.status(500).json({ error: paystackData.message || "Failed to initialize activation payment" });
+    }
+  } catch (err) {
+    db.transactions = db.transactions.filter(t => t.id !== txId);
+    saveDB();
+    return res.status(500).json({ error: "Failed to connect to Paystack payment gateway" });
+  }
+});
+
+app.post("/api/earner/activation/verify", async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+  // Idempotent — already activated
+  if (user.isActivated) {
+    const { password: _, verificationCode: __, verificationCodeExpires: ___, ...safe } = user;
+    return res.json({ success: true, alreadyActivated: true, user: safe });
+  }
+
+  const { reference } = req.body;
+  if (!reference) return res.status(400).json({ error: "Transaction reference is required" });
+
+  const transaction = db.transactions.find(
+    t => t.reference === reference && t.userId === user.id && t.type === TransactionType.ACTIVATION
+  );
+  if (!transaction) return res.status(404).json({ error: "Activation transaction record not found" });
+
+  // Prevent double-credit
+  if (transaction.status === TransactionStatus.SUCCESS) {
+    if (!user.isActivated) { user.isActivated = true; saveDB(); }
+    const { password: _, ...safe } = user;
+    return res.json({ success: true, user: safe });
+  }
+  if (transaction.status === TransactionStatus.FAILED || transaction.status === TransactionStatus.REJECTED) {
+    return res.status(400).json({ error: "This activation payment has already been marked as failed." });
+  }
+
+  const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+  if (!paystackKey) return res.status(400).json({ error: "PAYSTACK_SECRET_KEY is not configured." });
+
+  try {
+    const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      method: "GET",
+      headers: { "Authorization": `Bearer ${paystackKey}` }
+    });
+
+    const paystackData: any = await paystackRes.json();
+    if (paystackData && paystackData.status && paystackData.data) {
+      const paystackStatus = paystackData.data.status;
+      const paystackAmount = paystackData.data.amount / 100; // kobo → naira
+
+      if (paystackStatus === "success") {
+        if (Math.abs(paystackAmount - transaction.amount) > 0.01) {
+          transaction.status = TransactionStatus.FAILED;
+          saveDB();
+          return res.status(400).json({ error: "Activation payment amount mismatch. Security audit flag raised." });
+        }
+
+        // ✅ Mark payment successful and INSTANTLY activate the account
+        transaction.status = TransactionStatus.SUCCESS;
+        user.isActivated = true;
+        saveDB();
+
+        // Notify admin dashboard in real-time
+        notifyAdmin({
+          type: "submission",
+          message: `🎉 Earner "${user.name}" activated their account — ₦500 commission received.`,
+          referenceId: transaction.id
+        });
+
+        const { password: _, verificationCode: __, verificationCodeExpires: ___, ...safe } = user;
+        return res.json({ success: true, activated: true, user: safe });
+      } else {
+        transaction.status = TransactionStatus.FAILED;
+        saveDB();
+        return res.status(400).json({ error: `Activation payment failed. Paystack reported: ${paystackStatus}` });
+      }
+    } else {
+      return res.status(500).json({ error: "Could not verify activation payment status with Paystack" });
+    }
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to verify activation payment with Paystack" });
+  }
+});
+
+// -----------------------------------------------------------------------------
 // HISTORIC TRANSACTION HISTORY
 // -----------------------------------------------------------------------------
 app.get("/api/user/transactions", (req, res) => {
@@ -1697,7 +1859,7 @@ app.post("/api/admin/submissions/:id/review", (req, res) => {
   res.json({ success: true, submission });
 });
 
-// Helper to calculate platform revenue stats
+// Helper to calculate platform revenue stats (includes commission, withdrawal fees, activation fees)
 function getPlatformRevenueStats() {
   let totalCommission = 0;
   let todayCommission = 0;
@@ -1707,50 +1869,52 @@ function getPlatformRevenueStats() {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
+  // 1. Task submission commissions (costPerSlot - earnerReward per approved submission)
   const submissions = db.submissions || [];
   submissions.forEach(s => {
     if (s.status === SubmissionStatus.APPROVED || s.status === "Approved") {
       const task = (db.tasks || []).find(t => t.id === s.taskId);
-      const cost = task ? task.costPerSlot : (s.reward * 1.35); // fallback estimate
+      const cost = task ? task.costPerSlot : (s.reward * 1.35);
       const commission = cost - s.reward;
-
       totalCommission += commission;
-
-      // Check date
       const approvedTime = s.approvedAt ? new Date(s.approvedAt).getTime() : new Date(s.submittedAt).getTime();
-      if (approvedTime >= startOfToday) {
-        todayCommission += commission;
-      }
-      if (approvedTime >= startOfThisMonth) {
-        monthCommission += commission;
-      }
+      if (approvedTime >= startOfToday) todayCommission += commission;
+      if (approvedTime >= startOfThisMonth) monthCommission += commission;
     }
   });
 
+  // 2. Withdrawal fees
   let totalWithdrawalFees = 0;
   let todayWithdrawalFees = 0;
   let monthWithdrawalFees = 0;
-
   const userWithdrawals = (db.transactions || []).filter(
     t => t.type === TransactionType.WITHDRAWAL && (t.status === TransactionStatus.SUCCESS || t.status === "Success" || t.status === "Approved")
   );
-
   userWithdrawals.forEach(t => {
     const fee = db.settings?.withdrawalFee || 100;
     totalWithdrawalFees += fee;
-
     const time = new Date(t.createdAt).getTime();
-    if (time >= startOfToday) {
-      todayWithdrawalFees += fee;
-    }
-    if (time >= startOfThisMonth) {
-      monthWithdrawalFees += fee;
-    }
+    if (time >= startOfToday) todayWithdrawalFees += fee;
+    if (time >= startOfThisMonth) monthWithdrawalFees += fee;
   });
 
-  const lifetimeRevenue = totalCommission + totalWithdrawalFees;
-  const todayRevenue = todayCommission + todayWithdrawalFees;
-  const monthRevenue = monthCommission + monthWithdrawalFees;
+  // 3. Earner activation fees (₦500 per activated earner) — stored as ACTIVATION transactions
+  let totalActivationFees = 0;
+  let todayActivationFees = 0;
+  let monthActivationFees = 0;
+  const activationTxs = (db.transactions || []).filter(
+    t => t.type === TransactionType.ACTIVATION && (t.status === TransactionStatus.SUCCESS || t.status === "Success")
+  );
+  activationTxs.forEach(t => {
+    totalActivationFees += t.amount;
+    const time = new Date(t.createdAt).getTime();
+    if (time >= startOfToday) todayActivationFees += t.amount;
+    if (time >= startOfThisMonth) monthActivationFees += t.amount;
+  });
+
+  const lifetimeRevenue = totalCommission + totalWithdrawalFees + totalActivationFees;
+  const todayRevenue = todayCommission + todayWithdrawalFees + todayActivationFees;
+  const monthRevenue = monthCommission + monthWithdrawalFees + monthActivationFees;
 
   const ownerWithdrawals = db.ownerEarnings?.withdrawals || [];
   const totalWithdrawn = ownerWithdrawals
@@ -1770,7 +1934,12 @@ function getPlatformRevenueStats() {
     thisMonthRevenue: monthRevenue,
     totalWithdrawn,
     pendingWithdrawalAmount,
-    availableBalance
+    availableBalance,
+    // Breakdown for Admin Dashboard display
+    totalActivationFees,
+    totalCommission,
+    totalWithdrawalFees,
+    activatedEarnersCount: activationTxs.length
   };
 }
 
@@ -2434,6 +2603,19 @@ app.post("/api/admin/notifications/:id/read", (req, res) => {
 // VITE CLIENT DEV SERVER INTEGRATION & SPA FALLBACK
 // -----------------------------------------------------------------------------
 async function startServer() {
+  // Load from Railway PostgreSQL (DATABASE_URL) before serving any requests
+  if (isPostgresEnabled()) {
+    console.log("[PostgreSQL] DATABASE_URL detected — loading database state from Railway PostgreSQL...");
+    try {
+      db = await loadFromPostgres(db);
+      console.log("[PostgreSQL] ✅ Database state loaded successfully from Railway PostgreSQL.");
+    } catch (err) {
+      console.error("[PostgreSQL] ❌ Failed to load from PostgreSQL, falling back to db.json:", err);
+    }
+  } else {
+    console.log("[Database] No DATABASE_URL configured — using local db.json file storage.");
+  }
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true, allowedHosts: true },

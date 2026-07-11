@@ -51,7 +51,7 @@ function mapRowToCamel(row: any): any {
     )) {
       val = Number(val);
     }
-    if (key === "is_verified" || key === "active" || key === "is_default") {
+    if (key === "is_verified" || key === "active" || key === "is_default" || key === "is_activated") {
       val = val === true || val === 1 || val === "1";
     }
     result[snakeToCamel(key)] = val;
@@ -74,11 +74,16 @@ export async function bootstrapTables() {
         password VARCHAR(255) NOT NULL,
         role VARCHAR(50) NOT NULL DEFAULT 'Earner',
         is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+        is_activated BOOLEAN NOT NULL DEFAULT FALSE,
         wallet_balance DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
         referral_code VARCHAR(50) NULL,
         referred_by VARCHAR(50) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+    // Safe migration: add is_activated to existing tables that predate this column
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_activated BOOLEAN NOT NULL DEFAULT FALSE
     `);
 
     // 2. Tasks table
@@ -351,19 +356,20 @@ export async function saveToPostgres(db: any) {
     // 1. Sync Users
     for (const u of db.users) {
       await client.query(`
-        INSERT INTO users (id, name, email, password, role, is_verified, wallet_balance, referral_code, referred_by, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        INSERT INTO users (id, name, email, password, role, is_verified, is_activated, wallet_balance, referral_code, referred_by, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         ON CONFLICT (id) DO UPDATE SET
           name = EXCLUDED.name,
           email = EXCLUDED.email,
           password = EXCLUDED.password,
           role = EXCLUDED.role,
           is_verified = EXCLUDED.is_verified,
+          is_activated = EXCLUDED.is_activated,
           wallet_balance = EXCLUDED.wallet_balance,
           referral_code = EXCLUDED.referral_code,
           referred_by = EXCLUDED.referred_by,
           created_at = EXCLUDED.created_at
-      `, [u.id, u.name, u.email, u.password, u.role, u.isVerified, u.walletBalance, u.referralCode, u.referredBy, u.createdAt]);
+      `, [u.id, u.name, u.email, u.password, u.role, u.isVerified, u.isActivated ?? false, u.walletBalance, u.referralCode, u.referredBy, u.createdAt]);
     }
 
     // 2. Sync Tasks

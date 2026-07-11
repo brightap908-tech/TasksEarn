@@ -68,7 +68,8 @@ export enum TransactionType {
   WITHDRAWAL = "Withdrawal",
   EARN = "Task Earnings",
   SPEND = "Campaign Spend",
-  REFERRAL = "Referral Bonus"
+  REFERRAL = "Referral Bonus",
+  ACTIVATION = "Activation Fee"
 }
 
 export enum TransactionStatus {
@@ -85,6 +86,7 @@ export interface User {
   email: string;
   role: UserRole;
   isVerified: boolean;
+  isActivated?: boolean; // Earners must pay ₦500 activation fee; Admins/Advertisers are pre-activated
   walletBalance: number;
   referralCode?: string;
   referredBy?: string;
