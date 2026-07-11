@@ -709,7 +709,7 @@ export default function App() {
                   </h1>
 
                   <p className="text-sm leading-relaxed" style={{ color: "#64748b" }}>
-                    Join over 45,000+ active Nigerians working from home. Earn wallet payouts instantly in Nigerian Naira (₦) for likes, subscribes, follows, reviews, and app downloads. Advertisers get 100% organic, verified growth.
+                    Join over 12,000+ active Nigerians working from home. Earn wallet payouts instantly in Nigerian Naira (₦) for likes, subscribes, follows, reviews, and app downloads. Advertisers get 100% organic, verified growth.
                   </p>
 
                   <div className="flex flex-col sm:flex-row gap-3 pt-1">
