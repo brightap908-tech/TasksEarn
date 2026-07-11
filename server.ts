@@ -1551,7 +1551,7 @@ app.post("/api/earner/activation/verify", async (req, res) => {
     const paystackKey = process.env.PAYSTACK_SECRET_KEY;
     if (!paystackKey) return res.status(400).json({ error: "PAYSTACK_SECRET_KEY is not configured." });
 
-    // Verify with Paystack first (before any DB locks)
+    // Step 1: Verify with Paystack BEFORE acquiring any DB lock
     const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
       method: "GET",
       headers: { "Authorization": `Bearer ${paystackKey}` }
@@ -1562,15 +1562,35 @@ app.post("/api/earner/activation/verify", async (req, res) => {
       return res.status(500).json({ error: "Could not verify payment with Paystack. Please contact support." });
     }
 
-    const pStatus = paystackData.data.status;
-    const pAmount = paystackData.data.amount / 100;
+    const pStatus    = paystackData.data.status;
+    const pAmount    = paystackData.data.amount / 100;  // kobo → naira
+    const pEmail     = (paystackData.data.customer?.email || "").toLowerCase();
+    const pReference = paystackData.data.reference || "";
+    const pMeta      = paystackData.data.metadata || {};
 
+    // Paystack must report a successful payment
     if (pStatus !== "success") {
       return res.status(400).json({ error: `Payment not successful. Status: ${pStatus}. If you were charged, please contact support.` });
     }
 
+    // Amount must be exactly ₦500 (allow ±₦1 for floating-point tolerance)
     if (Math.abs(pAmount - 500) > 1) {
       return res.status(400).json({ error: "Payment amount mismatch. Please contact support." });
+    }
+
+    // Reference echoed by Paystack must match what was submitted
+    if (pReference !== reference) {
+      return res.status(400).json({ error: "Reference mismatch in Paystack response. Please contact support." });
+    }
+
+    // Email reported by Paystack must belong to the authenticated user
+    if (pEmail && pEmail !== user.email.toLowerCase()) {
+      return res.status(403).json({ error: "Payment reference does not belong to your account." });
+    }
+
+    // Metadata type guard: if we embedded type=earner_activation, it must match
+    if (pMeta.type && pMeta.type !== "earner_activation") {
+      return res.status(403).json({ error: "Payment reference is not an activation payment." });
     }
 
     const client = await pool.connect();
@@ -1578,21 +1598,41 @@ app.post("/api/earner/activation/verify", async (req, res) => {
     try {
       await client.query("BEGIN");
 
-      // Lock user row and check activation (prevents duplicate activation)
+      // Step 2: Lock and verify the pending activation transaction belonging to THIS user.
+      // This is the ownership gate — it rejects cross-user reference reuse and double-claims.
+      const pendingTxRes = await client.query(
+        `SELECT id FROM transactions
+         WHERE reference = $1
+           AND user_id   = $2
+           AND type      = 'Activation Fee'
+           AND status    = 'Pending'
+         FOR UPDATE`,
+        [reference, user.id]
+      );
+
+      if (pendingTxRes.rows.length === 0) {
+        // No pending activation record owned by this user → reject.
+        // This fires if: (a) reference was never created for this user, (b) it was already used/claimed.
+        await client.query("ROLLBACK");
+        return res.status(403).json({
+          error: "Invalid or already-used payment reference. Please initiate a new activation payment."
+        });
+      }
+
+      const pendingTxId = pendingTxRes.rows[0].id;
+
+      // Step 3: Check activation status under the same lock to prevent TOCTOU races
       const userRes = await client.query("SELECT is_activated FROM users WHERE id=$1 FOR UPDATE", [user.id]);
       if (userRes.rows[0]?.is_activated === true) {
         await client.query("ROLLBACK");
         alreadyDone = true;
       } else {
-        // Activate the account permanently
+        // Atomically: activate the account + mark transaction as Success
         await client.query("UPDATE users SET is_activated = true WHERE id=$1", [user.id]);
-
-        // Mark the pending transaction as Success
         await client.query(
-          "UPDATE transactions SET status='Success' WHERE reference=$1 AND user_id=$2",
-          [reference, user.id]
+          "UPDATE transactions SET status='Success' WHERE id=$1",
+          [pendingTxId]
         );
-
         await client.query("COMMIT");
       }
     } catch (txErr) {
