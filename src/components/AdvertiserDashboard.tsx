@@ -37,7 +37,9 @@ import {
   TrendingUp,
   Target,
   ArrowUpRight,
-  RefreshCw
+  RefreshCw,
+  Tags,
+  Coins
 } from "lucide-react";
 
 interface AdvertiserDashboardProps {
@@ -48,7 +50,7 @@ interface AdvertiserDashboardProps {
   apiFetch: (endpoint: string, options?: RequestInit) => Promise<any>;
 }
 
-type Tab = "overview" | "create" | "manage" | "audit" | "transactions" | "profile";
+type Tab = "overview" | "create" | "manage" | "audit" | "transactions" | "price-list" | "profile";
 
 const COUNTRIES = [
   "Nigeria", "Ghana", "Kenya", "South Africa", "Uganda", "Tanzania", "Rwanda",
@@ -82,6 +84,10 @@ export default function AdvertiserDashboard({
   const [submissions, setSubmissions] = React.useState<TaskSubmission[]>([]);
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
   const [pricingList, setPricingList] = React.useState<any[]>([]);
+
+  // ── Advertiser Price List (no earner rewards exposed) ─────────────────────
+  const [advertiserPricing, setAdvertiserPricing] = React.useState<{ id: string; platform: string; costPerSlot: number; logoUrl?: string | null }[]>([]);
+  const [priceListLoading, setPriceListLoading] = React.useState(false);
 
   // ── Audit ─────────────────────────────────────────────────────────────────
   const [auditingSub, setAuditingSub] = React.useState<TaskSubmission | null>(null);
@@ -214,6 +220,16 @@ export default function AdvertiserDashboard({
     } catch (e) {}
   };
 
+  const fetchAdvertiserPricing = async () => {
+    setPriceListLoading(true);
+    try {
+      const data = await apiFetch("/api/advertiser/pricing");
+      if (Array.isArray(data)) setAdvertiserPricing(data);
+    } catch (e) {} finally {
+      setPriceListLoading(false);
+    }
+  };
+
   React.useEffect(() => {
     fetchStats();
     fetchTransactions();
@@ -225,6 +241,7 @@ export default function AdvertiserDashboard({
     if (activeTab === "manage") fetchCampaigns();
     if (activeTab === "audit") fetchSubmissions();
     if (activeTab === "transactions") fetchTransactions();
+    if (activeTab === "price-list") fetchAdvertiserPricing();
   }, [activeTab]);
 
   // ── Campaign Create ───────────────────────────────────────────────────────
@@ -506,6 +523,7 @@ export default function AdvertiserDashboard({
           {navBtn("manage", `Manage Campaigns (${campaigns.length || stats.campaignsCount})`, <Briefcase className="h-4 w-4 text-slate-400" />)}
           {navBtn("audit", "Auditing Desk", <CheckSquare className="h-4 w-4 text-slate-400" />, stats.pendingSubmissionsCount)}
           {navBtn("transactions", "Payment Records", <History className="h-4 w-4 text-slate-400" />)}
+          {navBtn("price-list", "Task Price List", <Tags className="h-4 w-4 text-slate-400" />)}
           {navBtn("profile", "Profile Settings", <UserCircle className="h-4 w-4 text-slate-400" />)}
         </div>
 
@@ -1043,6 +1061,104 @@ export default function AdvertiserDashboard({
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ─── TAB: TASK PRICE LIST ───────────────────────────────────────── */}
+        {activeTab === "price-list" && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h2 className="font-display text-lg font-black text-slate-800 flex items-center gap-2">
+                    <Tags className="h-5 w-5 text-blue-500" /> Task Price List
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Advertiser campaign fees per completed task slot. Prices are set by the platform administrator and are subject to change.
+                  </p>
+                </div>
+                <button
+                  onClick={fetchAdvertiserPricing}
+                  disabled={priceListLoading}
+                  className="rounded-xl border border-slate-200 hover:bg-slate-50 p-2.5 text-xs font-bold text-slate-600 transition-all flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+                >
+                  <RefreshCw className={`h-4 w-4 ${priceListLoading ? "animate-spin" : ""}`} /> Refresh
+                </button>
+              </div>
+            </div>
+
+            {priceListLoading ? (
+              <div className="rounded-2xl border border-slate-100 bg-white p-12 text-center">
+                <RefreshCw className="h-8 w-8 text-blue-400 animate-spin mx-auto" />
+                <p className="text-xs text-slate-400 mt-3 font-semibold animate-pulse">Loading platform prices...</p>
+              </div>
+            ) : advertiserPricing.length === 0 ? (
+              <div className="rounded-2xl border border-slate-100 bg-white p-12 text-center">
+                <Coins className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                <p className="text-sm font-bold text-slate-400">No pricing available yet.</p>
+                <p className="text-xs text-slate-400 mt-1">The administrator hasn't configured platform pricing. Check back later.</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                {/* Info banner */}
+                <div className="border-b border-blue-100 bg-blue-50/60 px-5 py-3 flex items-center gap-2.5">
+                  <Info className="h-4 w-4 text-blue-500 shrink-0" />
+                  <p className="text-xs text-blue-700">
+                    <strong>How pricing works:</strong> The cost shown is charged per completed and verified task slot. Your total campaign cost = price per slot × number of slots you choose.
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-50/60 text-[10px] text-slate-400 font-extrabold tracking-wider uppercase border-b border-slate-200">
+                        <th className="px-5 py-4 w-1/2">Platform</th>
+                        <th className="px-5 py-4">Price per Completed Task</th>
+                        <th className="px-5 py-4 text-right">Example: 100 Slots</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {advertiserPricing.map((item) => (
+                        <tr key={item.id} className="hover:bg-blue-50/20 transition-colors">
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="h-9 w-9 rounded-xl border border-slate-100 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                                {item.logoUrl ? (
+                                  <img src={item.logoUrl} alt={item.platform} className="h-full w-full object-contain p-1" />
+                                ) : (
+                                  <span className="text-sm font-black text-blue-600">{item.platform.substring(0, 2).toUpperCase()}</span>
+                                )}
+                              </div>
+                              <span className="font-bold text-slate-800 text-sm">{item.platform}</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className="inline-flex items-center gap-1 font-mono font-extrabold text-blue-600 text-base">
+                              ₦{item.costPerSlot.toLocaleString()}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-sans ml-1">/ slot</span>
+                          </td>
+                          <td className="px-5 py-4 text-right">
+                            <span className="font-mono font-bold text-slate-700">₦{(item.costPerSlot * 100).toLocaleString()}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* CTA footer */}
+                <div className="border-t border-slate-100 bg-slate-50/40 px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <p className="text-[11px] text-slate-400">Prices include all platform service fees. Shown in Nigerian Naira (₦).</p>
+                  <button
+                    onClick={() => setActiveTab("create")}
+                    className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2 text-xs font-bold text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <PlusCircle className="h-3.5 w-3.5" /> Build a Campaign
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

@@ -45,15 +45,22 @@ interface EarnerDashboardProps {
   showToast: (message: string, type?: "success" | "error") => void;
 }
 
-// Complete list of Nigerian banks supported
-const NIGERIAN_BANKS = [
-  "Access Bank", "Guaranty Trust Bank (GTB)", "Zenith Bank", "United Bank for Africa (UBA)", 
-  "First Bank of Nigeria", "Fidelity Bank", "First City Monument Bank (FCMB)", "Sterling Bank", 
-  "Union Bank of Nigeria", "Wema Bank", "Keystone Bank", "Polaris Bank", "Ecobank Nigeria", 
-  "Stanbic IBTC Bank", "Unity Bank", "Jaiz Bank", "Providus Bank", "Parallex Bank", 
-  "Titan Trust Bank", "Globus Bank", "PremiumTrust Bank", "Lotus Bank", "Optimus Bank", 
-  "Moniepoint Microfinance Bank", "OPay Microfinance Bank", "PalmPay Microfinance Bank", 
-  "Kuda Bank", "VFD Microfinance Bank"
+interface NigerianBank { name: string; code: string; }
+const FALLBACK_BANKS: NigerianBank[] = [
+  { name: "Access Bank", code: "044" }, { name: "Guaranty Trust Bank (GTB)", code: "058" },
+  { name: "Zenith Bank", code: "057" }, { name: "United Bank for Africa (UBA)", code: "033" },
+  { name: "First Bank of Nigeria", code: "011" }, { name: "Fidelity Bank", code: "070" },
+  { name: "First City Monument Bank (FCMB)", code: "214" }, { name: "Sterling Bank", code: "232" },
+  { name: "Union Bank of Nigeria", code: "032" }, { name: "Wema Bank", code: "035" },
+  { name: "Keystone Bank", code: "082" }, { name: "Polaris Bank", code: "076" },
+  { name: "Ecobank Nigeria", code: "050" }, { name: "Stanbic IBTC Bank", code: "221" },
+  { name: "Unity Bank", code: "215" }, { name: "Jaiz Bank", code: "301" },
+  { name: "Providus Bank", code: "101" }, { name: "Parallex Bank", code: "104" },
+  { name: "Titan Trust Bank", code: "102" }, { name: "Globus Bank", code: "00103" },
+  { name: "PremiumTrust Bank", code: "105" }, { name: "Lotus Bank", code: "303" },
+  { name: "Optimus Bank", code: "107" }, { name: "Moniepoint Microfinance Bank", code: "50515" },
+  { name: "OPay Microfinance Bank", code: "999992" }, { name: "PalmPay Microfinance Bank", code: "999991" },
+  { name: "Kuda Bank", code: "50211" }, { name: "VFD Microfinance Bank", code: "566" }
 ];
 
 export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFetch, showToast }: EarnerDashboardProps) {
@@ -105,7 +112,9 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
 
   // Withdraw Form State
   const [withdrawAmount, setWithdrawAmount] = React.useState("");
-  const [bankName, setBankName] = React.useState(NIGERIAN_BANKS[1]); // Default GTB
+  const [bankList, setBankList] = React.useState<NigerianBank[]>(FALLBACK_BANKS);
+  const [bankName, setBankName] = React.useState("Guaranty Trust Bank (GTB)");
+  const [bankCode, setBankCode] = React.useState("058");
   const [accountNumber, setAccountNumber] = React.useState("");
   const [accountName, setAccountName] = React.useState("");
   const [withdrawSuccess, setWithdrawSuccess] = React.useState(false);
@@ -113,6 +122,12 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
   const [withdrawSubmitting, setWithdrawSubmitting] = React.useState(false);
   const [minWithdrawLimit, setMinWithdrawLimit] = React.useState(2000);
   const [withdrawFee, setWithdrawFee] = React.useState(100);
+
+  // Bank verification state
+  const [verifying, setVerifying] = React.useState(false);
+  const [isVerified, setIsVerified] = React.useState(false);
+  const [verifyError, setVerifyError] = React.useState("");
+  const [verifySuccess, setVerifySuccess] = React.useState("");
 
   // Profile Form State
   const [profileName, setProfileName] = React.useState(user.name);
@@ -185,9 +200,55 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
     } catch (e) {}
   };
 
+  // Fetch live bank list from server (Paystack-powered or fallback)
+  const fetchBankList = async () => {
+    try {
+      const data = await apiFetch("/api/banks");
+      if (Array.isArray(data) && data.length > 0) {
+        setBankList(data);
+        // If current selection isn't in new list, reset to first bank
+        const first = data[0] as NigerianBank;
+        setBankName(first.name);
+        setBankCode(first.code);
+      }
+    } catch (e) {}
+  };
+
+  // Verify bank account via Paystack (server-side, key never exposed)
+  const handleVerifyBank = async () => {
+    if (accountNumber.length !== 10) {
+      setVerifyError("Enter a valid 10-digit account number first.");
+      return;
+    }
+    setVerifying(true);
+    setVerifyError("");
+    setVerifySuccess("");
+    setAccountName("");
+    setIsVerified(false);
+    try {
+      const res = await apiFetch("/api/verify-bank", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountNumber, bankCode, bankName })
+      });
+      if (res && res.success) {
+        setAccountName(res.accountName);
+        setIsVerified(true);
+        setVerifySuccess(`✓ Verified: ${res.accountName}${res.isSimulated ? " (simulated)" : ""}`);
+      } else {
+        setVerifyError(res?.error || "Verification failed. Please check account details.");
+      }
+    } catch (e) {
+      setVerifyError("Network error during verification. Please try again.");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   React.useEffect(() => {
     fetchDashboardStats();
     fetchLimits();
+    fetchBankList();
   }, [user.walletBalance]);
 
   React.useEffect(() => {
@@ -363,6 +424,11 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
       return;
     }
 
+    if (!isVerified) {
+      setWithdrawError("You must verify your bank account before submitting a withdrawal request.");
+      return;
+    }
+
     const amount = parseFloat(withdrawAmount);
     if (isNaN(amount) || amount < minWithdrawLimit) {
       setWithdrawError(`Minimum withdrawal is ₦${minWithdrawLimit.toLocaleString()}`);
@@ -390,6 +456,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
         body: JSON.stringify({
           amount,
           bankName,
+          bankCode,
           accountNumber,
           accountName
         })
@@ -1241,7 +1308,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                     Your account balance has been deducted accordingly.
                   </p>
                   <button 
-                    onClick={() => setWithdrawSuccess(false)}
+                    onClick={() => { setWithdrawSuccess(false); setIsVerified(false); setAccountName(""); setVerifySuccess(""); setVerifyError(""); setAccountNumber(""); }}
                     className="mt-2 text-xs font-bold text-blue-700 hover:underline"
                   >
                     Submit Another Request
@@ -1250,7 +1317,11 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
               ) : (
                 <form onSubmit={handleWithdrawal} className="space-y-4 max-w-md">
                   
-                  {withdrawError && <p className="text-xs font-bold text-red-600">{withdrawError}</p>}
+                  {withdrawError && (
+                    <div className="rounded-xl bg-red-50 border border-red-100 p-3 text-xs font-bold text-red-700 flex items-center gap-2">
+                      <span>⚠</span> {withdrawError}
+                    </div>
+                  )}
                   
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">
@@ -1273,12 +1344,23 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                       Select Nigerian Bank
                     </label>
                     <select
-                      value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
+                      value={bankCode}
+                      onChange={(e) => {
+                        const selected = bankList.find(b => b.code === e.target.value);
+                        if (selected) {
+                          setBankCode(selected.code);
+                          setBankName(selected.name);
+                          // Reset verification when bank changes
+                          setIsVerified(false);
+                          setAccountName("");
+                          setVerifySuccess("");
+                          setVerifyError("");
+                        }
+                      }}
                       className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none bg-white"
                     >
-                      {NIGERIAN_BANKS.map((bank, idx) => (
-                        <option key={idx} value={bank}>{bank}</option>
+                      {bankList.map((bank) => (
+                        <option key={bank.code} value={bank.code}>{bank.name}</option>
                       ))}
                     </select>
                   </div>
@@ -1287,39 +1369,92 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                     <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">
                       10-Digit Account Number (NUBAN)
                     </label>
-                    <input 
-                      type="text"
-                      required
-                      maxLength={10}
-                      value={accountNumber}
-                      onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ""))}
-                      placeholder="e.g. 0123456789"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none font-mono"
-                    />
+                    <div className="flex gap-2">
+                      <input 
+                        type="text"
+                        required
+                        maxLength={10}
+                        value={accountNumber}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "");
+                          setAccountNumber(val);
+                          // Reset verification when account number changes
+                          setIsVerified(false);
+                          setAccountName("");
+                          setVerifySuccess("");
+                          setVerifyError("");
+                        }}
+                        placeholder="e.g. 0123456789"
+                        className="flex-1 rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleVerifyBank}
+                        disabled={verifying || accountNumber.length !== 10}
+                        className={`shrink-0 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isVerified
+                            ? "bg-green-50 border border-green-200 text-green-700"
+                            : "bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        {verifying ? (
+                          <><span className="animate-spin">⟳</span> Checking...</>
+                        ) : isVerified ? (
+                          <>✓ Verified</>
+                        ) : (
+                          <>Verify</>
+                        )}
+                      </button>
+                    </div>
+                    <span className="block text-[10px] text-gray-400 mt-1">Enter your 10-digit NUBAN number, then click Verify.</span>
                   </div>
+
+                  {/* Verification feedback */}
+                  {verifySuccess && (
+                    <div className="rounded-xl bg-green-50 border border-green-200 p-3 text-xs font-semibold text-green-800 flex items-center gap-2 animate-fadeIn">
+                      <span className="text-green-600">✓</span> {verifySuccess}
+                    </div>
+                  )}
+                  {verifyError && (
+                    <div className="rounded-xl bg-red-50 border border-red-100 p-3 text-xs font-bold text-red-700 flex items-center gap-2 animate-fadeIn">
+                      <span>⚠</span> {verifyError}
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">
-                      Exact Account Holder Name
+                      Account Holder Name
                     </label>
                     <input 
                       type="text"
                       required
+                      readOnly={isVerified}
                       value={accountName}
-                      onChange={(e) => setAccountName(e.target.value)}
-                      placeholder="Account holder name must match bank name"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
+                      onChange={(e) => !isVerified && setAccountName(e.target.value)}
+                      placeholder={isVerified ? "" : "Click Verify above to auto-fill account name"}
+                      className={`w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none ${
+                        isVerified
+                          ? "border-green-200 bg-green-50 text-green-800 font-bold cursor-default"
+                          : "border-gray-200 focus:border-blue-500"
+                      }`}
                     />
+                    {isVerified && (
+                      <span className="block text-[10px] text-green-600 font-semibold mt-1">✓ Name auto-filled from bank records — cannot be edited.</span>
+                    )}
                   </div>
 
                   <button
                     type="submit"
-                    disabled={withdrawSubmitting}
-                    className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 py-3 text-sm font-semibold text-white shadow hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    disabled={withdrawSubmitting || !isVerified}
+                    className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 py-3 text-sm font-semibold text-white shadow hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Banknote className="h-4.5 w-4.5" /> 
                     {withdrawSubmitting ? "Queueing Withdrawal Request..." : "Request Bank Transfer Payout"}
                   </button>
+
+                  {!isVerified && (
+                    <p className="text-center text-[10px] text-gray-400">You must verify your bank account before submitting.</p>
+                  )}
 
                 </form>
               )}

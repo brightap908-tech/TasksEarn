@@ -1194,6 +1194,33 @@ app.get("/api/pricing", async (_req, res) => {
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
+// Advertiser-only pricing view — returns only advertiser-facing price per slot.
+// Earner rewards and commissions are intentionally omitted so they are never
+// visible outside the Admin control panel.
+app.get("/api/advertiser/pricing", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || (user.role !== UserRole.ADVERTISER && user.role !== UserRole.ADMIN)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const result = await pool.query(
+      `SELECT tp.id, tp.platform, tp.cost_per_slot,
+              sp.logo_url, sp.icon
+       FROM task_pricing tp
+       LEFT JOIN social_platforms sp ON LOWER(sp.name) = LOWER(tp.platform)
+       WHERE tp.cost_per_slot > 0
+       ORDER BY tp.id`
+    );
+    res.json(result.rows.map(row => ({
+      id: row.id,
+      platform: row.platform,
+      costPerSlot: parseFloat(row.cost_per_slot) || 0,
+      logoUrl: row.logo_url || null,
+      icon: row.icon || null
+    })));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
 // ─── Social Media Platforms API ────────────────────────────────────────────
 
 // Public: active platforms only, for use across task creation, listings, filters, pricing displays.
