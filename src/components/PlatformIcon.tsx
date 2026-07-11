@@ -1,5 +1,6 @@
 import React from "react";
 import { Platform, TaskCategory, getPlatformForCategory } from "../types";
+import { getCachedPlatforms, loadPlatforms } from "../lib/platformsStore";
 import {
   Facebook,
   Instagram,
@@ -194,6 +195,14 @@ export default function PlatformIcon({
   className = "",
   showBg = false,
 }: PlatformIconProps) {
+  // Keep the dynamic platforms cache warm so admin-uploaded logos show up
+  // everywhere a PlatformIcon is rendered, without every call site needing
+  // to fetch/pass the list itself.
+  const [, forceRerender] = React.useReducer((c) => c + 1, 0);
+  React.useEffect(() => {
+    loadPlatforms().then(() => forceRerender());
+  }, []);
+
   let platformName = "";
 
   if (platform) {
@@ -204,18 +213,32 @@ export default function PlatformIcon({
     platformName = getPlatformForCategory(catVal);
   }
 
+  const normalizedName = platformName.toLowerCase();
+  const dynamicPlatform = getCachedPlatforms().find(
+    (p) => normalizedName === p.name.toLowerCase() || normalizedName.includes(p.name.toLowerCase())
+  );
+
   const { Icon, colorClass, bgClass } = getPlatformInfo(platformName);
+  const logoUrl = dynamicPlatform?.logoUrl;
 
   if (showBg) {
     return (
       <span
-        className={`inline-flex items-center justify-center p-2 rounded-xl border ${bgClass} ${className}`}
+        className={`inline-flex items-center justify-center p-2 rounded-xl border overflow-hidden ${bgClass} ${className}`}
         style={{ minWidth: size * 2, minHeight: size * 2 }}
       >
-        <Icon size={size} className={colorClass} />
+        {logoUrl ? (
+          <img src={logoUrl} alt={dynamicPlatform?.name} style={{ width: size, height: size }} className="object-contain rounded-sm" />
+        ) : (
+          <Icon size={size} className={colorClass} />
+        )}
       </span>
     );
   }
 
-  return <Icon size={size} className={`${colorClass} ${className}`} />;
+  return logoUrl ? (
+    <img src={logoUrl} alt={dynamicPlatform?.name} style={{ width: size, height: size }} className={`object-contain inline-block rounded-sm ${className}`} />
+  ) : (
+    <Icon size={size} className={`${colorClass} ${className}`} />
+  );
 }

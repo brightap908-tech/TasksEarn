@@ -9,6 +9,7 @@ import {
   SubmissionStatus, 
   TransactionStatus 
 } from "../types";
+import { usePlatforms } from "../lib/platformsStore";
 import PlatformIcon from "./PlatformIcon";
 import { 
   Briefcase, 
@@ -57,6 +58,10 @@ const NIGERIAN_BANKS = [
 
 export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFetch, showToast }: EarnerDashboardProps) {
   const [activeTab, setActiveTab] = React.useState<"overview" | "tasks" | "history" | "referrals" | "withdraw" | "profile">("overview");
+
+  // Dynamic, admin-managed social media platforms (DB-driven, no hardcoding)
+  const { platforms } = usePlatforms();
+  const filterChips = ["All", ...platforms.map(p => p.name), "Website", "App", "Survey"];
   
   // Dashboard Metrics
   const [metrics, setMetrics] = React.useState({
@@ -419,11 +424,13 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
     setPasswordForm({ old: "", new: "", confirm: "" });
   };
 
-  // Filtered tasks computation
+  // Filtered tasks computation. Category values are composed as
+  // "{Platform} {Action}" (e.g. "Instagram Follow"), so a platform-name
+  // filter chip matches via substring rather than exact equality.
   const filteredTasks = tasks.filter(t => {
     const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           t.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = categoryFilter === "All" || t.category === categoryFilter;
+    const matchesCategory = categoryFilter === "All" || t.category.toLowerCase().includes(categoryFilter.toLowerCase());
     return matchesSearch && matchesCategory;
   });
 
@@ -760,10 +767,8 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
 
               {/* Category selector */}
               <div className="flex gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 no-scrollbar">
-                {["All", "Facebook", "Instagram", "TikTok", "YouTube", "Telegram", "WhatsApp", "Twitter", "Website", "App", "Survey"].map((cat, idx) => {
-                  const isSelected = (cat === "All" && categoryFilter === "All") || 
-                    (categoryFilter !== "All" && cat.toLowerCase() === categoryFilter.toLowerCase()) || 
-                    (cat === "Twitter" && categoryFilter === "X (Twitter) Follow");
+                {filterChips.map((cat, idx) => {
+                  const isSelected = cat.toLowerCase() === categoryFilter.toLowerCase();
                   return (
                     <button
                       key={idx}

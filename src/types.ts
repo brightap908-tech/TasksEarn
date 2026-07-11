@@ -224,6 +224,38 @@ export interface TaskPricing {
   earningPerSlot: number; // What the earner receives
 }
 
+// Dynamic, admin-managed social media platform (replaces the hardcoded
+// Platform enum as the source of truth across the app). Stored in the
+// `social_platforms` table and served via /api/platforms & /api/admin/platforms.
+export interface SocialPlatform {
+  id: string;
+  name: string;
+  icon: string; // free-text hint (e.g. matching name) used for icon lookup fallback
+  logoUrl?: string | null; // optional uploaded logo (data URL) or external image URL
+  description?: string | null;
+  status: "Active" | "Inactive";
+  sortOrder: number;
+  createdAt?: string;
+}
+
+// Generic actions an earner can perform on a social media platform. Combined
+// with a dynamic platform name (e.g. "Instagram" + "Follow") to build a
+// task's category string, so new platforms never require code changes.
+export const TASK_ACTIONS = [
+  "Like",
+  "Follow",
+  "Share",
+  "Comment",
+  "Subscribe",
+  "Watch",
+  "Join",
+  "Add/Follow",
+  "Visit",
+  "Chat",
+  "Custom Task"
+] as const;
+export type TaskAction = typeof TASK_ACTIONS[number];
+
 export function getPlatformForCategory(category: TaskCategory): Platform {
   switch (category) {
     case TaskCategory.FB_LIKE:

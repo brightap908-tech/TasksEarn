@@ -4,13 +4,13 @@ import {
   Task, 
   TaskSubmission, 
   Transaction, 
-  TaskCategory, 
   TaskStatus, 
   SubmissionStatus,
   TransactionStatus,
   TransactionType,
-  getPlatformForCategory
+  TASK_ACTIONS
 } from "../types";
+import { usePlatforms } from "../lib/platformsStore";
 import PlatformIcon from "./PlatformIcon";
 import { 
   LayoutDashboard, 
@@ -67,11 +67,15 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
   const [auditFeedback, setAuditFeedback] = React.useState("");
   const [auditSubmitting, setAuditSubmitting] = React.useState(false);
 
+  // Dynamic, admin-managed social media platforms (DB-driven, no hardcoding)
+  const { platforms } = usePlatforms();
+
   // New Campaign Form State
   const [campaignForm, setCampaignForm] = React.useState({
     title: "",
     description: "",
-    category: TaskCategory.YT_SUBSCRIBE,
+    platform: "", // populated once dynamic platforms load
+    action: TASK_ACTIONS[0] as string,
     link: "",
     proofRequirements: "",
     earningPerSlot: "15", // Default
@@ -81,9 +85,16 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
   const [formSuccess, setFormSuccess] = React.useState(false);
   const [formSubmitting, setFormSubmitting] = React.useState(false);
 
+  // Default the platform selector to the first active platform once loaded
+  React.useEffect(() => {
+    if (!campaignForm.platform && platforms.length > 0) {
+      setCampaignForm((f) => ({ ...f, platform: platforms[0].name }));
+    }
+  }, [platforms]);
+
   // Auto Calculations
-  const platform = getPlatformForCategory(campaignForm.category);
-  const matchingPricing = pricingList.find(p => p.platform === platform);
+  const category = campaignForm.platform ? `${campaignForm.platform} ${campaignForm.action}` : "";
+  const matchingPricing = pricingList.find(p => p.platform === campaignForm.platform);
   const earningVal = matchingPricing ? matchingPricing.earningPerSlot : (parseFloat(campaignForm.earningPerSlot) || 0);
   const slotsVal = parseInt(campaignForm.totalSlots) || 0;
   const costPerSlot = matchingPricing ? matchingPricing.costPerSlot : Math.ceil(earningVal * 1.35); // 35% commission markup
@@ -176,7 +187,7 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
         body: JSON.stringify({
           title: campaignForm.title,
           description: campaignForm.description,
-          category: campaignForm.category,
+          category: category,
           proofRequirements: campaignForm.proofRequirements,
           link: campaignForm.link,
           costPerSlot: costPerSlot,
@@ -192,7 +203,8 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
         setCampaignForm({
           title: "",
           description: "",
-          category: TaskCategory.YT_SUBSCRIBE,
+          platform: platforms.length > 0 ? platforms[0].name : "",
+          action: TASK_ACTIONS[0] as string,
           link: "",
           proofRequirements: "",
           earningPerSlot: "15",
@@ -457,26 +469,43 @@ export default function AdvertiserDashboard({ user, onRefreshUser, onNavigate, o
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Social Task Category</label>
-                      <select
-                        value={campaignForm.category}
-                        onChange={(e) => {
-                          const cat = e.target.value as TaskCategory;
-                          const platform = getPlatformForCategory(cat);
-                          const matching = pricingList.find(p => p.platform === platform);
-                          setCampaignForm({ 
-                            ...campaignForm, 
-                            category: cat,
-                            earningPerSlot: matching ? matching.earningPerSlot.toString() : campaignForm.earningPerSlot
-                          });
-                        }}
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none bg-white"
-                      >
-                        {Object.values(TaskCategory).map((cat, idx) => (
-                          <option key={idx} value={cat}>{cat}</option>
-                        ))}
-                      </select>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Social Media Platform</label>
+                        <select
+                          value={campaignForm.platform}
+                          onChange={(e) => {
+                            const plat = e.target.value;
+                            const matching = pricingList.find(p => p.platform === plat);
+                            setCampaignForm({
+                              ...campaignForm,
+                              platform: plat,
+                              earningPerSlot: matching ? matching.earningPerSlot.toString() : campaignForm.earningPerSlot
+                            });
+                          }}
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none bg-white"
+                        >
+                          {platforms.length === 0 && <option value="">Loading platforms...</option>}
+                          {platforms.map((p) => (
+                            <option key={p.id} value={p.name}>{p.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Action Type</label>
+                        <select
+                          value={campaignForm.action}
+                          onChange={(e) => setCampaignForm({ ...campaignForm, action: e.target.value })}
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none bg-white"
+                        >
+                          {TASK_ACTIONS.map((a) => (
+                            <option key={a} value={a}>{a}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <p className="col-span-2 text-[10px] text-slate-400 -mt-1">
+                        Task category will be listed as: <strong className="text-slate-600">{category || "—"}</strong>. New platforms added by the admin appear here automatically.
+                      </p>
                     </div>
 
                     <div>

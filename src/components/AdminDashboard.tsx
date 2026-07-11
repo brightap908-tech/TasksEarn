@@ -40,9 +40,11 @@ import {
   BellRing,
   CheckCheck,
   Clock,
-  Coins
+  Coins,
+  Share2
 } from "lucide-react";
 import AdminTaskPricing from "./AdminTaskPricing";
+import AdminSocialPlatforms from "./AdminSocialPlatforms";
 
 interface AdminDashboardProps {
   user: User;
@@ -52,7 +54,7 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = React.useState<
-    "stats" | "users" | "campaigns" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platform-earnings"
+    "stats" | "users" | "campaigns" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings"
   >("stats");
 
   // Admin states
@@ -1069,6 +1071,16 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         </button>
 
         <button 
+          onClick={() => setActiveTab("platforms")}
+          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
+            activeTab === "platforms" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
+          }`}
+        >
+          <Share2 className="h-4 w-4 text-slate-400" /> 
+          <span>Social Media Platforms</span>
+        </button>
+
+        <button 
           onClick={() => setActiveTab("pricing")}
           className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
             activeTab === "pricing" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
@@ -1841,6 +1853,12 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                 </button>
               </form>
             </div>
+          </div>
+        )}
+
+        {activeTab === "platforms" && (
+          <div className="space-y-6 animate-fadeIn">
+            <AdminSocialPlatforms apiFetch={apiFetch} />
           </div>
         )}
 
