@@ -1,5 +1,6 @@
 import React from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { AnimatePresence, motion } from "motion/react";
 import { resolvePath, pathToView } from "./lib/routes";
 import BackButton from "./components/BackButton";
 import { 
@@ -689,8 +690,16 @@ export default function App() {
 
       {/* Main Dynamic Content View Stage */}
       <main className="flex-grow">
-        
-        <Routes>
+
+        <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={location.pathname}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18, ease: "easeInOut" }}
+        >
+        <Routes location={location}>
         {/* PUBLIC HOME LANDING VIEW */}
         <Route path="/" element={
           <div className="space-y-16 pb-16">
@@ -1549,6 +1558,8 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </motion.div>
+        </AnimatePresence>
 
       </main>
 
