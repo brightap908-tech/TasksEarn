@@ -91,6 +91,7 @@ database.sql       # MySQL schema reference (for external DB setup)
 - **Authentication**: Bearer token contains raw user ID (`Authorization: Bearer <userId>`). `getAuthenticatedUser()` in `server.ts` is async and queries the DB on every authenticated request.
 - **Financial operations** (campaign creation, submission approval, withdrawal approval, deposit verification) are wrapped in PostgreSQL transactions with `SELECT ... FOR UPDATE` row locking to prevent race conditions and partial writes.
 - **Notifications**: Stored in the `notifications` PostgreSQL table. Real-time broadcast to admin via WebSocket on `/ws`.
+- **Routing**: `react-router-dom` (`BrowserRouter`, wrapped in `src/main.tsx`). Every page — including every dashboard menu section — has its own URL: `/earner/:section`, `/advertiser/:section`, `/admin/:section` for dashboards, plus `/login`, `/register`, `/about`, etc. `src/lib/routes.ts` maps legacy view-name strings to real paths so existing `onNavigate("view-name")` calls keep working. `src/components/BackButton.tsx` is rendered on every non-home page.
 
 ## User Preferences
 
