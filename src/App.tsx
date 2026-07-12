@@ -52,6 +52,11 @@ export default function App() {
     const path = resolvePath(view);
     if (path) navigate(path);
   };
+
+  // Always start every new page at the top of the viewport
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
   
   // Public configurations
   const [banners, setBanners] = React.useState<Banner[]>([]);
