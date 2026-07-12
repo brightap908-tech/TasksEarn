@@ -1,4 +1,5 @@
 import React from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { 
   User, 
   Task, 
@@ -53,9 +54,12 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = React.useState<
-    "stats" | "users" | "campaigns" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings" | "commissions"
-  >("stats");
+  type AdminTab = "stats" | "users" | "campaigns" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings" | "commissions";
+  const VALID_ADMIN_TABS: AdminTab[] = ["stats", "users", "campaigns", "withdrawals", "audits", "announcements", "cms", "settings", "pricing", "platforms", "platform-earnings", "commissions"];
+  const { section } = useParams<{ section?: string }>();
+  const navigate = useNavigate();
+  const activeTab: AdminTab = (VALID_ADMIN_TABS.includes(section as AdminTab) ? section : "stats") as AdminTab;
+  const setActiveTab = (tab: AdminTab) => navigate(`/admin/${tab}`);
 
   // Admin states
   const [stats, setStats] = React.useState({

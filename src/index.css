@@ -155,6 +155,55 @@ html.dark .border-slate-50 {
 .text-slate-400, .text-gray-400 { color: #94a3b8 !important; }
 
 /* ==========================================================================
+   READABILITY UPGRADE — FONT SIZES, WEIGHTS & SPACING
+   Bumps up the app's historically very small type scale (lots of 9-11px
+   micro-labels) so body copy, labels and dashboard write-ups are easier to
+   read on both mobile and desktop, while keeping every existing Tailwind
+   class name working exactly where it already appears in the markup.
+   ========================================================================== */
+html, body { font-size: 16.5px; }
+
+body, p, li, label, td, th, span, div {
+  line-height: 1.6;
+}
+
+/* Arbitrary micro-sizes used throughout the dashboards for meta labels */
+[class*="text-[8px]"]  { font-size: 0.6875rem !important; }
+[class*="text-[9px]"]  { font-size: 0.75rem !important; }
+[class*="text-[10px]"] { font-size: 0.8125rem !important; }
+[class*="text-[11px]"] { font-size: 0.875rem !important; }
+
+/* Standard Tailwind text scale — raised one notch across the board */
+.text-xs   { font-size: 0.875rem !important;  line-height: 1.5 !important; }
+.text-sm   { font-size: 0.9375rem !important; line-height: 1.6 !important; }
+.text-base { font-size: 1.0625rem !important; line-height: 1.65 !important; }
+.text-lg   { font-size: 1.1875rem !important; line-height: 1.6 !important; }
+.text-xl   { font-size: 1.375rem !important;  line-height: 1.5 !important; }
+.text-2xl  { font-size: 1.625rem !important;  line-height: 1.35 !important; }
+.text-3xl  { font-size: 2rem !important;      line-height: 1.25 !important; }
+.text-4xl  { font-size: 2.5rem !important;    line-height: 1.15 !important; }
+.text-5xl  { font-size: 3.1rem !important;    line-height: 1.1 !important; }
+.text-6xl  { font-size: 3.75rem !important;   line-height: 1.05 !important; }
+
+/* Headings and important write-ups — always bold, slightly tighter tracking */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 800 !important;
+  letter-spacing: -0.015em;
+}
+.font-semibold { font-weight: 700 !important; }
+.font-bold, .font-extrabold { font-weight: 800 !important; }
+
+/* Prose / long-form write-ups read more comfortably a touch larger */
+.prose { font-size: 1.0625rem !important; line-height: 1.75 !important; }
+.leading-relaxed { line-height: 1.75 !important; }
+
+@media (max-width: 640px) {
+  html, body { font-size: 16px; }
+  .text-xs { font-size: 0.8125rem !important; }
+  .text-sm { font-size: 0.9rem !important; }
+}
+
+/* ==========================================================================
    DARK MODE — TYPOGRAPHY
    ========================================================================== */
 html.dark .text-slate-900, html.dark .text-gray-900,
@@ -734,4 +783,37 @@ html.dark .stat-card {
   background: #111827;
   border-color: rgba(255,255,255,0.07);
   box-shadow: 0 4px 20px rgba(0,0,0,0.30);
+}
+
+/* ==========================================================================
+   MODERN BUTTON & CARD POLISH
+   Applies globally on top of the rules above: crisper radii, consistent
+   press/hover feedback, and slightly larger tap targets for every button
+   and rounded card across the site, without altering the blue/white palette.
+   ========================================================================== */
+button {
+  cursor: pointer;
+  border-radius: 0.85rem;
+}
+button:disabled { cursor: not-allowed; opacity: 0.6; }
+
+button:not([class*="rounded-full"]):not([class*="rounded-lg"]) {
+  border-radius: 0.85rem;
+}
+button:active:not(:disabled) { transform: translateY(0.5px); }
+
+/* Cards: consistent generous padding + refined corner radius for a more
+   modern, professional look site-wide */
+.rounded-2xl, .rounded-3xl {
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+/* Section headings used across dashboards/marketing pages */
+h1, h2, h3 { text-wrap: balance; }
+
+/* Ensure responsive tables scroll instead of overflowing on small screens */
+.overflow-x-auto { -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 480px) {
+  table { font-size: 0.85rem; }
 }

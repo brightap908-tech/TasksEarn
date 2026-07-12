@@ -1,4 +1,5 @@
 import React from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { 
   User, 
   Task, 
@@ -64,7 +65,12 @@ const FALLBACK_BANKS: NigerianBank[] = [
 ];
 
 export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFetch, showToast }: EarnerDashboardProps) {
-  const [activeTab, setActiveTab] = React.useState<"overview" | "tasks" | "history" | "referrals" | "withdraw" | "profile">("overview");
+  type EarnerTab = "overview" | "tasks" | "history" | "referrals" | "withdraw" | "profile";
+  const VALID_EARNER_TABS: EarnerTab[] = ["overview", "tasks", "history", "referrals", "withdraw", "profile"];
+  const { section } = useParams<{ section?: string }>();
+  const navigate = useNavigate();
+  const activeTab: EarnerTab = (VALID_EARNER_TABS.includes(section as EarnerTab) ? section : "overview") as EarnerTab;
+  const setActiveTab = (tab: EarnerTab) => navigate(`/earner/${tab}`);
 
   // Dynamic, admin-managed social media platforms (DB-driven, no hardcoding)
   const { platforms } = usePlatforms();

@@ -1,4 +1,5 @@
 import React from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   User,
   Task,
@@ -65,7 +66,11 @@ export default function AdvertiserDashboard({
   onOpenDeposit,
   apiFetch
 }: AdvertiserDashboardProps) {
-  const [activeTab, setActiveTab] = React.useState<Tab>("overview");
+  const VALID_ADVERTISER_TABS: Tab[] = ["overview", "create", "manage", "audit", "transactions", "price-list", "profile"];
+  const { section } = useParams<{ section?: string }>();
+  const navigate = useNavigate();
+  const activeTab: Tab = (VALID_ADVERTISER_TABS.includes(section as Tab) ? section : "overview") as Tab;
+  const setActiveTab = (tab: Tab) => navigate(`/advertiser/${tab}`);
 
   // ── Dashboard Stats ──────────────────────────────────────────────────────
   const [stats, setStats] = React.useState({

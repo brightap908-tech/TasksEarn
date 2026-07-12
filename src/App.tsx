@@ -1,4 +1,7 @@
 import React from "react";
+import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { resolvePath, pathToView } from "./lib/routes";
+import BackButton from "./components/BackButton";
 import { 
   User, 
   UserRole, 
@@ -42,7 +45,13 @@ import {
 
 export default function App() {
   const [user, setUser] = React.useState<User | null>(null);
-  const [currentView, setCurrentView] = React.useState<string>("home");
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentView = pathToView(location.pathname);
+  const setCurrentView = (view: string) => {
+    const path = resolvePath(view);
+    if (path) navigate(path);
+  };
   
   // Public configurations
   const [banners, setBanners] = React.useState<Banner[]>([]);
@@ -676,8 +685,9 @@ export default function App() {
       {/* Main Dynamic Content View Stage */}
       <main className="flex-grow">
         
+        <Routes>
         {/* PUBLIC HOME LANDING VIEW */}
-        {currentView === "home" && (
+        <Route path="/" element={
           <div className="space-y-16 pb-16">
             
             {/* Hero Section */}
@@ -1013,11 +1023,12 @@ export default function App() {
             </section>
 
           </div>
-        )}
+        } />
 
         {/* AUTHENTICATION SECURE VIEW (LOGIN) */}
-        {currentView === "login" && (
+        <Route path="/login" element={
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24">
+            <BackButton fallback="/" />
             <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
               
               <div className="text-center">
@@ -1157,11 +1168,12 @@ export default function App() {
 
             </div>
           </div>
-        )}
+        } />
 
         {/* AUTHENTICATION SECURE VIEW (ADVERTISER LOGIN) */}
-        {currentView === "advertiser-login" && (
+        <Route path="/advertiser-login" element={
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24 animate-fadeIn">
+            <BackButton fallback="/" />
             <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
               
               <div className="text-center">
@@ -1273,11 +1285,12 @@ export default function App() {
 
             </div>
           </div>
-        )}
+        } />
 
         {/* AUTHENTICATION SECURE VIEW (FORGOT PASSWORD) */}
-        {currentView === "forgot-password" && (
+        <Route path="/forgot-password" element={
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24">
+            <BackButton fallback="/login" />
             <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
               
               <div className="text-center">
@@ -1331,11 +1344,12 @@ export default function App() {
 
             </div>
           </div>
-        )}
+        } />
 
         {/* AUTHENTICATION SECURE VIEW (REGISTER) */}
-        {currentView === "register" && (
+        <Route path="/register" element={
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24">
+            <BackButton fallback="/" />
             <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
               
               <div className="text-center">
@@ -1404,11 +1418,12 @@ export default function App() {
 
             </div>
           </div>
-        )}
+        } />
 
         {/* AUTHENTICATION SECURE VIEW (EMAIL VERIFICATION) */}
-        {currentView === "verify-email" && (
+        <Route path="/verify-email" element={
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24 animate-fadeIn">
+            <BackButton fallback="/login" />
             <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
               
               <div className="text-center space-y-3">
@@ -1469,53 +1484,66 @@ export default function App() {
 
             </div>
           </div>
-        )}
+        } />
 
         {/* CMS STATIC AND REGULATORY PAGES */}
-        {["about", "faq", "contact", "terms", "privacy"].includes(currentView) && (
-          <PublicPages 
-            view={currentView} 
-            pagesContent={pagesContent} 
-            settings={settings}
-          />
-        )}
+        <Route path="/about" element={<><BackButton fallback="/" /><PublicPages view="about" pagesContent={pagesContent} settings={settings} /></>} />
+        <Route path="/faq" element={<><BackButton fallback="/" /><PublicPages view="faq" pagesContent={pagesContent} settings={settings} /></>} />
+        <Route path="/contact" element={<><BackButton fallback="/" /><PublicPages view="contact" pagesContent={pagesContent} settings={settings} /></>} />
+        <Route path="/terms" element={<><BackButton fallback="/" /><PublicPages view="terms" pagesContent={pagesContent} settings={settings} /></>} />
+        <Route path="/privacy" element={<><BackButton fallback="/" /><PublicPages view="privacy" pagesContent={pagesContent} settings={settings} /></>} />
 
         {/* ROLE PROTECTED: EARNER DASHBOARD PANELS */}
-        {user && user.role === UserRole.EARNER && ["earner-dashboard", "earner-tasks", "earner-submissions", "earner-referrals"].includes(currentView) && (
-          <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-            <EarnerDashboard 
-              user={user} 
-              onRefreshUser={refreshUserSession}
-              onNavigate={(view) => setCurrentView(view)}
-              apiFetch={apiFetch}
-              showToast={showToast}
-            />
-          </div>
-        )}
+        <Route path="/earner/:section" element={
+          user && user.role === UserRole.EARNER ? (
+            <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+              <BackButton fallback="/" />
+              <EarnerDashboard 
+                user={user} 
+                onRefreshUser={refreshUserSession}
+                onNavigate={(view) => setCurrentView(view)}
+                apiFetch={apiFetch}
+                showToast={showToast}
+              />
+            </div>
+          ) : (<Navigate to="/login" replace />)
+        } />
+        <Route path="/earner" element={<Navigate to="/earner/overview" replace />} />
 
         {/* ROLE PROTECTED: ADVERTISER DASHBOARD PANELS */}
-        {user && user.role === UserRole.ADVERTISER && ["advertiser-dashboard", "advertiser-tasks", "advertiser-submissions"].includes(currentView) && (
-          <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-            <AdvertiserDashboard 
-              user={user} 
-              onRefreshUser={refreshUserSession}
-              onNavigate={(view) => setCurrentView(view)}
-              onOpenDeposit={() => setDepositOpen(true)}
-              apiFetch={apiFetch}
-            />
-          </div>
-        )}
+        <Route path="/advertiser/:section" element={
+          user && user.role === UserRole.ADVERTISER ? (
+            <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+              <BackButton fallback="/" />
+              <AdvertiserDashboard 
+                user={user} 
+                onRefreshUser={refreshUserSession}
+                onNavigate={(view) => setCurrentView(view)}
+                onOpenDeposit={() => setDepositOpen(true)}
+                apiFetch={apiFetch}
+              />
+            </div>
+          ) : (<Navigate to="/advertiser-login" replace />)
+        } />
+        <Route path="/advertiser" element={<Navigate to="/advertiser/overview" replace />} />
 
         {/* ROLE PROTECTED: ADMIN PANEL */}
-        {user && user.role === UserRole.ADMIN && currentView === "admin-dashboard" && (
-          <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-            <AdminDashboard 
-              user={user} 
-              onRefreshUser={refreshUserSession}
-              apiFetch={apiFetch}
-            />
-          </div>
-        )}
+        <Route path="/admin/:section" element={
+          user && user.role === UserRole.ADMIN ? (
+            <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+              <BackButton fallback="/" />
+              <AdminDashboard 
+                user={user} 
+                onRefreshUser={refreshUserSession}
+                apiFetch={apiFetch}
+              />
+            </div>
+          ) : (<Navigate to="/login" replace />)
+        } />
+        <Route path="/admin" element={<Navigate to="/admin/stats" replace />} />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
 
       </main>
 
