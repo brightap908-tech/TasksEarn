@@ -6,21 +6,21 @@
   --font-display: "Space Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* Brand palette — #0066FF primary */
-  --color-brand-50:  #eff5ff;
-  --color-brand-100: #dceaff;
-  --color-brand-200: #b0cfff;
-  --color-brand-500: #0066FF;
-  --color-brand-600: #0052cc;
-  --color-brand-700: #003d99;
-  --color-brand-900: #001f66;
+  /* Brand palette — #2563EB primary */
+  --color-brand-50:  #DBEAFE;
+  --color-brand-100: #DBEAFE;
+  --color-brand-200: #DBEAFE;
+  --color-brand-500: #2563EB;
+  --color-brand-600: #1D4ED8;
+  --color-brand-700: #1D4ED8;
+  --color-brand-900: #1D4ED8;
 
   /* Light mode surface tokens */
-  --surface-base:    #f0f4ff;
+  --surface-base:    #FFFFFF;
   --surface-card:    #ffffff;
-  --surface-raised:  #f8faff;
-  --surface-float:   #eef2ff;
-  --surface-border:  #dde8ff;
+  --surface-raised:  #F8FAFC;
+  --surface-float:   #DBEAFE;
+  --surface-border:  #E2E8F0;
 }
 
 /* ==========================================================================
@@ -29,14 +29,14 @@
 *, *::before, *::after { box-sizing: border-box; }
 
 html, :root {
-  background-color: #f0f4ff;
+  background-color: #FFFFFF;
   color-scheme: light;
   scroll-behavior: smooth;
 }
 
 body {
   font-family: var(--font-sans);
-  background-color: #f0f4ff;
+  background-color: #FFFFFF;
   color: #0f172a;
   overflow-x: hidden;
   transition: background-color 0.25s ease, color 0.25s ease;
@@ -57,13 +57,13 @@ html.dark body {
    SCROLLBAR
    ========================================================================== */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #f0f4ff; }
-::-webkit-scrollbar-thumb { background: #b0cfff; border-radius: 9999px; }
-::-webkit-scrollbar-thumb:hover { background: #0066FF; }
+::-webkit-scrollbar-track { background: #FFFFFF; }
+::-webkit-scrollbar-thumb { background: #DBEAFE; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #2563EB; }
 
 html.dark ::-webkit-scrollbar-track { background: #050d1a; }
 html.dark ::-webkit-scrollbar-thumb { background: #1e3a5f; }
-html.dark ::-webkit-scrollbar-thumb:hover { background: #0066FF; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: #2563EB; }
 
 /* ==========================================================================
    LIGHT MODE — SURFACES
@@ -73,15 +73,15 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: #0066FF; }
 }
 .bg-slate-50,
 .bg-gray-50 {
-  background-color: #f8faff !important;
+  background-color: #F8FAFC !important;
 }
 .bg-slate-100,
 .bg-gray-100 {
-  background-color: #eff5ff !important;
+  background-color: #DBEAFE !important;
 }
 .bg-slate-200,
 .bg-gray-200 {
-  background-color: #dde8ff !important;
+  background-color: #E2E8F0 !important;
 }
 
 /* ==========================================================================
@@ -121,11 +121,11 @@ html.dark .hover\:bg-gray-100:hover {
 .border-gray-100,
 .border-slate-300,
 .border-gray-300 {
-  border-color: #dde8ff !important;
+  border-color: #E2E8F0 !important;
 }
 .border-slate-50,
 .border-gray-50 {
-  border-color: #eff5ff !important;
+  border-color: #DBEAFE !important;
 }
 
 /* ==========================================================================
@@ -221,7 +221,7 @@ textarea,
 select {
   background-color: #ffffff !important;
   color: #0f172a !important;
-  border: 1.5px solid #dde8ff !important;
+  border: 1.5px solid #E2E8F0 !important;
   border-radius: 0.75rem !important;
   padding: 0.625rem 1rem !important;
   font-size: 0.875rem !important;
@@ -230,7 +230,7 @@ select {
   box-shadow: 0 1px 3px rgba(0,102,255,0.05) !important;
 }
 input:focus, textarea:focus, select:focus {
-  border-color: #0066FF !important;
+  border-color: #2563EB !important;
   box-shadow: 0 0 0 3px rgba(0,102,255,0.12) !important;
   background-color: #ffffff !important;
 }
@@ -251,7 +251,7 @@ html.dark select {
 html.dark input:focus,
 html.dark textarea:focus,
 html.dark select:focus {
-  border-color: #0066FF !important;
+  border-color: #2563EB !important;
   box-shadow: 0 0 0 3px rgba(0,102,255,0.20) !important;
   background-color: #0d1a2e !important;
 }
@@ -267,7 +267,7 @@ html.dark textarea::placeholder {
   background-color: rgba(255,255,255,0.95) !important;
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
-  border-bottom: 1.5px solid #dde8ff !important;
+  border-bottom: 1.5px solid #E2E8F0 !important;
   box-shadow: 0 1px 20px rgba(0,102,255,0.08) !important;
 }
 #app-header span.text-slate-900 { color: #0f172a !important; }
@@ -276,7 +276,7 @@ html.dark textarea::placeholder {
   color: #334155 !important;
   transition: color 0.15s ease-in-out !important;
 }
-#app-header nav span:hover { color: #0066FF !important; }
+#app-header nav span:hover { color: #2563EB !important; }
 
 /* ==========================================================================
    NAVIGATION HEADER — DARK
@@ -288,22 +288,22 @@ html.dark #app-header {
 }
 html.dark #app-header span.text-slate-900 { color: #f1f5f9 !important; }
 html.dark #app-header nav span { color: #cbd5e1 !important; }
-html.dark #app-header nav span:hover { color: #60a5fa !important; }
+html.dark #app-header nav span:hover { color: #2563EB !important; }
 
 /* Mobile drawer — light */
 #mobile-nav-drawer {
   background-color: #ffffff !important;
-  border-left: 1.5px solid #dde8ff !important;
+  border-left: 1.5px solid #E2E8F0 !important;
 }
 #mobile-nav-drawer span { color: #334155 !important; border-radius: 0.5rem !important; }
-#mobile-nav-drawer span:hover { background-color: #eff5ff !important; color: #0066FF !important; }
+#mobile-nav-drawer span:hover { background-color: #DBEAFE !important; color: #2563EB !important; }
 
 html.dark #mobile-nav-drawer {
   background-color: #0e1729 !important;
   border-left: 1px solid rgba(255,255,255,0.07) !important;
 }
 html.dark #mobile-nav-drawer span { color: #e2e8f0 !important; }
-html.dark #mobile-nav-drawer span:hover { background-color: #1a2236 !important; color: #60a5fa !important; }
+html.dark #mobile-nav-drawer span:hover { background-color: #1a2236 !important; color: #2563EB !important; }
 
 /* ==========================================================================
    SIDEBAR NAV BUTTONS (Dashboards) — LIGHT
@@ -313,8 +313,8 @@ button[class*="text-slate-500 hover:bg-slate-50"] {
   border-radius: 0.75rem !important;
 }
 button[class*="text-slate-500 hover:bg-slate-50"]:hover {
-  background-color: #eff5ff !important;
-  color: #0066FF !important;
+  background-color: #DBEAFE !important;
+  color: #2563EB !important;
 }
 
 html.dark button[class*="text-slate-500 hover:bg-slate-50"] {
@@ -328,33 +328,33 @@ html.dark button[class*="text-slate-500 hover:bg-slate-50"]:hover {
 /* Active sidebar tabs — LIGHT */
 .bg-blue-50,
 [class*="bg-blue-50"] {
-  background-color: #eff5ff !important;
-  color: #0066FF !important;
+  background-color: #DBEAFE !important;
+  color: #2563EB !important;
 }
 
 html.dark .bg-blue-50,
 html.dark [class*="bg-blue-50"] {
   background-color: rgba(0,102,255,0.12) !important;
-  color: #60a5fa !important;
-  border-right-color: #0066FF !important;
+  color: #2563EB !important;
+  border-right-color: #2563EB !important;
 }
 
 /* ==========================================================================
    BLUE COLOR OVERRIDES
    ========================================================================== */
-.text-blue-600 { color: #0066FF !important; }
-.text-blue-500 { color: #0066FF !important; }
-.text-blue-700 { color: #0052cc !important; }
-.text-blue-800 { color: #003d99 !important; }
-.bg-blue-600 { background-color: #0066FF !important; }
-.bg-blue-500 { background-color: #0066FF !important; }
-.border-blue-500 { border-color: #0066FF !important; }
-.border-blue-600 { border-color: #0052cc !important; }
-.border-blue-200 { border-color: #b0cfff !important; }
-.border-r-4.border-blue-500 { border-right-color: #0066FF !important; }
+.text-blue-600 { color: #2563EB !important; }
+.text-blue-500 { color: #2563EB !important; }
+.text-blue-700 { color: #1D4ED8 !important; }
+.text-blue-800 { color: #1D4ED8 !important; }
+.bg-blue-600 { background-color: #2563EB !important; }
+.bg-blue-500 { background-color: #2563EB !important; }
+.border-blue-500 { border-color: #2563EB !important; }
+.border-blue-600 { border-color: #1D4ED8 !important; }
+.border-blue-200 { border-color: #DBEAFE !important; }
+.border-r-4.border-blue-500 { border-right-color: #2563EB !important; }
 
-html.dark .text-blue-600 { color: #60a5fa !important; }
-html.dark .text-blue-500 { color: #60a5fa !important; }
+html.dark .text-blue-600 { color: #2563EB !important; }
+html.dark .text-blue-500 { color: #2563EB !important; }
 
 /* ==========================================================================
    DROPDOWN MENUS
@@ -362,7 +362,7 @@ html.dark .text-blue-500 { color: #60a5fa !important; }
 [class*="absolute right-0 mt-2 w-"],
 [class*="dropdown-menu"] {
   background-color: #ffffff !important;
-  border: 1.5px solid #dde8ff !important;
+  border: 1.5px solid #E2E8F0 !important;
   box-shadow: 0 8px 30px rgba(0,102,255,0.12) !important;
   border-radius: 0.875rem !important;
 }
@@ -378,22 +378,22 @@ html.dark [class*="dropdown-menu"] {
    ========================================================================== */
 table { border-collapse: collapse !important; width: 100% !important; }
 th {
-  background-color: #f0f4ff !important;
+  background-color: #FFFFFF !important;
   color: #64748b !important;
   font-weight: 600 !important;
   text-transform: uppercase !important;
   font-size: 0.7rem !important;
   letter-spacing: 0.08em !important;
   padding: 0.875rem 1rem !important;
-  border-bottom: 1.5px solid #dde8ff !important;
+  border-bottom: 1.5px solid #E2E8F0 !important;
 }
 td {
   padding: 1rem !important;
-  border-bottom: 1px solid #eff5ff !important;
+  border-bottom: 1px solid #DBEAFE !important;
   color: #1e293b !important;
   font-size: 0.875rem !important;
 }
-tr:hover td { background-color: #f0f4ff !important; }
+tr:hover td { background-color: #FFFFFF !important; }
 
 html.dark th {
   background-color: rgba(255,255,255,0.02) !important;
@@ -410,8 +410,8 @@ html.dark tr:hover td { background-color: rgba(0,102,255,0.04) !important; }
    BADGES / PILLS — LIGHT
    ========================================================================== */
 .bg-blue-100 {
-  background-color: #dceaff !important;
-  color: #0052cc !important;
+  background-color: #DBEAFE !important;
+  color: #1D4ED8 !important;
 }
 .bg-amber-50, .bg-amber-100 {
   background-color: rgba(245,158,11,0.10) !important;
@@ -441,7 +441,7 @@ html.dark tr:hover td { background-color: rgba(0,102,255,0.04) !important; }
 
 html.dark .bg-blue-50, html.dark .bg-blue-100 {
   background-color: rgba(0,102,255,0.10) !important;
-  color: #60a5fa !important;
+  color: #2563EB !important;
   border: 1px solid rgba(0,102,255,0.15) !important;
 }
 html.dark .bg-amber-50, html.dark .bg-amber-100 {
@@ -476,7 +476,7 @@ button.bg-blue-500,
 button.bg-blue-600,
 .bg-blue-500,
 .bg-blue-600 {
-  background: linear-gradient(135deg, #0066FF 0%, #0052cc 100%) !important;
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
   color: #ffffff !important;
   border: none !important;
   font-weight: 600 !important;
@@ -496,7 +496,7 @@ button.bg-blue-600:active { transform: translateY(0) !important; }
 /* Indigo buttons */
 button.bg-indigo-600,
 .bg-indigo-600 {
-  background: linear-gradient(135deg, #0066FF 0%, #4f46e5 100%) !important;
+  background: linear-gradient(135deg, #2563EB 0%, #4f46e5 100%) !important;
   color: #ffffff !important;
   box-shadow: 0 4px 16px rgba(0,102,255,0.25) !important;
   border: none !important;
@@ -514,13 +514,13 @@ button.bg-indigo-600:hover,
 button.bg-slate-100,
 button.bg-gray-100,
 button.bg-slate-200 {
-  background-color: #eff5ff !important;
+  background-color: #DBEAFE !important;
   color: #334155 !important;
-  border: 1.5px solid #dde8ff !important;
+  border: 1.5px solid #E2E8F0 !important;
   transition: all 0.2s ease !important;
 }
 button.bg-slate-100:hover,
-button.bg-gray-100:hover { background-color: #dceaff !important; }
+button.bg-gray-100:hover { background-color: #DBEAFE !important; }
 
 html.dark button.bg-slate-100,
 html.dark button.bg-gray-100,
@@ -545,7 +545,7 @@ html.dark button.bg-gray-100:hover { background-color: #243047 !important; }
   letter-spacing: 0.04em !important;
 }
 #app-footer a, #app-footer span { color: #64748b !important; transition: color 0.15s ease !important; }
-#app-footer a:hover, #app-footer span:hover { color: #60a5fa !important; }
+#app-footer a:hover, #app-footer span:hover { color: #2563EB !important; }
 
 /* ==========================================================================
    MODALS & OVERLAYS
@@ -561,7 +561,7 @@ html.dark button.bg-gray-100:hover { background-color: #243047 !important; }
    ========================================================================== */
 .fixed.bottom-6.right-6 {
   background-color: #ffffff !important;
-  border: 1.5px solid #dde8ff !important;
+  border: 1.5px solid #E2E8F0 !important;
   box-shadow: 0 12px 40px rgba(0,102,255,0.18) !important;
   border-radius: 1rem !important;
   color: #0f172a !important;
@@ -577,7 +577,7 @@ html.dark .fixed.bottom-6.right-6 {
    DIVIDERS
    ========================================================================== */
 .divide-y > :not([hidden]) ~ :not([hidden]) {
-  border-color: #eff5ff !important;
+  border-color: #DBEAFE !important;
 }
 html.dark .divide-y > :not([hidden]) ~ :not([hidden]) {
   border-color: rgba(255,255,255,0.06) !important;
@@ -594,13 +594,13 @@ html.dark .divide-y > :not([hidden]) ~ :not([hidden]) {
 .bg-blue-500\/10 {
   background-color: rgba(0,102,255,0.07) !important;
   border-color: rgba(0,102,255,0.20) !important;
-  color: #0052cc !important;
+  color: #1D4ED8 !important;
 }
 html.dark .bg-amber-500\/10 {
   color: #fbbf24 !important;
 }
 html.dark .bg-blue-500\/10 {
-  color: #60a5fa !important;
+  color: #2563EB !important;
 }
 
 /* ==========================================================================
@@ -636,12 +636,12 @@ input[maxlength="6"] {
    ========================================================================== */
 .premium-card {
   background: #ffffff !important;
-  border: 1.5px solid #dde8ff !important;
+  border: 1.5px solid #E2E8F0 !important;
   box-shadow: 0 4px 24px rgba(0,102,255,0.08), 0 1px 4px rgba(0,0,0,0.04) !important;
   border-radius: 1rem !important;
 }
 .premium-card:hover {
-  border-color: #0066FF !important;
+  border-color: #2563EB !important;
   box-shadow: 0 8px 32px rgba(0,102,255,0.16), 0 2px 8px rgba(0,0,0,0.06) !important;
 }
 
@@ -657,7 +657,7 @@ html.dark .premium-card:hover {
 
 /* Rounded cards */
 .rounded-2xl, .rounded-3xl, .rounded-xl {
-  border-color: #dde8ff !important;
+  border-color: #E2E8F0 !important;
 }
 html.dark .rounded-2xl, html.dark .rounded-3xl, html.dark .rounded-xl {
   border-color: rgba(255,255,255,0.07) !important;
@@ -691,12 +691,12 @@ html.dark {
    ========================================================================== */
 .prose { color: #334155 !important; }
 .prose h1,.prose h2,.prose h3 { color: #0f172a !important; }
-.prose a { color: #0066FF !important; }
+.prose a { color: #2563EB !important; }
 .prose strong { color: #1e293b !important; }
 
 html.dark .prose { color: #cbd5e1 !important; }
 html.dark .prose h1, html.dark .prose h2, html.dark .prose h3 { color: #f1f5f9 !important; }
-html.dark .prose a { color: #60a5fa !important; }
+html.dark .prose a { color: #2563EB !important; }
 html.dark .prose strong { color: #e2e8f0 !important; }
 
 /* ==========================================================================
@@ -750,18 +750,18 @@ html.dark .glow-orb-blue {
    PROFILE PHOTO UPLOAD WIDGET
    ========================================================================== */
 .photo-upload-ring {
-  border: 3px solid #dde8ff;
+  border: 3px solid #E2E8F0;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .photo-upload-ring:hover {
-  border-color: #0066FF;
+  border-color: #2563EB;
   box-shadow: 0 0 0 4px rgba(0,102,255,0.12);
 }
 html.dark .photo-upload-ring {
   border-color: rgba(255,255,255,0.12);
 }
 html.dark .photo-upload-ring:hover {
-  border-color: #0066FF;
+  border-color: #2563EB;
   box-shadow: 0 0 0 4px rgba(0,102,255,0.20);
 }
 
@@ -770,7 +770,7 @@ html.dark .photo-upload-ring:hover {
    ========================================================================== */
 .stat-card {
   background: #ffffff;
-  border: 1.5px solid #dde8ff;
+  border: 1.5px solid #E2E8F0;
   border-radius: 1rem;
   box-shadow: 0 2px 12px rgba(0,102,255,0.06);
   transition: transform 0.2s ease, box-shadow 0.2s ease;

@@ -14,17 +14,17 @@ interface PublicPagesProps {
 }
 
 const card: React.CSSProperties = {
-  background: "linear-gradient(145deg,#111827,#0f1e35)",
-  border: "1px solid rgba(255,255,255,0.07)",
-  boxShadow: "0 8px 32px rgba(0,0,0,0.40)",
+  background: "#FFFFFF",
+  border: "1px solid #E2E8F0",
+  boxShadow: "0 4px 24px rgba(37,99,235,0.08)",
   borderRadius: "1rem",
 };
 
 const inputStyle: React.CSSProperties = {
-  background: "#0f1e35",
-  border: "1px solid rgba(255,255,255,0.10)",
+  background: "#FFFFFF",
+  border: "1px solid #E2E8F0",
   borderRadius: "0.75rem",
-  color: "#f1f5f9",
+  color: "#0F172A",
   padding: "0.625rem 1rem",
   fontSize: "0.875rem",
   width: "100%",
@@ -79,14 +79,14 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
       {/* Page header */}
       <div className="mb-10 text-center">
         <h1
-          className="font-bold tracking-tight text-white sm:text-4xl"
+          className="font-bold tracking-tight text-slate-900 sm:text-4xl"
           style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.75rem,4vw,2.5rem)" }}
         >
           {page.title}
         </h1>
         <div
           className="mx-auto mt-3 h-0.5 w-16 rounded-full"
-          style={{ background: "linear-gradient(90deg,#2563eb,#60a5fa)" }}
+          style={{ background: "linear-gradient(90deg,#2563eb,#2563EB)" }}
         />
         <p className="mt-4 text-sm max-w-xl mx-auto leading-relaxed" style={{ color: "#64748b" }}>
           Learn more about our social media task exchange platform — regulations, contact details, and guidelines.
@@ -103,16 +103,16 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
               {faqs.map((faq, idx) => (
                 <div key={idx} style={card} className="p-5">
                   <h3
-                    className="flex items-start gap-3 font-bold text-white"
+                    className="flex items-start gap-3 font-bold text-slate-900"
                     style={{ fontFamily: "var(--font-display)", fontSize: "0.9375rem" }}
                   >
-                    <HelpCircle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#3b82f6" }} />
+                    <HelpCircle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#2563EB" }} />
                     <span>{faq.q}</span>
                   </h3>
                   <p
                     className="mt-3 text-sm leading-relaxed pl-8"
                     style={{
-                      color: "#94a3b8",
+                      color: "#475569",
                       borderLeft: "2px solid rgba(59,130,246,0.20)",
                       paddingLeft: "1rem",
                       marginLeft: "1.25rem",
@@ -126,7 +126,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
           ) : view === "contact" ? (
             <div style={card} className="p-6 sm:p-8">
               <h2
-                className="font-bold text-white mb-6"
+                className="font-bold text-slate-900 mb-6"
                 style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}
               >
                 Send Us a Direct Message
@@ -140,9 +140,9 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
                     border: "1px solid rgba(59,130,246,0.20)"
                   }}
                 >
-                  <CheckCircle className="h-8 w-8 mx-auto mb-3" style={{ color: "#60a5fa" }} />
-                  <p className="text-sm font-bold text-white">Message Received Successfully!</p>
-                  <p className="text-xs mt-1" style={{ color: "#60a5fa" }}>
+                  <CheckCircle className="h-8 w-8 mx-auto mb-3" style={{ color: "#2563EB" }} />
+                  <p className="text-sm font-bold text-slate-900">Message Received Successfully!</p>
+                  <p className="text-xs mt-1" style={{ color: "#2563EB" }}>
                     Our support team will reply within 12 hours via email.
                   </p>
                 </div>
@@ -198,7 +198,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
                     type="submit"
                     className="w-full rounded-xl py-3 text-sm font-bold text-white flex items-center justify-center gap-2 cursor-pointer transition-all"
                     style={{
-                      background: "linear-gradient(135deg,#3b82f6,#2563eb)",
+                      background: "linear-gradient(135deg,#2563EB,#2563eb)",
                       boxShadow: "0 4px 16px rgba(37,99,235,0.30)"
                     }}
                   >
@@ -211,7 +211,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
             <div style={card} className="p-6 sm:p-8">
               <div
                 className="prose max-w-none text-sm leading-relaxed whitespace-pre-wrap"
-                style={{ color: "#94a3b8" }}
+                style={{ color: "#475569" }}
               >
                 {page.content}
               </div>
@@ -225,7 +225,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
           {/* Contact widget */}
           <div style={card} className="p-6">
             <h3
-              className="font-bold text-white mb-5"
+              className="font-bold text-slate-900 mb-5"
               style={{ fontFamily: "var(--font-display)", fontSize: "0.9375rem" }}
             >
               Official Channels
@@ -233,9 +233,9 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
 
             <div className="space-y-4">
               {[
-                { icon: <Mail className="h-4 w-4" style={{ color: "#60a5fa" }} />, label: "Support Email", value: settings.contactEmail },
-                { icon: <Phone className="h-4 w-4" style={{ color: "#60a5fa" }} />, label: "Hotline", value: settings.contactPhone },
-                { icon: <MapPin className="h-4 w-4" style={{ color: "#60a5fa" }} />, label: "Headquarters", value: "Yaba Tech Corridor, Lagos, Nigeria" },
+                { icon: <Mail className="h-4 w-4" style={{ color: "#2563EB" }} />, label: "Support Email", value: settings.contactEmail },
+                { icon: <Phone className="h-4 w-4" style={{ color: "#2563EB" }} />, label: "Hotline", value: settings.contactPhone },
+                { icon: <MapPin className="h-4 w-4" style={{ color: "#2563EB" }} />, label: "Headquarters", value: "Yaba Tech Corridor, Lagos, Nigeria" },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <div
@@ -245,7 +245,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
                     {item.icon}
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-white">{item.label}</p>
+                    <p className="text-xs font-semibold text-slate-900">{item.label}</p>
                     <p className="text-xs mt-0.5" style={{ color: "#64748b" }}>{item.value}</p>
                   </div>
                 </div>
@@ -253,7 +253,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
             </div>
 
             {(settings.telegramChannel || settings.whatsappGroup) && (
-              <div className="mt-6 pt-5 space-y-2.5" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="mt-6 pt-5 space-y-2.5" style={{ borderTop: "1px solid #E2E8F0" }}>
                 <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#475569" }}>Social Chatrooms</p>
                 {settings.telegramChannel && (
                   <a

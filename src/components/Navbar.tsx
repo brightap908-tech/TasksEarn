@@ -18,8 +18,8 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
   const navLinkClass = (view: string) =>
     `text-sm font-medium transition-all cursor-pointer px-1 py-0.5 ${
       currentView === view
-        ? isDarkMode ? "text-[#60a5fa] font-semibold" : "text-[#0066FF] font-semibold"
-        : isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-[#0066FF]"
+        ? isDarkMode ? "text-[#2563EB] font-semibold" : "text-[#2563EB] font-semibold"
+        : isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-[#2563EB]"
     }`;
 
   const isActive = (view: string) => currentView === view;
@@ -32,7 +32,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
         background: isDarkMode ? "rgba(11,18,32,0.94)" : "rgba(255,255,255,0.96)",
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
-        borderBottom: isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1.5px solid #dde8ff",
+        borderBottom: isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1.5px solid #E2E8F0",
         boxShadow: isDarkMode ? "0 1px 40px rgba(0,0,0,0.50)" : "0 1px 20px rgba(0,102,255,0.08)"
       }}
     >
@@ -49,7 +49,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
           <div
             className="relative flex h-10 w-10 items-center justify-center rounded-xl shrink-0 overflow-hidden"
             style={{
-              background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+              background: "linear-gradient(135deg, #2563EB 0%, #1d4ed8 100%)",
               boxShadow: "0 0 20px rgba(59,130,246,0.45), 0 4px 12px rgba(29,78,216,0.35)",
               border: "1px solid rgba(96,165,250,0.30)"
             }}
@@ -83,7 +83,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                   fontSize: "1.0625rem",
                   letterSpacing: "-0.03em",
                   lineHeight: 1,
-                  background: "linear-gradient(135deg,#60a5fa,#3b82f6)",
+                  background: "linear-gradient(135deg,#2563EB,#2563EB)",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   backgroundClip: "text"
@@ -96,7 +96,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
               className="flex items-center gap-1"
               style={{ fontFamily: "var(--font-mono)", fontSize: "0.5rem", letterSpacing: "0.18em", color: "rgba(96,165,250,0.70)", marginTop: "3px", textTransform: "uppercase", fontWeight: 700 }}
             >
-              <Zap style={{ width: "7px", height: "7px", color: "#60a5fa" }} />
+              <Zap style={{ width: "7px", height: "7px", color: "#2563EB" }} />
               MICRO-EXCHANGE
             </span>
           </div>
@@ -134,7 +134,9 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
           <button
             onClick={onToggleDarkMode}
             className="rounded-full p-2 transition-colors cursor-pointer flex items-center justify-center shrink-0"
-            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+            style={isDarkMode
+              ? { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }
+              : { background: "#F8FAFC", border: "1px solid #E2E8F0" }}
             aria-label="Toggle Theme"
             title={isDarkMode ? "Light Mode" : "Dark Mode"}
           >
@@ -155,16 +157,16 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                   border: "1px solid rgba(59,130,246,0.20)"
                 }}
               >
-                <Wallet className="h-3.5 w-3.5 shrink-0" style={{ color: "#60a5fa" }} />
+                <Wallet className="h-3.5 w-3.5 shrink-0" style={{ color: "#2563EB" }} />
                 <span className="text-[10px] font-semibold" style={{ color: "#94a3b8" }}>Balance</span>
-                <span className="font-mono text-sm font-bold" style={{ color: "#93c5fd" }}>
+                <span className="font-mono text-sm font-bold" style={{ color: "#2563EB" }}>
                   ₦{user.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
                 {user.role === UserRole.ADVERTISER && (
                   <button
                     onClick={onOpenDeposit}
                     className="ml-1 rounded-full text-white text-[9px] font-bold uppercase px-2.5 py-0.5 transition-all cursor-pointer"
-                    style={{ background: "linear-gradient(135deg,#3b82f6,#2563eb)" }}
+                    style={{ background: "linear-gradient(135deg,#2563EB,#2563eb)" }}
                   >
                     + Fund
                   </button>
@@ -174,14 +176,14 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
               {/* Profile */}
               <div
                 className="flex items-center gap-3 pl-3"
-                style={{ borderLeft: "1px solid rgba(255,255,255,0.08)" }}
+                style={{ borderLeft: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}
               >
                 <div className="text-right">
-                  <p className="text-xs font-bold text-white leading-none">{user.name}</p>
+                  <p className="text-xs font-bold leading-none" style={{ color: isDarkMode ? "#ffffff" : "#0F172A" }}>{user.name}</p>
                   <p className="text-[9px] font-bold flex items-center gap-1 justify-end uppercase tracking-wider mt-1.5" style={{ color: "#64748b" }}>
                     {user.role === UserRole.ADMIN
                       ? <Shield className="h-2.5 w-2.5" style={{ color: "#fb7185" }} />
-                      : <UserIcon className="h-2.5 w-2.5" style={{ color: "#60a5fa" }} />
+                      : <UserIcon className="h-2.5 w-2.5" style={{ color: "#2563EB" }} />
                     }
                     <span>{user.role}</span>
                   </p>
@@ -194,19 +196,21 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                     if (user.role === UserRole.ADMIN) onNavigate("admin-dashboard");
                   }}
                   className="rounded-full p-2 transition-all cursor-pointer"
-                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+                  style={isDarkMode
+                    ? { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }
+                    : { background: "#F8FAFC", border: "1px solid #E2E8F0" }}
                   title="Dashboard"
                 >
-                  <Coins className="h-4 w-4" style={{ color: "#60a5fa" }} />
+                  <Coins className="h-4 w-4" style={{ color: "#2563EB" }} />
                 </button>
 
                 <button
                   onClick={onLogout}
                   className="rounded-full p-2 transition-all cursor-pointer"
-                  style={{ background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.15)" }}
+                  style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)" }}
                   title="Logout"
                 >
-                  <LogOut className="h-4 w-4" style={{ color: "#fb7185" }} />
+                  <LogOut className="h-4 w-4" style={{ color: "#EF4444" }} />
                 </button>
               </div>
             </div>
@@ -215,9 +219,9 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
               <button
                 onClick={() => onNavigate("login")}
                 className="text-sm font-semibold cursor-pointer transition-colors"
-                style={{ color: "#94a3b8" }}
-                onMouseEnter={e => (e.currentTarget.style.color = "#f1f5f9")}
-                onMouseLeave={e => (e.currentTarget.style.color = "#94a3b8")}
+                style={{ color: isDarkMode ? "#94a3b8" : "#475569" }}
+                onMouseEnter={e => (e.currentTarget.style.color = isDarkMode ? "#f1f5f9" : "#2563EB")}
+                onMouseLeave={e => (e.currentTarget.style.color = isDarkMode ? "#94a3b8" : "#475569")}
               >
                 Sign In
               </button>
@@ -225,7 +229,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                 onClick={() => onNavigate("register")}
                 className="rounded-full px-5 py-2 text-sm font-bold text-white cursor-pointer transition-all active:scale-95"
                 style={{
-                  background: "linear-gradient(135deg,#3b82f6 0%,#2563eb 100%)",
+                  background: "linear-gradient(135deg,#2563EB 0%,#2563eb 100%)",
                   boxShadow: "0 4px 16px rgba(37,99,235,0.35)"
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 6px 24px rgba(37,99,235,0.50)"; }}
@@ -242,7 +246,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
           <button
             onClick={onToggleDarkMode}
             className="rounded-full p-2 transition-colors cursor-pointer flex items-center justify-center shrink-0"
-            style={{ background: "rgba(255,255,255,0.04)" }}
+            style={isDarkMode ? { background: "rgba(255,255,255,0.04)" } : { background: "#F8FAFC" }}
             aria-label="Toggle Theme"
           >
             {isDarkMode
@@ -278,8 +282,8 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
           id="mobile-nav-drawer"
           className="md:hidden px-4 py-4 space-y-1.5 animate-fadeIn"
           style={{
-            background: "rgba(10,16,28,0.97)",
-            borderTop: "1px solid rgba(255,255,255,0.06)",
+            background: isDarkMode ? "rgba(10,16,28,0.97)" : "#FFFFFF",
+            borderTop: isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1px solid #E2E8F0",
             backdropFilter: "blur(20px)"
           }}
         >
@@ -289,8 +293,8 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
               onClick={() => { onNavigate(v); setMobileMenuOpen(false); }}
               className="block py-2.5 text-sm font-semibold rounded-xl px-3 cursor-pointer transition-colors"
               style={isActive(v)
-                ? { background: "rgba(59,130,246,0.12)", color: "#60a5fa" }
-                : { color: "#94a3b8" }
+                ? { background: "#DBEAFE", color: "#2563EB" }
+                : { color: isDarkMode ? "#94a3b8" : "#475569" }
               }
             >
               {v.charAt(0).toUpperCase() + v.slice(1)}
@@ -298,8 +302,8 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
           ))}
 
           {user && (
-            <div className="pt-3 mt-2 space-y-1" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-              <p className="px-3 text-[10px] font-bold uppercase tracking-[0.12em] mb-2" style={{ color: "#3b82f6" }}>
+            <div className="pt-3 mt-2 space-y-1" style={{ borderTop: isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1px solid #E2E8F0" }}>
+              <p className="px-3 text-[10px] font-bold uppercase tracking-[0.12em] mb-2" style={{ color: "#2563EB" }}>
                 My Dashboard
               </p>
 
@@ -313,7 +317,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                   ].map(([v, label]) => (
                     <span key={v} onClick={() => { onNavigate(v); setMobileMenuOpen(false); }}
                       className="block py-2.5 text-sm font-medium rounded-xl px-3 cursor-pointer transition-colors"
-                      style={{ color: "#94a3b8" }}
+                      style={{ color: isDarkMode ? "#94a3b8" : "#475569" }}
                     >{label}</span>
                   ))}
                 </>
@@ -328,13 +332,13 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                   ].map(([v, label]) => (
                     <span key={v} onClick={() => { onNavigate(v); setMobileMenuOpen(false); }}
                       className="block py-2.5 text-sm font-medium rounded-xl px-3 cursor-pointer transition-colors"
-                      style={{ color: "#94a3b8" }}
+                      style={{ color: isDarkMode ? "#94a3b8" : "#475569" }}
                     >{label}</span>
                   ))}
                   <button
                     onClick={() => { onOpenDeposit(); setMobileMenuOpen(false); }}
                     className="w-full text-left block py-2.5 text-sm font-semibold rounded-xl px-3 transition-colors"
-                    style={{ color: "#60a5fa" }}
+                    style={{ color: "#2563EB" }}
                   >
                     Fund Wallet (₦)
                   </button>
@@ -353,7 +357,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
               <button
                 onClick={() => { onLogout(); setMobileMenuOpen(false); }}
                 className="w-full text-left block py-2.5 text-sm font-semibold rounded-xl px-3 mt-4 transition-colors"
-                style={{ color: "#fb7185" }}
+                style={{ color: "#EF4444" }}
               >
                 Logout Account
               </button>
@@ -361,18 +365,20 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
           )}
 
           {!user && (
-            <div className="pt-4 flex flex-col gap-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <div className="pt-4 flex flex-col gap-2" style={{ borderTop: isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1px solid #E2E8F0" }}>
               <button
                 onClick={() => { onNavigate("login"); setMobileMenuOpen(false); }}
                 className="w-full py-2.5 text-center text-sm font-semibold rounded-xl transition-all"
-                style={{ color: "#94a3b8", border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.02)" }}
+                style={isDarkMode
+                  ? { color: "#94a3b8", border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.02)" }
+                  : { color: "#475569", border: "1px solid #E2E8F0", background: "#F8FAFC" }}
               >
                 Sign In
               </button>
               <button
                 onClick={() => { onNavigate("register"); setMobileMenuOpen(false); }}
                 className="w-full py-2.5 text-center text-sm font-bold text-white rounded-xl transition-all"
-                style={{ background: "linear-gradient(135deg,#3b82f6,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}
+                style={{ background: "linear-gradient(135deg,#2563EB,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}
               >
                 Sign Up Free
               </button>

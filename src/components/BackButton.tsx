@@ -24,7 +24,7 @@ export default function BackButton({ fallback = "/", label = "Back" }: BackButto
       style={{
         background: "rgba(0,102,255,0.08)",
         border: "1px solid rgba(0,102,255,0.18)",
-        color: "#0066FF",
+        color: "#2563EB",
       }}
       onMouseEnter={e => {
         (e.currentTarget as HTMLElement).style.background = "rgba(0,102,255,0.15)";

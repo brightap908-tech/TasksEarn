@@ -491,7 +491,7 @@ export default function AdvertiserDashboard({
               />
             ) : (
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border-4 border-blue-100 font-display text-xl font-black text-white"
-                style={{ background: "linear-gradient(135deg,#0066FF,#4f46e5)" }}>
+                style={{ background: "linear-gradient(135deg,#2563EB,#4f46e5)" }}>
                 {user.name.substring(0, 2).toUpperCase()}
               </div>
             )}
@@ -504,7 +504,7 @@ export default function AdvertiserDashboard({
 
           {/* Wallet Balance */}
           <div className="mt-4 rounded-xl border border-blue-100 p-3"
-            style={{ background: "linear-gradient(135deg,#eff5ff,#f0f4ff)" }}>
+            style={{ background: "linear-gradient(135deg,#DBEAFE,#FFFFFF)" }}>
             <span className="block text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">
               Ad Wallet Balance
             </span>
@@ -562,7 +562,7 @@ export default function AdvertiserDashboard({
 
             {/* Advertiser guidelines banner */}
             <div className="rounded-2xl p-5 relative overflow-hidden"
-              style={{ background: "linear-gradient(135deg,#0066FF,#4f46e5)" }}>
+              style={{ background: "linear-gradient(135deg,#2563EB,#4f46e5)" }}>
               <div className="absolute inset-0 opacity-10"
                 style={{ backgroundImage: "radial-gradient(circle at 80% 50%,white 0%,transparent 60%)" }} />
               <div className="relative">
@@ -632,7 +632,7 @@ export default function AdvertiserDashboard({
 
               {formSuccess ? (
                 <div className="rounded-xl border border-blue-100 p-6 text-center animate-fadeIn space-y-2"
-                  style={{ background: "#eff5ff" }}>
+                  style={{ background: "#DBEAFE" }}>
                   <p className="text-sm font-bold text-blue-800">🎉 Campaign Launched Successfully!</p>
                   <p className="text-xs text-blue-600">Budget deducted from wallet. Tasks are now live on the platform.</p>
                 </div>
@@ -737,7 +737,7 @@ export default function AdvertiserDashboard({
 
                     {/* Budget Estimator */}
                     <div className="rounded-xl border border-blue-100 p-4 space-y-2.5 font-mono text-xs"
-                      style={{ background: "#eff5ff" }}>
+                      style={{ background: "#DBEAFE" }}>
                       <p className="font-sans text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">
                         Campaign Budget Estimate
                       </p>
@@ -795,7 +795,7 @@ export default function AdvertiserDashboard({
                     <div key={idx} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:border-blue-100 transition-colors">
                       <div className="min-w-0">
                         <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase"
-                          style={{ background: "#eff5ff", color: "#0052cc" }}>
+                          style={{ background: "#DBEAFE", color: "#1D4ED8" }}>
                           <PlatformIcon category={task.category} size={11} />
                           {task.category}
                         </span>
@@ -866,7 +866,7 @@ export default function AdvertiserDashboard({
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="rounded-full px-2.5 py-0.5 text-[9px] font-bold text-blue-700"
-                      style={{ background: "#dceaff" }}>
+                      style={{ background: "#DBEAFE" }}>
                       Verification Portal
                     </span>
                     <h4 className="font-display text-sm font-bold text-gray-900 mt-1.5">{auditingSub.taskTitle}</h4>
@@ -975,7 +975,7 @@ export default function AdvertiserDashboard({
                             <button
                               onClick={() => { setAuditingSub(sub); setTimeout(() => window.scrollBy({ top: 120, behavior: "smooth" }), 100); }}
                               className="rounded-lg px-2.5 py-1 text-[10px] font-bold text-white transition-all"
-                              style={{ background: "#0066FF" }}
+                              style={{ background: "#2563EB" }}
                             >
                               Review
                             </button>
@@ -1200,7 +1200,7 @@ export default function AdvertiserDashboard({
                     />
                   ) : (
                     <div className="h-20 w-20 rounded-full flex items-center justify-center text-white font-display text-2xl font-black photo-upload-ring"
-                      style={{ background: "linear-gradient(135deg,#0066FF,#4f46e5)" }}>
+                      style={{ background: "linear-gradient(135deg,#2563EB,#4f46e5)" }}>
                       {user.name.substring(0, 2).toUpperCase()}
                     </div>
                   )}

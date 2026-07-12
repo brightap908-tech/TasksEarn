@@ -35,7 +35,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
               <div
                 className="flex h-9 w-9 items-center justify-center rounded-xl shrink-0"
                 style={{
-                  background: "linear-gradient(135deg,#3b82f6,#1d4ed8)",
+                  background: "linear-gradient(135deg,#2563EB,#1d4ed8)",
                   boxShadow: "0 0 16px rgba(59,130,246,0.35)",
                   border: "1px solid rgba(96,165,250,0.25)"
                 }}
@@ -52,7 +52,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                   className="font-bold text-white"
                   style={{ fontFamily: "var(--font-display)", fontSize: "1rem", letterSpacing: "-0.03em", lineHeight: 1 }}
                 >
-                  Tasks<span style={{ color: "#60a5fa" }}>Earn</span>
+                  Tasks<span style={{ color: "#2563EB" }}>Earn</span>
                 </div>
                 <div
                   className="flex items-center gap-1 mt-1"
@@ -73,8 +73,8 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
               className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
               style={{ background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.15)" }}
             >
-              <ShieldCheck className="h-3 w-3" style={{ color: "#60a5fa" }} />
-              <span className="text-[10px] font-semibold" style={{ color: "#60a5fa" }}>SSL Secured Platform</span>
+              <ShieldCheck className="h-3 w-3" style={{ color: "#2563EB" }} />
+              <span className="text-[10px] font-semibold" style={{ color: "#2563EB" }}>SSL Secured Platform</span>
             </div>
           </div>
 
@@ -90,7 +90,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
               {[
                 { label: "Home", view: "home" },
                 { label: "About TasksEarn", view: "about" },
-                { label: "FAQ & Help", view: "faq", icon: <HelpCircle className="h-3.5 w-3.5" style={{ color: "#3b82f6" }} /> },
+                { label: "FAQ & Help", view: "faq", icon: <HelpCircle className="h-3.5 w-3.5" style={{ color: "#2563EB" }} /> },
                 { label: "Contact Support", view: "contact" },
               ].map(item => (
                 <li key={item.view}>
@@ -98,7 +98,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                     onClick={() => onNavigate(item.view)}
                     className="cursor-pointer transition-colors flex items-center gap-1.5"
                     style={{ color: "#475569" }}
-                    onMouseEnter={e => (e.currentTarget.style.color = "#60a5fa")}
+                    onMouseEnter={e => (e.currentTarget.style.color = "#2563EB")}
                     onMouseLeave={e => (e.currentTarget.style.color = "#475569")}
                   >
                     {item.icon}
@@ -123,7 +123,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                   onClick={() => onNavigate("terms")}
                   className="cursor-pointer transition-colors flex items-center gap-1.5"
                   style={{ color: "#475569" }}
-                  onMouseEnter={e => (e.currentTarget.style.color = "#60a5fa")}
+                  onMouseEnter={e => (e.currentTarget.style.color = "#2563EB")}
                   onMouseLeave={e => (e.currentTarget.style.color = "#475569")}
                 >
                   <FileText className="h-3.5 w-3.5" style={{ color: "#fbbf24" }} />
@@ -135,10 +135,10 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                   onClick={() => onNavigate("privacy")}
                   className="cursor-pointer transition-colors flex items-center gap-1.5"
                   style={{ color: "#475569" }}
-                  onMouseEnter={e => (e.currentTarget.style.color = "#60a5fa")}
+                  onMouseEnter={e => (e.currentTarget.style.color = "#2563EB")}
                   onMouseLeave={e => (e.currentTarget.style.color = "#475569")}
                 >
-                  <ShieldCheck className="h-3.5 w-3.5" style={{ color: "#60a5fa" }} />
+                  <ShieldCheck className="h-3.5 w-3.5" style={{ color: "#2563EB" }} />
                   Privacy Policy
                 </span>
               </li>
@@ -159,7 +159,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                   className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0"
                   style={{ background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.15)" }}
                 >
-                  <Mail className="h-3.5 w-3.5" style={{ color: "#60a5fa" }} />
+                  <Mail className="h-3.5 w-3.5" style={{ color: "#2563EB" }} />
                 </div>
                 <a
                   href={`mailto:${settings.contactEmail}`}
@@ -176,7 +176,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                   className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0"
                   style={{ background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.15)" }}
                 >
-                  <Phone className="h-3.5 w-3.5" style={{ color: "#60a5fa" }} />
+                  <Phone className="h-3.5 w-3.5" style={{ color: "#2563EB" }} />
                 </div>
                 <a
                   href={`tel:${settings.contactPhone}`}
@@ -214,7 +214,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                   className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0 mt-0.5"
                   style={{ background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.15)" }}
                 >
-                  <Landmark className="h-3.5 w-3.5" style={{ color: "#60a5fa" }} />
+                  <Landmark className="h-3.5 w-3.5" style={{ color: "#2563EB" }} />
                 </div>
                 <span style={{ color: "#374151" }}>12, Herbert Macaulay Way, Yaba, Lagos, Nigeria</span>
               </li>

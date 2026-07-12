@@ -669,7 +669,7 @@ export default function App() {
   ];
 
   return (
-    <div className="flex min-h-screen flex-col font-sans" style={{ background: isDarkMode ? "#0b1220" : "#f0f4ff", color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>
+    <div className="flex min-h-screen flex-col font-sans" style={{ background: isDarkMode ? "#0b1220" : "#FFFFFF", color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>
       
       {/* Navigation Header */}
       <Navbar 
@@ -691,7 +691,7 @@ export default function App() {
           <div className="space-y-16 pb-16">
             
             {/* Hero Section */}
-            <section className="relative overflow-hidden hero-grid" style={{ background: isDarkMode ? "linear-gradient(180deg,#0b1220 0%,#0d1626 100%)" : "linear-gradient(180deg,#f0f4ff 0%,#e8f0ff 100%)", borderBottom: isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1.5px solid #dde8ff", paddingTop: "5rem", paddingBottom: "6rem" }}>
+            <section className="relative overflow-hidden hero-grid" style={{ background: isDarkMode ? "linear-gradient(180deg,#0b1220 0%,#0d1626 100%)" : "linear-gradient(180deg,#FFFFFF 0%,#e8f0ff 100%)", borderBottom: isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1.5px solid #E2E8F0", paddingTop: "5rem", paddingBottom: "6rem" }}>
               {/* Glow orbs */}
               <div className="glow-orb-blue" style={{ width: "500px", height: "500px", top: "-120px", left: "-100px", opacity: 0.6 }} />
               <div className="glow-orb-indigo" style={{ width: "400px", height: "400px", bottom: "-80px", right: "-60px", opacity: 0.5 }} />
@@ -702,9 +702,9 @@ export default function App() {
                 <div className="space-y-7 max-w-xl">
                   <span
                     className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold"
-                    style={{ background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.20)", color: "#60a5fa" }}
+                    style={{ background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.20)", color: "#2563EB" }}
                   >
-                    <Zap className="h-3.5 w-3.5" style={{ color: "#60a5fa" }} />
+                    <Zap className="h-3.5 w-3.5" style={{ color: "#2563EB" }} />
                     Nigeria's Most Trusted Micro-Job Exchange
                   </span>
 
@@ -713,7 +713,7 @@ export default function App() {
                     style={{ fontFamily: "var(--font-display)", fontSize: "clamp(2.25rem,5vw,3.5rem)", color: isDarkMode ? "#f1f5f9" : "#0f172a" }}
                   >
                     Get Paid Weekly for{" "}
-                    <span style={{ background: "linear-gradient(135deg,#60a5fa,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                    <span style={{ background: "linear-gradient(135deg,#2563EB,#2563EB)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
                       Simple Tasks
                     </span>
                   </h1>
@@ -727,7 +727,7 @@ export default function App() {
                       onClick={() => setCurrentView("register")}
                       className="rounded-full px-7 py-3.5 text-sm font-bold text-white text-center cursor-pointer transition-all active:scale-95"
                       style={{
-                        background: "linear-gradient(135deg,#3b82f6,#2563eb)",
+                        background: "linear-gradient(135deg,#2563EB,#2563eb)",
                         boxShadow: "0 4px 20px rgba(37,99,235,0.40)"
                       }}
                     >
@@ -738,8 +738,8 @@ export default function App() {
                       className="rounded-full px-7 py-3.5 text-sm font-bold text-center cursor-pointer transition-all"
                       style={{
                         background: isDarkMode ? "rgba(255,255,255,0.04)" : "rgba(0,102,255,0.06)",
-                        border: isDarkMode ? "1px solid rgba(255,255,255,0.12)" : "1.5px solid #b0cfff",
-                        color: isDarkMode ? "#cbd5e1" : "#0052cc"
+                        border: isDarkMode ? "1px solid rgba(255,255,255,0.12)" : "1.5px solid #DBEAFE",
+                        color: isDarkMode ? "#cbd5e1" : "#1D4ED8"
                       }}
                     >
                       Promote My Business
@@ -751,15 +751,15 @@ export default function App() {
                 <div
                   className="relative rounded-2xl p-6 space-y-4"
                   style={{
-                    background: "linear-gradient(145deg,#111827,#0f1e35)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    boxShadow: "0 24px 60px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.05)"
+                    background: "#FFFFFF",
+                    border: "1px solid #E2E8F0",
+                    boxShadow: "0 24px 60px rgba(37,99,235,0.12)"
                   }}
                 >
                   {/* Top glow strip */}
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-2/3 rounded-full" style={{ background: "linear-gradient(90deg,transparent,rgba(59,130,246,0.40),transparent)" }} />
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-2/3 rounded-full" style={{ background: "linear-gradient(90deg,transparent,rgba(37,99,235,0.40),transparent)" }} />
 
-                  <div className="flex justify-between items-center pb-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div className="flex justify-between items-center pb-3" style={{ borderBottom: "1px solid #E2E8F0" }}>
                     <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#475569", fontFamily: "var(--font-mono)" }}>
                       Active Live Ticker
                     </span>
@@ -775,14 +775,14 @@ export default function App() {
                       style={{ background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.12)" }}
                     >
                       <div>
-                        <p className="font-bold text-white">
+                        <p className="font-bold text-slate-900">
                           {publicStats.latestWithdrawal
                             ? `${publicStats.latestWithdrawal.userName} (${publicStats.latestWithdrawal.bankName})`
                             : "Tunde Bakare (Guaranty Trust Bank)"}
                         </p>
                         <p className="mt-0.5" style={{ color: "#475569" }}>Withdrawal requested successfully</p>
                       </div>
-                      <span className="font-mono font-black" style={{ color: "#60a5fa" }}>
+                      <span className="font-mono font-black" style={{ color: "#2563EB" }}>
                         ₦{publicStats.latestWithdrawal ? publicStats.latestWithdrawal.amount.toLocaleString() : "7,450"}
                       </span>
                     </div>
@@ -792,7 +792,7 @@ export default function App() {
                       style={{ background: "rgba(99,102,241,0.07)", border: "1px solid rgba(99,102,241,0.12)" }}
                     >
                       <div>
-                        <p className="font-bold text-white">
+                        <p className="font-bold text-slate-900">
                           {publicStats.latestCampaign
                             ? `New Campaign: ${publicStats.latestCampaign.title}`
                             : "New Campaign: Telegram Group Join – Crypto Signals NG"}
@@ -814,7 +814,7 @@ export default function App() {
 
                   <div
                     className="grid grid-cols-3 gap-2 pt-4 text-center"
-                    style={{ borderTop: "1px solid rgba(255,255,255,0.05)", fontFamily: "var(--font-mono)" }}
+                    style={{ borderTop: "1px solid #E2E8F0", fontFamily: "var(--font-mono)" }}
                   >
                     {[
                       { val: publicStats.earnersCount > 0 ? publicStats.earnersCount.toLocaleString() : "0", label: "Earners" },
@@ -822,7 +822,7 @@ export default function App() {
                       { val: `₦${publicStats.totalPaidOut > 0 ? (publicStats.totalPaidOut / 1000000).toFixed(1) + "M" : "0"}`, label: "Paid Out" },
                     ].map((s, i) => (
                       <div key={i}>
-                        <p className="text-base font-black text-white">{s.val}</p>
+                        <p className="text-base font-black text-slate-900">{s.val}</p>
                         <p className="mt-0.5 text-[10px]" style={{ color: "#475569" }}>{s.label}</p>
                       </div>
                     ))}
@@ -867,7 +867,7 @@ export default function App() {
             <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
               <div className="text-center">
                 <h2
-                  className="font-bold tracking-tight text-white sm:text-3xl"
+                  className="font-bold tracking-tight text-slate-900 sm:text-3xl"
                   style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.5rem,3vw,1.875rem)" }}
                 >
                   Micro-Job Engagement Categories
@@ -884,42 +884,42 @@ export default function App() {
                     className="group cursor-pointer transition-all"
                     onClick={() => setCurrentView("register")}
                     style={{
-                      background: "linear-gradient(145deg,#111827,#0f1e35)",
-                      border: "1px solid rgba(255,255,255,0.07)",
+                      background: "#FFFFFF",
+                      border: "1px solid #E2E8F0",
                       borderRadius: "1rem",
                       padding: "1.25rem",
-                      boxShadow: "0 4px 20px rgba(0,0,0,0.30)"
+                      boxShadow: "0 2px 12px rgba(37,99,235,0.06)"
                     }}
                     onMouseEnter={e => {
-                      (e.currentTarget as HTMLElement).style.borderColor = "rgba(59,130,246,0.30)";
-                      (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 32px rgba(0,0,0,0.40), 0 0 0 1px rgba(59,130,246,0.15)";
+                      (e.currentTarget as HTMLElement).style.borderColor = "#2563EB";
+                      (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 32px rgba(37,99,235,0.16)";
                     }}
                     onMouseLeave={e => {
-                      (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)";
-                      (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 20px rgba(0,0,0,0.30)";
+                      (e.currentTarget as HTMLElement).style.borderColor = "#E2E8F0";
+                      (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 12px rgba(37,99,235,0.06)";
                     }}
                   >
                     <div className="flex justify-between items-start">
                       <div
                         className="rounded-xl p-2.5"
-                        style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.12)" }}
+                        style={{ background: "#DBEAFE", border: "1px solid #DBEAFE" }}
                       >
                         {getCategoryIcon(cat.title.substring(0, cat.title.length - 1))}
                       </div>
-                      <span className="text-[10px] font-mono" style={{ color: "#374151" }}>{cat.count}</span>
+                      <span className="text-[10px] font-mono" style={{ color: "#94A3B8" }}>{cat.count}</span>
                     </div>
                     <h3
-                      className="font-bold text-white mt-4"
+                      className="font-bold text-slate-900 mt-4"
                       style={{ fontFamily: "var(--font-display)", fontSize: "0.8125rem" }}
                     >
                       {cat.title}
                     </h3>
-                    <p className="text-[11px] font-bold mt-1" style={{ fontFamily: "var(--font-mono)", color: "#60a5fa" }}>
+                    <p className="text-[11px] font-bold mt-1" style={{ fontFamily: "var(--font-mono)", color: "#2563EB" }}>
                       {cat.payout}
                     </p>
                     <div
                       className="mt-3 text-[10px] font-semibold flex items-center gap-1 justify-end transition-colors"
-                      style={{ color: "#374151" }}
+                      style={{ color: "#475569" }}
                     >
                       Claim Task <ArrowRight className="h-3 w-3" />
                     </div>
@@ -929,11 +929,11 @@ export default function App() {
             </section>
 
             {/* How It Works Timeline */}
-            <section style={{ background: "#0d1626", borderTop: "1px solid rgba(255,255,255,0.05)", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "5rem 0" }}>
+            <section style={{ background: "#F8FAFC", borderTop: "1px solid #E2E8F0", borderBottom: "1px solid #E2E8F0", padding: "5rem 0" }}>
               <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-12">
                 <div className="text-center">
                   <h2
-                    className="font-bold tracking-tight text-white sm:text-3xl"
+                    className="font-bold tracking-tight text-slate-900 sm:text-3xl"
                     style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.5rem,3vw,1.875rem)" }}
                   >
                     How TasksEarn Works
@@ -951,25 +951,25 @@ export default function App() {
                       key={i}
                       className="text-center space-y-4 rounded-2xl p-7"
                       style={{
-                        background: "linear-gradient(145deg,#111827,#0f1e35)",
-                        border: "1px solid rgba(255,255,255,0.07)",
-                        boxShadow: "0 4px 24px rgba(0,0,0,0.30)"
+                        background: "#FFFFFF",
+                        border: "1px solid #E2E8F0",
+                        boxShadow: "0 4px 24px rgba(37,99,235,0.08)"
                       }}
                     >
                       <div
                         className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl font-bold text-lg"
                         style={{
-                          background: "linear-gradient(135deg,rgba(59,130,246,0.20),rgba(37,99,235,0.10))",
-                          border: "1px solid rgba(59,130,246,0.25)",
-                          color: "#60a5fa",
+                          background: "#DBEAFE",
+                          border: "1px solid #DBEAFE",
+                          color: "#2563EB",
                           fontFamily: "var(--font-display)",
-                          boxShadow: "0 4px 16px rgba(59,130,246,0.12)"
+                          boxShadow: "0 4px 16px rgba(37,99,235,0.12)"
                         }}
                       >
                         {step.n}
                       </div>
                       <h3
-                        className="font-bold text-white"
+                        className="font-bold text-slate-900"
                         style={{ fontFamily: "var(--font-display)", fontSize: "0.9375rem" }}
                       >
                         {step.title}
@@ -1029,10 +1029,10 @@ export default function App() {
         <Route path="/login" element={
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24">
             <BackButton fallback="/" />
-            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
+            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", boxShadow: "0 12px 40px rgba(37,99,235,0.10)" }}>
               
               <div className="text-center">
-                <h2 className="font-bold text-white" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Welcome Back to TasksEarn</h2>
+                <h2 className="font-bold text-slate-900" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Welcome Back to TasksEarn</h2>
                 <p className="text-xs mt-1" style={{ color: "#64748b" }}>Sign in to your dashboard to complete tasks or fund campaigns.</p>
               </div>
 
@@ -1084,24 +1084,24 @@ export default function App() {
                 </button>
               </form>
 
-              <div className="flex flex-col gap-3 text-center text-xs pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="flex flex-col gap-3 text-center text-xs pt-4" style={{ borderTop: "1px solid #E2E8F0" }}>
                 <div style={{ color: "#64748b" }}>
                   Don't have an account?{" "}
-                  <button onClick={() => setCurrentView("register")} className="font-bold cursor-pointer" style={{ color: "#60a5fa" }}>
+                  <button onClick={() => setCurrentView("register")} className="font-bold cursor-pointer" style={{ color: "#2563EB" }}>
                     Create one now
                   </button>
                 </div>
                 <div style={{ color: "#64748b" }}>
                   Are you an Advertiser?{" "}
-                  <button onClick={() => { setAuthError(""); setCurrentView("advertiser-login"); }} className="font-bold cursor-pointer" style={{ color: "#60a5fa" }}>
+                  <button onClick={() => { setAuthError(""); setCurrentView("advertiser-login"); }} className="font-bold cursor-pointer" style={{ color: "#2563EB" }}>
                     Go to Advertiser Portal
                   </button>
                 </div>
               </div>
 
               {/* Demo accounts */}
-              <div className="rounded-2xl p-4 text-[11px] space-y-2" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                <p className="font-bold" style={{ color: "#e2e8f0" }}>🔑 Secure Demo Account Access:</p>
+              <div className="rounded-2xl p-4 text-[11px] space-y-2" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                <p className="font-bold" style={{ color: "#334155" }}>🔑 Secure Demo Account Access:</p>
                 <div className="flex flex-col gap-1.5 mt-1">
 
                   {!showEarnerPasswordPrompt ? (
@@ -1110,12 +1110,12 @@ export default function App() {
                       style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.15)", color: "#94a3b8" }}
                     >
                       <span>👥 Demo Earner</span>
-                      <span className="font-semibold font-mono text-[9px] rounded-full px-2 py-0.5" style={{ background: "rgba(59,130,246,0.15)", color: "#60a5fa" }}>Enter Password</span>
+                      <span className="font-semibold font-mono text-[9px] rounded-full px-2 py-0.5" style={{ background: "rgba(59,130,246,0.15)", color: "#2563EB" }}>Enter Password</span>
                     </button>
                   ) : (
                     <div className="rounded-xl p-3 space-y-2.5" style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.20)" }}>
                       <div className="flex justify-between items-center">
-                        <span className="font-semibold text-[10px]" style={{ color: "#60a5fa" }}>👥 Demo Earner Password</span>
+                        <span className="font-semibold text-[10px]" style={{ color: "#2563EB" }}>👥 Demo Earner Password</span>
                         <button type="button" onClick={() => { setShowEarnerPasswordPrompt(false); setEarnerPasswordPromptValue(""); }}
                           className="text-[9px] font-semibold cursor-pointer" style={{ color: "#64748b" }}>Cancel</button>
                       </div>
@@ -1123,11 +1123,11 @@ export default function App() {
                         <input type="password" required value={earnerPasswordPromptValue}
                           onChange={(e) => setEarnerPasswordPromptValue(e.target.value)}
                           placeholder="Enter earner password..." className="flex-1 rounded-lg px-3 py-1.5 text-xs"
-                          style={{ background: "#0f1e35", border: "1px solid rgba(255,255,255,0.10)", color: "#f1f5f9" }}
+                          style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
                         />
                         <button type="button" onClick={() => { if (!earnerPasswordPromptValue) return; handleDemoLogin("earner@tasksearn.com", earnerPasswordPromptValue); }}
                           className="rounded-lg text-white font-bold px-3 py-1.5 text-[10px] cursor-pointer shrink-0"
-                          style={{ background: "linear-gradient(135deg,#3b82f6,#2563eb)" }}>
+                          style={{ background: "linear-gradient(135deg,#2563EB,#2563eb)" }}>
                           Verify
                         </button>
                       </div>
@@ -1153,7 +1153,7 @@ export default function App() {
                         <input type="password" required value={adminPasswordPromptValue}
                           onChange={(e) => setAdminPasswordPromptValue(e.target.value)}
                           placeholder="Enter admin password..." className="flex-1 rounded-lg px-3 py-1.5 text-xs"
-                          style={{ background: "#0f1e35", border: "1px solid rgba(255,255,255,0.10)", color: "#f1f5f9" }}
+                          style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
                         />
                         <button type="button" onClick={() => { if (!adminPasswordPromptValue) return; handleDemoLogin("admin@tasksearn.com", adminPasswordPromptValue); }}
                           className="rounded-lg text-white font-bold px-3 py-1.5 text-[10px] cursor-pointer shrink-0"
@@ -1174,13 +1174,13 @@ export default function App() {
         <Route path="/advertiser-login" element={
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24 animate-fadeIn">
             <BackButton fallback="/" />
-            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
+            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", boxShadow: "0 12px 40px rgba(37,99,235,0.10)" }}>
               
               <div className="text-center">
                 <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase" style={{ background: "rgba(99,102,241,0.10)", border: "1px solid rgba(99,102,241,0.20)", color: "#818cf8" }}>
                   Advertiser Portal
                 </span>
-                <h2 className="font-bold text-white mt-2" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Welcome Back, Advertiser!</h2>
+                <h2 className="font-bold text-slate-900 mt-2" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Welcome Back, Advertiser!</h2>
                 <p className="text-xs mt-1" style={{ color: "#64748b" }}>Sign in to manage your campaigns, track submissions, and check your ad budget.</p>
               </div>
 
@@ -1232,24 +1232,24 @@ export default function App() {
                 </button>
               </form>
 
-              <div className="flex flex-col gap-2 text-center text-xs pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="flex flex-col gap-2 text-center text-xs pt-4" style={{ borderTop: "1px solid #E2E8F0" }}>
                 <div style={{ color: "#64748b" }}>
                   Not registered as an Advertiser?{" "}
-                  <button onClick={() => { setAuthRole(UserRole.ADVERTISER); setCurrentView("register"); }} className="font-bold cursor-pointer" style={{ color: "#60a5fa" }}>
+                  <button onClick={() => { setAuthRole(UserRole.ADVERTISER); setCurrentView("register"); }} className="font-bold cursor-pointer" style={{ color: "#2563EB" }}>
                     Register here
                   </button>
                 </div>
                 <div style={{ color: "#64748b" }}>
                   Are you an Earner?{" "}
-                  <button onClick={() => { setAuthError(""); setCurrentView("login"); }} className="font-bold cursor-pointer" style={{ color: "#60a5fa" }}>
+                  <button onClick={() => { setAuthError(""); setCurrentView("login"); }} className="font-bold cursor-pointer" style={{ color: "#2563EB" }}>
                     Go to Earner Sign In
                   </button>
                 </div>
               </div>
 
               {/* Demo Advertiser */}
-              <div className="rounded-2xl p-4 text-[11px] space-y-2" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                <p className="font-bold" style={{ color: "#e2e8f0" }}>🔑 Secure Demo Advertiser Access:</p>
+              <div className="rounded-2xl p-4 text-[11px] space-y-2" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                <p className="font-bold" style={{ color: "#334155" }}>🔑 Secure Demo Advertiser Access:</p>
                 <div className="flex flex-col gap-1.5 mt-1">
                   {!showAdvertiserPasswordPrompt ? (
                     <button type="button" onClick={() => setShowAdvertiserPasswordPrompt(true)}
@@ -1257,12 +1257,12 @@ export default function App() {
                       style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.15)", color: "#94a3b8" }}
                     >
                       <span>📢 Demo Advertiser</span>
-                      <span className="font-semibold font-mono text-[9px] rounded-full px-2 py-0.5" style={{ background: "rgba(59,130,246,0.15)", color: "#60a5fa" }}>Enter Password</span>
+                      <span className="font-semibold font-mono text-[9px] rounded-full px-2 py-0.5" style={{ background: "rgba(59,130,246,0.15)", color: "#2563EB" }}>Enter Password</span>
                     </button>
                   ) : (
                     <div className="rounded-xl p-3 space-y-2.5" style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.20)" }}>
                       <div className="flex justify-between items-center">
-                        <span className="font-semibold text-[10px]" style={{ color: "#60a5fa" }}>📢 Demo Advertiser Password</span>
+                        <span className="font-semibold text-[10px]" style={{ color: "#2563EB" }}>📢 Demo Advertiser Password</span>
                         <button type="button" onClick={() => { setShowAdvertiserPasswordPrompt(false); setAdvertiserPasswordPromptValue(""); }}
                           className="text-[9px] font-semibold cursor-pointer" style={{ color: "#64748b" }}>Cancel</button>
                       </div>
@@ -1270,11 +1270,11 @@ export default function App() {
                         <input type="password" required value={advertiserPasswordPromptValue}
                           onChange={(e) => setAdvertiserPasswordPromptValue(e.target.value)}
                           placeholder="Enter advertiser password..." className="flex-1 rounded-lg px-3 py-1.5 text-xs"
-                          style={{ background: "#0f1e35", border: "1px solid rgba(255,255,255,0.10)", color: "#f1f5f9" }}
+                          style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
                         />
                         <button type="button" onClick={() => { if (!advertiserPasswordPromptValue) return; handleDemoLogin("advertiser@tasksearn.com", advertiserPasswordPromptValue); }}
                           className="rounded-lg text-white font-bold px-3 py-1.5 text-[10px] cursor-pointer shrink-0"
-                          style={{ background: "linear-gradient(135deg,#3b82f6,#2563eb)" }}>
+                          style={{ background: "linear-gradient(135deg,#2563EB,#2563eb)" }}>
                           Verify
                         </button>
                       </div>
@@ -1291,10 +1291,10 @@ export default function App() {
         <Route path="/forgot-password" element={
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24">
             <BackButton fallback="/login" />
-            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
+            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", boxShadow: "0 12px 40px rgba(37,99,235,0.10)" }}>
               
               <div className="text-center">
-                <h2 className="font-bold text-white" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Account Recovery</h2>
+                <h2 className="font-bold text-slate-900" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Account Recovery</h2>
                 <p className="text-xs mt-1" style={{ color: "#64748b" }}>Enter your registered email address to receive password recovery instructions.</p>
               </div>
 
@@ -1303,15 +1303,15 @@ export default function App() {
               {forgotSuccess ? (
                 <div className="rounded-xl p-5 text-center space-y-3" style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.20)" }}>
                   <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full" style={{ background: "rgba(59,130,246,0.15)" }}>
-                    <CheckCircle className="h-5 w-5" style={{ color: "#60a5fa" }} />
+                    <CheckCircle className="h-5 w-5" style={{ color: "#2563EB" }} />
                   </div>
-                  <h3 className="font-bold text-white" style={{ fontFamily: "var(--font-display)", fontSize: "0.9375rem" }}>Instructions Sent</h3>
-                  <p className="text-xs leading-relaxed" style={{ color: "#60a5fa" }}>
+                  <h3 className="font-bold text-slate-900" style={{ fontFamily: "var(--font-display)", fontSize: "0.9375rem" }}>Instructions Sent</h3>
+                  <p className="text-xs leading-relaxed" style={{ color: "#1D4ED8" }}>
                     Check your email inbox for instructions to reset your secure credentials.
                   </p>
                   <div className="pt-2">
                     <button onClick={() => { setForgotSuccess(false); setCurrentView("login"); }}
-                      className="text-xs font-bold cursor-pointer" style={{ color: "#60a5fa" }}>
+                      className="text-xs font-bold cursor-pointer" style={{ color: "#2563EB" }}>
                       Return to Secure Sign In
                     </button>
                   </div>
@@ -1323,21 +1323,21 @@ export default function App() {
                     <input type="email" required value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)}
                       placeholder="e.g. yourname@example.com"
                       className="w-full rounded-xl px-4 py-2.5 text-sm"
-                      style={{ background: "#0f1e35", border: "1px solid rgba(255,255,255,0.10)", color: "#f1f5f9" }}
+                      style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
                     />
                   </div>
                   <button type="submit" disabled={authLoading}
                     className="w-full rounded-xl py-3 text-sm font-bold text-white cursor-pointer transition-all"
-                    style={{ background: "linear-gradient(135deg,#3b82f6,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}>
+                    style={{ background: "linear-gradient(135deg,#2563EB,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}>
                     {authLoading ? "Verifying Registry..." : "Send Recovery Instructions"}
                   </button>
                 </form>
               )}
 
-              <div className="pt-4 text-center text-xs" style={{ borderTop: "1px solid rgba(255,255,255,0.06)", color: "#64748b" }}>
+              <div className="pt-4 text-center text-xs" style={{ borderTop: "1px solid #E2E8F0", color: "#64748b" }}>
                 Remember your password?{" "}
                 <button onClick={() => { setAuthError(""); setForgotSuccess(false); setCurrentView("login"); }}
-                  className="font-bold cursor-pointer" style={{ color: "#60a5fa" }}>
+                  className="font-bold cursor-pointer" style={{ color: "#2563EB" }}>
                   Sign In
                 </button>
               </div>
@@ -1350,26 +1350,26 @@ export default function App() {
         <Route path="/register" element={
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24">
             <BackButton fallback="/" />
-            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
+            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", boxShadow: "0 12px 40px rgba(37,99,235,0.10)" }}>
               
               <div className="text-center">
-                <h2 className="font-bold text-white" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Create Free Account</h2>
+                <h2 className="font-bold text-slate-900" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Create Free Account</h2>
                 <p className="text-xs mt-1" style={{ color: "#64748b" }}>Get certified, perform tasks, promote brand awareness.</p>
               </div>
 
               {/* Role Toggle */}
-              <div className="grid grid-cols-2 gap-1.5 rounded-xl p-1" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+              <div className="grid grid-cols-2 gap-1.5 rounded-xl p-1" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                 <button type="button" onClick={() => setAuthRole(UserRole.EARNER)}
                   className="py-2 text-xs font-bold rounded-lg cursor-pointer transition-all"
                   style={authRole === UserRole.EARNER
-                    ? { background: "linear-gradient(135deg,#3b82f6,#2563eb)", color: "#fff", boxShadow: "0 2px 8px rgba(37,99,235,0.30)" }
+                    ? { background: "linear-gradient(135deg,#2563EB,#2563eb)", color: "#fff", boxShadow: "0 2px 8px rgba(37,99,235,0.30)" }
                     : { color: "#64748b" }}>
                   Register as Earner
                 </button>
                 <button type="button" onClick={() => setAuthRole(UserRole.ADVERTISER)}
                   className="py-2 text-xs font-bold rounded-lg cursor-pointer transition-all"
                   style={authRole === UserRole.ADVERTISER
-                    ? { background: "linear-gradient(135deg,#3b82f6,#2563eb)", color: "#fff", boxShadow: "0 2px 8px rgba(37,99,235,0.30)" }
+                    ? { background: "linear-gradient(135deg,#2563EB,#2563eb)", color: "#fff", boxShadow: "0 2px 8px rgba(37,99,235,0.30)" }
                     : { color: "#64748b" }}>
                   Register as Advertiser
                 </button>
@@ -1387,7 +1387,7 @@ export default function App() {
                     <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b", letterSpacing: "0.06em" }}>{f.label}</label>
                     <input type={f.type} required value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
                       className="w-full rounded-xl px-4 py-2.5 text-sm"
-                      style={{ background: "#0f1e35", border: "1px solid rgba(255,255,255,0.10)", color: "#f1f5f9" }}
+                      style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
                     />
                   </div>
                 ))}
@@ -1397,21 +1397,21 @@ export default function App() {
                     <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b", letterSpacing: "0.06em" }}>Referral Code (Optional)</label>
                     <input type="text" value={regReferral} onChange={e => setRegReferral(e.target.value)} placeholder="e.g. TUNDE887"
                       className="w-full rounded-xl px-4 py-2.5 text-sm font-mono text-center uppercase tracking-wider"
-                      style={{ background: "#0f1e35", border: "1px solid rgba(255,255,255,0.10)", color: "#f1f5f9" }}
+                      style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
                     />
                   </div>
                 )}
 
                 <button type="submit" disabled={authLoading}
                   className="w-full rounded-xl py-3 text-sm font-bold text-white cursor-pointer transition-all"
-                  style={{ background: "linear-gradient(135deg,#3b82f6,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}>
+                  style={{ background: "linear-gradient(135deg,#2563EB,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}>
                   {authLoading ? "Initializing Encrypted Vault..." : "Create Account"}
                 </button>
               </form>
 
-              <div className="pt-4 text-center text-xs" style={{ borderTop: "1px solid rgba(255,255,255,0.06)", color: "#64748b" }}>
+              <div className="pt-4 text-center text-xs" style={{ borderTop: "1px solid #E2E8F0", color: "#64748b" }}>
                 Already registered?{" "}
-                <button onClick={() => setCurrentView("login")} className="font-bold cursor-pointer" style={{ color: "#60a5fa" }}>
+                <button onClick={() => setCurrentView("login")} className="font-bold cursor-pointer" style={{ color: "#2563EB" }}>
                   Sign In
                 </button>
               </div>
@@ -1424,19 +1424,19 @@ export default function App() {
         <Route path="/verify-email" element={
           <div className="mx-auto max-w-md px-4 py-16 sm:py-24 animate-fadeIn">
             <BackButton fallback="/login" />
-            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "linear-gradient(145deg,#111827,#0f1e35)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.50)" }}>
+            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", boxShadow: "0 12px 40px rgba(37,99,235,0.10)" }}>
               
               <div className="text-center space-y-3">
                 <div
                   className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl"
                   style={{ background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)", boxShadow: "0 0 20px rgba(59,130,246,0.15)" }}
                 >
-                  <ShieldCheck className="h-6 w-6" style={{ color: "#60a5fa" }} />
+                  <ShieldCheck className="h-6 w-6" style={{ color: "#2563EB" }} />
                 </div>
-                <h2 className="font-bold text-white" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Email Verification Required</h2>
+                <h2 className="font-bold text-slate-900" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Email Verification Required</h2>
                 <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>
                   A secure 6-digit code has been sent to{" "}
-                  <span className="font-semibold text-white">{verificationEmail}</span>.
+                  <span className="font-semibold text-slate-900">{verificationEmail}</span>.
                   Enter it below.
                 </p>
               </div>
@@ -1456,22 +1456,22 @@ export default function App() {
                     onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
                     placeholder="123456"
                     className="w-full rounded-xl px-4 py-3 text-center text-xl font-bold tracking-widest"
-                    style={{ background: "#0f1e35", border: "1px solid rgba(59,130,246,0.25)", color: "#60a5fa", letterSpacing: "0.35em" }}
+                    style={{ background: "#F8FAFC", border: "1px solid #DBEAFE", color: "#2563EB", letterSpacing: "0.35em" }}
                   />
                 </div>
                 <button type="submit" disabled={authLoading}
                   className="w-full rounded-xl py-3 text-sm font-bold text-white cursor-pointer transition-all"
-                  style={{ background: "linear-gradient(135deg,#3b82f6,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}>
+                  style={{ background: "linear-gradient(135deg,#2563EB,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}>
                   {authLoading ? "Validating Credentials..." : "Verify Code & Log In"}
                 </button>
               </form>
 
-              <div className="flex flex-col gap-3 text-center text-xs pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="flex flex-col gap-3 text-center text-xs pt-4" style={{ borderTop: "1px solid #E2E8F0" }}>
                 <p style={{ color: "#64748b" }}>
                   Didn't receive the email?{" "}
                   <button onClick={handleResendCode} disabled={verificationResent}
                     className={`font-bold cursor-pointer ${verificationResent ? "opacity-50 cursor-not-allowed" : ""}`}
-                    style={{ color: "#60a5fa" }}>
+                    style={{ color: "#2563EB" }}>
                     {verificationResent ? "Code Resent ✓" : "Resend Verification Code"}
                   </button>
                 </p>
@@ -1553,24 +1553,24 @@ export default function App() {
           <div
             className="w-full max-w-sm rounded-2xl p-6 relative overflow-hidden space-y-5"
             style={{
-              background: "linear-gradient(145deg,#111827,#0f1e35)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              boxShadow: "0 40px 80px rgba(0,0,0,0.70)"
+              background: "#FFFFFF",
+              border: "1px solid #E2E8F0",
+              boxShadow: "0 40px 80px rgba(15,23,42,0.25)"
             }}
           >
             {/* Top glow strip */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-3/4 rounded-full" style={{ background: "linear-gradient(90deg,transparent,rgba(59,130,246,0.50),transparent)" }} />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-3/4 rounded-full" style={{ background: "linear-gradient(90deg,transparent,rgba(37,99,235,0.50),transparent)" }} />
 
             <div className="flex justify-between items-start">
               <div>
                 <span
                   className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold"
-                  style={{ background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.20)", color: "#60a5fa" }}
+                  style={{ background: "#DBEAFE", border: "1px solid #DBEAFE", color: "#2563EB" }}
                 >
                   Official Gateway
                 </span>
                 <h3
-                  className="font-bold text-white mt-1"
+                  className="font-bold text-slate-900 mt-1"
                   style={{ fontFamily: "var(--font-display)", fontSize: "1rem" }}
                 >
                   Fund Advertiser Wallet
@@ -1579,7 +1579,7 @@ export default function App() {
               <button
                 onClick={() => { if (!depositProcessing) setDepositOpen(false); }}
                 className="rounded-full p-1.5 cursor-pointer transition-colors"
-                style={{ background: "rgba(255,255,255,0.06)", color: "#64748b", border: "1px solid rgba(255,255,255,0.08)" }}
+                style={{ background: "#F8FAFC", color: "#64748b", border: "1px solid #E2E8F0" }}
                 disabled={depositProcessing}
               >
                 ✕
@@ -1588,9 +1588,9 @@ export default function App() {
 
             {depositProcessing ? (
               <div className="text-center py-8 space-y-4">
-                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4" style={{ borderColor: "rgba(59,130,246,0.20)", borderTopColor: "#3b82f6" }} />
+                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4" style={{ borderColor: "rgba(37,99,235,0.20)", borderTopColor: "#2563EB" }} />
                 <div>
-                  <p className="text-xs font-bold text-white uppercase tracking-wider">Contacting Paystack...</p>
+                  <p className="text-xs font-bold text-slate-900 uppercase tracking-wider">Contacting Paystack...</p>
                   <p className="text-[10px] mt-1 font-semibold" style={{ color: "#475569" }}>Opening secure Paystack checkout portal...</p>
                 </div>
               </div>
@@ -1604,8 +1604,8 @@ export default function App() {
                   >
                     <span className="text-lg">🇳🇬</span>
                     <div>
-                      <p className="font-bold text-white">Paystack Secure Checkout</p>
-                      <p className="text-[10px]" style={{ color: "#60a5fa" }}>Supports Cards, Bank Transfer, USSD &amp; more</p>
+                      <p className="font-bold text-slate-900">Paystack Secure Checkout</p>
+                      <p className="text-[10px]" style={{ color: "#2563EB" }}>Supports Cards, Bank Transfer, USSD &amp; more</p>
                     </div>
                   </div>
                 </div>
@@ -1617,7 +1617,7 @@ export default function App() {
                     value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
                     placeholder="Min: 1000"
                     className="w-full rounded-xl px-3 py-2 text-sm font-mono"
-                    style={{ background: "#0f1e35", border: "1px solid rgba(255,255,255,0.10)", color: "#f1f5f9" }}
+                    style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
                   />
                   <span className="block text-[10px] mt-1" style={{ color: "#374151" }}>Min deposit: ₦{settings.minDeposit.toLocaleString()}</span>
                 </div>
@@ -1632,7 +1632,7 @@ export default function App() {
                 <button
                   type="submit"
                   className="w-full rounded-xl py-3 text-xs font-bold text-white cursor-pointer transition-all"
-                  style={{ background: "linear-gradient(135deg,#3b82f6,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}
+                  style={{ background: "linear-gradient(135deg,#2563EB,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}
                 >
                   Pay ₦{parseFloat(depositAmount || "0").toLocaleString()} via Paystack
                 </button>
