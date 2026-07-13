@@ -289,6 +289,19 @@ function mapNotification(row) {
     read: row.read === true || row.read === "true"
   };
 }
+function mapEarnerNotification(row) {
+  return {
+    id: row.id,
+    taskId: row.task_id,
+    taskTitle: row.task_title,
+    platform: row.platform,
+    category: row.category,
+    reward: parseFloat(row.reward) || 0,
+    message: row.message,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    read: row.read === true || row.read === "true"
+  };
+}
 async function creditAdminCommission(opts) {
   if (!opts.amount || opts.amount <= 0) return;
   const id = "com-" + Math.random().toString(36).substr(2, 9);
@@ -507,6 +520,21 @@ async function bootstrapTables() {
         reference_id VARCHAR(50) NOT NULL,
         read BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS earner_notifications (
+        id VARCHAR(50) PRIMARY KEY,
+        earner_id VARCHAR(50) NOT NULL,
+        task_id VARCHAR(50) NOT NULL,
+        task_title VARCHAR(500) NOT NULL,
+        platform VARCHAR(100) NOT NULL,
+        category VARCHAR(200) NOT NULL,
+        reward DECIMAL(10,2) NOT NULL DEFAULT 0,
+        message TEXT NOT NULL,
+        read BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(earner_id, task_id)
       )
     `);
     await client.query(`
@@ -1467,6 +1495,42 @@ app.get("/api/earner/referrals", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+app.get("/api/earner/notifications", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    const result = await pool.query(
+      "SELECT * FROM earner_notifications WHERE earner_id=$1 ORDER BY created_at DESC LIMIT 200",
+      [user.id]
+    );
+    res.json(result.rows.map(mapEarnerNotification));
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.post("/api/earner/notifications/read-all", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    await pool.query("UPDATE earner_notifications SET read=true WHERE earner_id=$1", [user.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.post("/api/earner/notifications/:id/read", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    const result = await pool.query(
+      "UPDATE earner_notifications SET read=true WHERE id=$1 AND earner_id=$2 RETURNING *",
+      [req.params.id, user.id]
+    );
+    res.json({ success: true, notification: result.rows.length > 0 ? mapEarnerNotification(result.rows[0]) : null });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
 app.get("/api/banks", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
@@ -1694,6 +1758,8 @@ app.post("/api/advertiser/tasks", async (req, res) => {
     } finally {
       client.release();
     }
+    notifyEarners({ id: newTask.id, title: newTask.title, category: newTask.category, earningPerSlot: newTask.earningPerSlot }).catch(() => {
+    });
     res.json({ success: true, task: newTask, remainingBalance: newBalance });
   } catch (err) {
     console.error("Create task error:", err);
@@ -2164,7 +2230,10 @@ app.post("/api/admin/tasks", async (req, res) => {
       INSERT INTO tasks (id, title, description, category, proof_requirements, link, cost_per_slot, earning_per_slot, total_slots, filled_slots, status, advertiser_id, advertiser_name, is_admin_task, created_at)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$7,$8,0,'Active',$9,$10,true,$11) RETURNING *
     `, [newTaskId, title, description, category, proofReq, link, reward, slots, user.id, user.name, /* @__PURE__ */ new Date()]);
-    res.json({ success: true, task: mapTask(taskInsert.rows[0]) });
+    const createdTask = mapTask(taskInsert.rows[0]);
+    notifyEarners({ id: createdTask.id, title: createdTask.title, category: createdTask.category, earningPerSlot: createdTask.earningPerSlot }).catch(() => {
+    });
+    res.json({ success: true, task: createdTask });
   } catch (err) {
     console.error("Admin create task error:", err);
     res.status(500).json({ error: "Server error" });
@@ -2963,8 +3032,9 @@ app.post("/api/admin/notifications/:id/read", async (req, res) => {
 var server = (0, import_http.createServer)(app);
 var wss = new import_ws.WebSocketServer({ noServer: true });
 var adminClients = /* @__PURE__ */ new Set();
+var earnerWsClients = /* @__PURE__ */ new Map();
 wss.on("connection", (ws) => {
-  console.log("[WS] Admin client connected");
+  console.log("[WS] Client connected");
   ws.on("message", async (message) => {
     try {
       const data = JSON.parse(message.toString());
@@ -2979,15 +3049,29 @@ wss.on("connection", (ws) => {
           notifications: all.rows.map(mapNotification)
         }));
       }
+      if (data.type === "register-earner" && data.userId) {
+        earnerWsClients.set(ws, data.userId);
+        console.log(`[WS] Earner client registered: ${data.userId}`);
+        const unread = await pool.query(
+          "SELECT COUNT(*) FROM earner_notifications WHERE earner_id=$1 AND read=false",
+          [data.userId]
+        );
+        ws.send(JSON.stringify({
+          type: "earner-init",
+          unreadCount: parseInt(unread.rows[0].count)
+        }));
+      }
     } catch (e) {
       console.error("[WS] Error:", e);
     }
   });
   ws.on("close", () => {
     adminClients.delete(ws);
+    earnerWsClients.delete(ws);
   });
   ws.on("error", () => {
     adminClients.delete(ws);
+    earnerWsClients.delete(ws);
   });
 });
 server.on("upgrade", (request, socket, head) => {
@@ -2996,6 +3080,45 @@ server.on("upgrade", (request, socket, head) => {
     wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
   }
 });
+async function notifyEarners(task) {
+  try {
+    const platform = getPlatformForCategory(task.category);
+    const message = `\u{1F514} New task available! "${task.title}" \u2014 Earn \u20A6${task.earningPerSlot.toLocaleString()} on ${platform}. Complete it now!`;
+    const now = /* @__PURE__ */ new Date();
+    const earnersRes = await pool.query("SELECT id FROM users WHERE role='Earner'");
+    if (earnersRes.rows.length === 0) return;
+    for (const earner of earnersRes.rows) {
+      const nid = "en-" + Math.random().toString(36).substr(2, 9);
+      await pool.query(
+        `INSERT INTO earner_notifications (id, earner_id, task_id, task_title, platform, category, reward, message, read, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,$9)
+         ON CONFLICT (earner_id, task_id) DO NOTHING`,
+        [nid, earner.id, task.id, task.title, platform, task.category, task.earningPerSlot, message, now]
+      );
+    }
+    const broadcastPayload = JSON.stringify({
+      type: "earner-new-task",
+      notification: {
+        taskId: task.id,
+        taskTitle: task.title,
+        platform,
+        category: task.category,
+        reward: task.earningPerSlot,
+        message,
+        createdAt: now.toISOString(),
+        read: false
+      }
+    });
+    earnerWsClients.forEach((userId, client) => {
+      if (client.readyState === import_ws.WebSocket.OPEN) {
+        client.send(broadcastPayload);
+      }
+    });
+    console.log(`[Earner Notify] Notified ${earnersRes.rows.length} earner(s) about task: ${task.title}`);
+  } catch (err) {
+    console.error("[Earner Notify] Failed:", err);
+  }
+}
 async function notifyAdmin(notification) {
   const id = "notif-" + Math.random().toString(36).substr(2, 9);
   const now = /* @__PURE__ */ new Date();
