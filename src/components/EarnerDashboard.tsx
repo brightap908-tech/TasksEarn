@@ -142,11 +142,6 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
   const [profileSuccess, setProfileSuccess] = React.useState("");
   const [profileError, setProfileError] = React.useState("");
 
-  // Account activation payment state (₦500 one-time Paystack fee)
-  const [activationLoading, setActivationLoading] = React.useState(false);
-  const [activationError, setActivationError] = React.useState("");
-  const [activationVerifying, setActivationVerifying] = React.useState(false);
-
   // Fetch Dashboard Stats
   const fetchDashboardStats = async () => {
     try {
@@ -263,63 +258,6 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
     if (activeTab === "history") fetchSubmissions();
     if (activeTab === "referrals") fetchReferrals();
   }, [activeTab]);
-
-  // Initiate ₦500 Paystack activation payment
-  const handleActivateAccount = async () => {
-    setActivationLoading(true);
-    setActivationError("");
-    try {
-      const res = await apiFetch("/api/earner/activation/initialize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" }
-      });
-      if (res && res.authorization_url) {
-        window.location.href = res.authorization_url;
-      } else if (res && res.alreadyActivated) {
-        onRefreshUser();
-      } else {
-        setActivationError(res?.error || "Could not initialize activation payment. Please try again.");
-        setActivationLoading(false);
-      }
-    } catch (e) {
-      setActivationError("Network error. Please check your connection.");
-      setActivationLoading(false);
-    }
-  };
-
-  // Verify activation payment after Paystack redirect
-  const verifyActivationPayment = React.useCallback(async (ref: string) => {
-    setActivationVerifying(true);
-    setActivationError("");
-    try {
-      const res = await apiFetch("/api/earner/activation/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reference: ref })
-      });
-      if (res && (res.success || res.activated)) {
-        showToast("🎉 Account activated! You can now complete tasks.", "success");
-        onRefreshUser();
-        window.history.replaceState({}, document.title, window.location.pathname);
-      } else {
-        setActivationError(res?.error || "Payment verification failed. Please contact support if you were charged.");
-      }
-    } catch (e) {
-      setActivationError("Failed to verify activation payment.");
-    } finally {
-      setActivationVerifying(false);
-    }
-  }, []);
-
-  // Detect Paystack activation callback on mount
-  React.useEffect(() => {
-    const urlObj = new URL(window.location.href);
-    const hashParams = new URLSearchParams(urlObj.hash.replace("#", "?"));
-    const activationRef = hashParams.get("paystack_activation_ref");
-    if (activationRef) {
-      verifyActivationPayment(activationRef);
-    }
-  }, []);
 
   // File selection / drag & drop handlers
   const handleFileChange = (file: File) => {
@@ -539,26 +477,12 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700 border border-amber-100">
                 <AlertCircle className="h-3 w-3" /> Email Unverified
               </span>
-            ) : user.isActivated ? (
+            ) : (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 border border-emerald-100">
                 <Check className="h-3 w-3" /> Active Earner
               </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-bold text-orange-700 border border-orange-100">
-                <AlertCircle className="h-3 w-3" /> Activation Required
-              </span>
             )}
           </div>
-
-          {user.isVerified && !user.isActivated && (
-            <button
-              onClick={handleActivateAccount}
-              disabled={activationLoading}
-              className="w-full mt-3 rounded-full bg-orange-500 hover:bg-orange-600 px-3 py-2 text-xs font-bold text-white transition-all shadow-xs cursor-pointer disabled:opacity-60"
-            >
-              {activationLoading ? "Redirecting to Paystack..." : "Activate Account — ₦500"}
-            </button>
-          )}
         </div>
 
         {/* Action Panel Menu */}
@@ -624,46 +548,6 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
       {/* Main Panel Content Area */}
       <div className="lg:col-span-3 space-y-6">
         
-        {/* Account Activation Banner — shown when email is verified but account not yet activated */}
-        {user.isVerified && !user.isActivated && (
-          <div className="rounded-2xl border border-orange-200 bg-orange-50/80 p-5 shadow-sm animate-fadeIn space-y-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-orange-500 mt-0.5 shrink-0" />
-              <div>
-                <h4 className="text-sm font-bold text-orange-900">Account Activation Required</h4>
-                <p className="text-xs text-orange-700 leading-relaxed mt-1">
-                  Your email is verified! To start completing tasks and earning Naira, pay a one-time <strong>₦500 activation fee</strong> via Paystack. This fee is non-refundable and activates your account instantly after payment.
-                </p>
-              </div>
-            </div>
-            {activationError && (
-              <p className="rounded-lg bg-red-50 border border-red-200 p-2.5 text-xs font-bold text-red-600">{activationError}</p>
-            )}
-            <button
-              onClick={handleActivateAccount}
-              disabled={activationLoading}
-              className="rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-5 py-2.5 cursor-pointer transition-all disabled:opacity-60 flex items-center gap-2"
-            >
-              {activationLoading ? (
-                <><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" /> Redirecting to Paystack...</>
-              ) : (
-                "Pay ₦500 via Paystack — Activate Now"
-              )}
-            </button>
-          </div>
-        )}
-
-        {/* Activation payment verification in progress */}
-        {activationVerifying && (
-          <div className="rounded-2xl border border-blue-200 bg-blue-50/80 p-5 shadow-sm animate-fadeIn flex items-center gap-3">
-            <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent shrink-0" />
-            <div>
-              <p className="text-sm font-bold text-blue-900">Verifying Activation Payment...</p>
-              <p className="text-xs text-blue-700 mt-0.5">Please wait while we confirm your payment with Paystack.</p>
-            </div>
-          </div>
-        )}
-
         {/* TAB 1: OVERVIEW */}
         {activeTab === "overview" && (
           <div className="space-y-6">
@@ -907,22 +791,8 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                   </p>
                 </div>
 
-                {/* Proof Submit Form — blocked if account not activated */}
-                {!user.isActivated ? (
-                  <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-center space-y-3">
-                    <AlertCircle className="h-6 w-6 text-orange-500 mx-auto" />
-                    <p className="text-xs font-bold text-orange-900">Account Activation Required</p>
-                    <p className="text-[11px] text-orange-700 leading-relaxed">Pay the one-time ₦500 activation fee to unlock task submissions and start earning.</p>
-                    <button
-                      type="button"
-                      onClick={handleActivateAccount}
-                      disabled={activationLoading}
-                      className="rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-5 py-2 cursor-pointer transition-all disabled:opacity-60"
-                    >
-                      {activationLoading ? "Redirecting..." : "Activate Account — ₦500"}
-                    </button>
-                  </div>
-                ) : submitSuccess ? (
+                {/* Proof Submit Form */}
+                {submitSuccess ? (
                   <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-center animate-fadeIn">
                     <p className="text-xs font-bold text-blue-800">Proof submitted successfully!</p>
                     <p className="text-[10px] text-blue-600 mt-1">Pending advertiser audit. This task slots will be credited upon approval.</p>

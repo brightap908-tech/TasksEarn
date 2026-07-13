@@ -86,7 +86,7 @@ export interface User {
   email: string;
   role: UserRole;
   isVerified: boolean;
-  isActivated?: boolean; // Earners must pay ₦500 activation fee; Admins/Advertisers are pre-activated
+  isActivated?: boolean; // Activation fees have been removed — all users (Earners, Advertisers, Admins) are activated by default
   walletBalance: number;
   referralCode?: string;
   referredBy?: string;
