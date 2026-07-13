@@ -42,7 +42,11 @@ import {
   CheckCheck,
   Clock,
   Coins,
-  Share2
+  Share2,
+  Trash2,
+  PlusCircle,
+  Pencil,
+  ListTodo
 } from "lucide-react";
 import AdminTaskPricing from "./AdminTaskPricing";
 import AdminSocialPlatforms from "./AdminSocialPlatforms";
@@ -54,8 +58,8 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminDashboardProps) {
-  type AdminTab = "stats" | "users" | "campaigns" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings" | "commissions";
-  const VALID_ADMIN_TABS: AdminTab[] = ["stats", "users", "campaigns", "withdrawals", "audits", "announcements", "cms", "settings", "pricing", "platforms", "platform-earnings", "commissions"];
+  type AdminTab = "stats" | "users" | "campaigns" | "admin-tasks" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings" | "commissions";
+  const VALID_ADMIN_TABS: AdminTab[] = ["stats", "users", "campaigns", "admin-tasks", "withdrawals", "audits", "announcements", "cms", "settings", "pricing", "platforms", "platform-earnings", "commissions"];
   const { section } = useParams<{ section?: string }>();
   const navigate = useNavigate();
   const activeTab: AdminTab = (VALID_ADMIN_TABS.includes(section as AdminTab) ? section : "stats") as AdminTab;
@@ -176,6 +180,21 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   const [commissionsList, setCommissionsList] = React.useState<any[]>([]);
   const [commissionFilter, setCommissionFilter] = React.useState<string>("all");
 
+  // Admin Tasks state
+  const [adminTasksList, setAdminTasksList] = React.useState<Task[]>([]);
+  const [showAdminTaskForm, setShowAdminTaskForm] = React.useState(false);
+  const [editingAdminTask, setEditingAdminTask] = React.useState<Task | null>(null);
+  const [adminTaskTitle, setAdminTaskTitle] = React.useState("");
+  const [adminTaskDescription, setAdminTaskDescription] = React.useState("");
+  const [adminTaskCategory, setAdminTaskCategory] = React.useState("");
+  const [adminTaskProofReq, setAdminTaskProofReq] = React.useState("");
+  const [adminTaskLink, setAdminTaskLink] = React.useState("");
+  const [adminTaskSlots, setAdminTaskSlots] = React.useState("");
+  const [adminTaskReward, setAdminTaskReward] = React.useState("");
+  const [adminTaskFormError, setAdminTaskFormError] = React.useState("");
+  const [adminTaskFormSuccess, setAdminTaskFormSuccess] = React.useState("");
+  const [adminTaskSubmitting, setAdminTaskSubmitting] = React.useState(false);
+
   const fetchPlatformStats = async () => {
     try {
       const data = await apiFetch("/api/admin/owner-earnings/stats");
@@ -293,7 +312,20 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   const fetchCampaigns = async () => {
     try {
       const data = await apiFetch("/api/admin/tasks");
-      if (Array.isArray(data)) setCampaignsList(data);
+      if (Array.isArray(data)) {
+        setCampaignsList(data.filter((t: any) => !t.isAdminTask));
+        setAdminTasksList(data.filter((t: any) => t.isAdminTask));
+      }
+    } catch (e) {}
+  };
+
+  const fetchAdminTasks = async () => {
+    try {
+      const data = await apiFetch("/api/admin/tasks");
+      if (Array.isArray(data)) {
+        setAdminTasksList(data.filter((t: any) => t.isAdminTask));
+        setCampaignsList(data.filter((t: any) => !t.isAdminTask));
+      }
     } catch (e) {}
   };
 
@@ -352,6 +384,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
     if (activeTab === "stats") { fetchStats(); fetchDepositsAndReferrals(); }
     if (activeTab === "users") fetchUsers();
     if (activeTab === "campaigns") fetchCampaigns();
+    if (activeTab === "admin-tasks") fetchAdminTasks();
     if (activeTab === "withdrawals") fetchWithdrawals();
     if (activeTab === "audits") fetchAudits();
     if (activeTab === "announcements") fetchAnnouncementsAndBanners();
@@ -875,6 +908,103 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
     } catch (e) {}
   };
 
+  // Delete any campaign (advertiser or admin) from admin desk
+  const handleDeleteCampaign = async (taskId: string, taskTitle: string) => {
+    if (!window.confirm(`Are you sure you want to delete this campaign?\n\n"${taskTitle}"\n\nThis action cannot be undone.`)) return;
+    try {
+      const res = await apiFetch(`/api/admin/tasks/${taskId}`, { method: "DELETE" });
+      if (res && res.success) fetchCampaigns();
+    } catch (e) {}
+  };
+
+  // Admin task form helpers
+  const resetAdminTaskForm = () => {
+    setAdminTaskTitle("");
+    setAdminTaskDescription("");
+    setAdminTaskCategory("");
+    setAdminTaskProofReq("");
+    setAdminTaskLink("");
+    setAdminTaskSlots("");
+    setAdminTaskReward("");
+    setAdminTaskFormError("");
+    setAdminTaskFormSuccess("");
+    setEditingAdminTask(null);
+    setShowAdminTaskForm(false);
+  };
+
+  const handleOpenEditAdminTask = (task: Task) => {
+    setEditingAdminTask(task);
+    setAdminTaskTitle(task.title);
+    setAdminTaskDescription(task.description);
+    setAdminTaskCategory(task.category as string);
+    setAdminTaskProofReq(task.proofRequirements || "");
+    setAdminTaskLink(task.link);
+    setAdminTaskSlots(String(task.totalSlots));
+    setAdminTaskReward(String(task.earningPerSlot));
+    setAdminTaskFormError("");
+    setAdminTaskFormSuccess("");
+    setShowAdminTaskForm(true);
+  };
+
+  const handleSubmitAdminTask = async () => {
+    setAdminTaskFormError("");
+    setAdminTaskFormSuccess("");
+    if (!adminTaskTitle || !adminTaskDescription || !adminTaskCategory || !adminTaskLink || !adminTaskSlots || !adminTaskReward) {
+      setAdminTaskFormError("All fields are required.");
+      return;
+    }
+    setAdminTaskSubmitting(true);
+    try {
+      const payload = {
+        title: adminTaskTitle,
+        description: adminTaskDescription,
+        category: adminTaskCategory,
+        proofRequirements: adminTaskProofReq || "Submit a screenshot or username as proof.",
+        link: adminTaskLink,
+        totalSlots: adminTaskSlots,
+        earningPerSlot: adminTaskReward
+      };
+      const endpoint = editingAdminTask ? `/api/admin/tasks/${editingAdminTask.id}` : "/api/admin/tasks";
+      const method = editingAdminTask ? "PUT" : "POST";
+      const res = await apiFetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res && res.success) {
+        setAdminTaskFormSuccess(editingAdminTask ? "Task updated successfully!" : "Task published successfully!");
+        resetAdminTaskForm();
+        fetchAdminTasks();
+      } else {
+        setAdminTaskFormError(res?.error || "Failed to save task.");
+      }
+    } catch (e) {
+      setAdminTaskFormError("Server error. Please try again.");
+    } finally {
+      setAdminTaskSubmitting(false);
+    }
+  };
+
+  const handleDeleteAdminTask = async (taskId: string, taskTitle: string) => {
+    if (!window.confirm(`Are you sure you want to delete this admin task?\n\n"${taskTitle}"\n\nThis action cannot be undone.`)) return;
+    try {
+      const res = await apiFetch(`/api/admin/tasks/${taskId}`, { method: "DELETE" });
+      if (res && res.success) fetchAdminTasks();
+    } catch (e) {}
+  };
+
+  const handleToggleAdminTask = async (taskId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === TaskStatus.ACTIVE ? TaskStatus.PAUSED : TaskStatus.ACTIVE;
+    try {
+      const res = await apiFetch(`/api/admin/tasks/${taskId}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus })
+      });
+      if (res && res.success) fetchAdminTasks();
+    } catch (e) {}
+  };
+
   return (
     <div className="space-y-6 relative">
       
@@ -1037,6 +1167,16 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         >
           <Briefcase className="h-4 w-4 text-slate-400" /> 
           <span>Tasks & Campaigns</span>
+        </button>
+
+        <button 
+          onClick={() => setActiveTab("admin-tasks")}
+          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
+            activeTab === "admin-tasks" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
+          }`}
+        >
+          <ListTodo className="h-4 w-4 text-slate-400" /> 
+          <span>Admin Tasks ({adminTasksList.filter(t => t.status === TaskStatus.ACTIVE).length} active)</span>
         </button>
 
         <button 
@@ -1324,42 +1464,278 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         {activeTab === "campaigns" && (
           <div className="space-y-6">
             <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Ad Campaigns Moderation</h3>
+              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Advertiser Campaigns Moderation</h3>
               
-              <div className="space-y-3">
-                {campaignsList.map((task, idx) => (
-                  <div key={idx} className="rounded-xl border border-gray-50 bg-white p-4 text-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div>
-                      <span className="rounded bg-red-50 text-[9px] font-bold text-red-700 px-2 py-1 uppercase inline-flex items-center gap-1.5">
-                        <PlatformIcon category={task.category} size={11} />
-                        <span>{task.category}</span>
-                      </span>
-                      <h4 className="font-display font-bold text-gray-800 mt-1">{task.title}</h4>
-                      <p className="text-[10px] text-gray-400 mt-1">Publisher: {task.advertiserName} • Budget: ₦{(task.costPerSlot * task.totalSlots).toLocaleString()}</p>
-                    </div>
-
-                    <div className="flex items-center gap-3 shrink-0 text-right">
+              {campaignsList.length === 0 ? (
+                <p className="text-center py-10 text-xs text-gray-400">No advertiser campaigns found.</p>
+              ) : (
+                <div className="space-y-3">
+                  {campaignsList.map((task, idx) => (
+                    <div key={idx} className="rounded-xl border border-gray-50 bg-white p-4 text-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                       <div>
-                        <span className="block text-[10px] text-gray-400">Slots Completed</span>
-                        <span className="font-mono font-bold text-gray-700">{task.filledSlots} / {task.totalSlots}</span>
+                        <span className="rounded bg-red-50 text-[9px] font-bold text-red-700 px-2 py-1 uppercase inline-flex items-center gap-1.5">
+                          <PlatformIcon category={task.category} size={11} />
+                          <span>{task.category}</span>
+                        </span>
+                        <h4 className="font-display font-bold text-gray-800 mt-1">{task.title}</h4>
+                        <p className="text-[10px] text-gray-400 mt-1">Publisher: {task.advertiserName} • Budget: ₦{(task.costPerSlot * task.totalSlots).toLocaleString()}</p>
                       </div>
-                      
-                      <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${
-                        task.status === TaskStatus.ACTIVE ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
-                      }`}>{task.status}</span>
 
-                      {task.status !== TaskStatus.COMPLETED && (
+                      <div className="flex items-center gap-3 shrink-0 text-right">
+                        <div>
+                          <span className="block text-[10px] text-gray-400">Slots Completed</span>
+                          <span className="font-mono font-bold text-gray-700">{task.filledSlots} / {task.totalSlots}</span>
+                        </div>
+                        
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${
+                          task.status === TaskStatus.ACTIVE ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
+                        }`}>{task.status}</span>
+
+                        {task.status !== TaskStatus.COMPLETED && (
+                          <button
+                            onClick={() => handleAdminToggleCampaign(task.id, task.status)}
+                            className="rounded bg-gray-100 hover:bg-amber-50 hover:text-amber-700 px-2 py-1 font-bold text-[10px]"
+                          >
+                            {task.status === TaskStatus.ACTIVE ? "Pause" : "Resume"}
+                          </button>
+                        )}
+
                         <button
-                          onClick={() => handleAdminToggleCampaign(task.id, task.status)}
-                          className="rounded bg-gray-100 hover:bg-red-50 px-2 py-1 font-bold text-[10px]"
+                          onClick={() => handleDeleteCampaign(task.id, task.title)}
+                          className="rounded bg-red-50 hover:bg-red-100 text-red-600 px-2 py-1 font-bold text-[10px] flex items-center gap-1"
                         >
-                          {task.status === TaskStatus.ACTIVE ? "Pause" : "Resume"}
+                          <Trash2 className="h-3 w-3" /> Delete
                         </button>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB: ADMIN TASKS */}
+        {activeTab === "admin-tasks" && (
+          <div className="space-y-6">
+            {/* Create / Edit Form */}
+            {!showAdminTaskForm ? (
+              <div className="flex justify-end">
+                <button
+                  onClick={() => { resetAdminTaskForm(); setShowAdminTaskForm(true); }}
+                  className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 flex items-center gap-2"
+                >
+                  <PlusCircle className="h-4 w-4" /> Create New Admin Task
+                </button>
               </div>
+            ) : (
+              <div className="rounded-2xl border border-blue-100 bg-white p-6 shadow-sm space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-display text-sm font-bold text-gray-900">
+                    {editingAdminTask ? "Edit Admin Task" : "Create Admin Task"}
+                  </h3>
+                  <button onClick={resetAdminTaskForm} className="text-gray-400 hover:text-gray-600">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {adminTaskFormError && (
+                  <div className="rounded-lg bg-red-50 border border-red-100 text-red-700 text-xs font-medium px-4 py-2.5">{adminTaskFormError}</div>
+                )}
+                {adminTaskFormSuccess && (
+                  <div className="rounded-lg bg-green-50 border border-green-100 text-green-700 text-xs font-medium px-4 py-2.5">{adminTaskFormSuccess}</div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide">Task Title *</label>
+                    <input
+                      type="text"
+                      value={adminTaskTitle}
+                      onChange={e => setAdminTaskTitle(e.target.value)}
+                      placeholder="e.g. Follow our Instagram page"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide">Category / Platform *</label>
+                    <select
+                      value={adminTaskCategory}
+                      onChange={e => setAdminTaskCategory(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-blue-400 bg-white"
+                    >
+                      <option value="">Select category...</option>
+                      <option value="Instagram Follow">Instagram Follow</option>
+                      <option value="Instagram Like">Instagram Like</option>
+                      <option value="Facebook Follow">Facebook Follow</option>
+                      <option value="Facebook Like">Facebook Like</option>
+                      <option value="Facebook Share">Facebook Share</option>
+                      <option value="Facebook Comment">Facebook Comment</option>
+                      <option value="TikTok Follow">TikTok Follow</option>
+                      <option value="TikTok Like">TikTok Like</option>
+                      <option value="TikTok Comment">TikTok Comment</option>
+                      <option value="YouTube Subscribe">YouTube Subscribe</option>
+                      <option value="YouTube Like">YouTube Like</option>
+                      <option value="YouTube Watch">YouTube Watch</option>
+                      <option value="Telegram Join">Telegram Join</option>
+                      <option value="WhatsApp Join">WhatsApp Join</option>
+                      <option value="X (Twitter) Follow">X (Twitter) Follow</option>
+                      <option value="Snapchat Add/Follow">Snapchat Add/Follow</option>
+                      <option value="LinkedIn Follow/Connect">LinkedIn Follow/Connect</option>
+                      <option value="Threads Follow">Threads Follow</option>
+                      <option value="Pinterest Follow">Pinterest Follow</option>
+                      <option value="Reddit Join">Reddit Join</option>
+                      <option value="Discord Join">Discord Join</option>
+                      <option value="Website Visit">Website Visit</option>
+                      <option value="App Download">App Download</option>
+                      <option value="App Registration">App Registration</option>
+                      <option value="Email Signup">Email Signup</option>
+                      <option value="Survey Completion">Survey Completion</option>
+                      <option value="Review Submission">Review Submission</option>
+                      <option value="Other Custom Task">Other Custom Task</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide">Task Description *</label>
+                    <textarea
+                      value={adminTaskDescription}
+                      onChange={e => setAdminTaskDescription(e.target.value)}
+                      placeholder="Explain what earners need to do step by step..."
+                      rows={3}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-blue-400 resize-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide">Task Link / URL *</label>
+                    <input
+                      type="url"
+                      value={adminTaskLink}
+                      onChange={e => setAdminTaskLink(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide">Proof Requirements (optional)</label>
+                    <input
+                      type="text"
+                      value={adminTaskProofReq}
+                      onChange={e => setAdminTaskProofReq(e.target.value)}
+                      placeholder="e.g. Submit a screenshot showing you followed the account."
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide">Total Slots *</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={adminTaskSlots}
+                      onChange={e => setAdminTaskSlots(e.target.value)}
+                      placeholder="e.g. 100"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide">Reward per Slot (₦) *</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={adminTaskReward}
+                      onChange={e => setAdminTaskReward(e.target.value)}
+                      placeholder="e.g. 15"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button onClick={resetAdminTaskForm} className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-50">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSubmitAdminTask}
+                    disabled={adminTaskSubmitting}
+                    className="rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-bold px-5 py-2 flex items-center gap-2"
+                  >
+                    {adminTaskSubmitting ? "Saving..." : editingAdminTask ? "Save Changes" : "Publish Task"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Admin Tasks List */}
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-display text-sm font-bold text-gray-900">Published Admin Tasks</h3>
+                <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2.5 py-1 rounded-full">
+                  {adminTasksList.length} total
+                </span>
+              </div>
+
+              {adminTasksList.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-slate-50 text-slate-400 mb-3">
+                    <ListTodo className="h-5 w-5" />
+                  </div>
+                  <p className="text-xs font-bold text-gray-500">No admin tasks yet</p>
+                  <p className="text-[10px] text-gray-400 mt-1">Create your first admin task using the button above.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {adminTasksList.map((task) => (
+                    <div key={task.id} className="rounded-xl border border-gray-100 bg-white p-4 text-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:shadow-sm transition-shadow">
+                      <div className="flex-1 min-w-0">
+                        <span className="rounded bg-blue-50 text-[9px] font-bold text-blue-700 px-2 py-1 uppercase inline-flex items-center gap-1.5 mb-1">
+                          <PlatformIcon category={task.category} size={11} />
+                          <span>{task.category}</span>
+                        </span>
+                        <h4 className="font-display font-bold text-gray-800 mt-1 truncate">{task.title}</h4>
+                        <p className="text-[10px] text-gray-400 mt-0.5">
+                          Slots: {task.filledSlots}/{task.totalSlots} completed • Reward: ₦{task.earningPerSlot}/slot
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${
+                          task.status === TaskStatus.ACTIVE ? "bg-blue-50 text-blue-700" :
+                          task.status === TaskStatus.PAUSED ? "bg-amber-50 text-amber-700" :
+                          "bg-gray-100 text-gray-500"
+                        }`}>{task.status}</span>
+
+                        {task.status !== TaskStatus.COMPLETED && (
+                          <button
+                            onClick={() => handleToggleAdminTask(task.id, task.status)}
+                            className="rounded bg-gray-100 hover:bg-amber-50 hover:text-amber-700 px-2 py-1 font-bold text-[10px]"
+                          >
+                            {task.status === TaskStatus.ACTIVE ? "Pause" : "Resume"}
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => handleOpenEditAdminTask(task)}
+                          className="rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1 font-bold text-[10px] flex items-center gap-1"
+                        >
+                          <Pencil className="h-3 w-3" /> Edit
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteAdminTask(task.id, task.title)}
+                          className="rounded bg-red-50 hover:bg-red-100 text-red-600 px-2 py-1 font-bold text-[10px] flex items-center gap-1"
+                        >
+                          <Trash2 className="h-3 w-3" /> Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

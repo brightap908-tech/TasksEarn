@@ -111,6 +111,7 @@ function mapTask(row: any) {
     status: row.status,
     advertiserId: row.advertiser_id,
     advertiserName: row.advertiser_name,
+    isAdminTask: row.is_admin_task === true || row.is_admin_task === "true",
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
   };
 }
@@ -526,6 +527,9 @@ async function bootstrapTables() {
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT NULL`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs JSONB NULL`);
+
+    // 18. Migrate: add is_admin_task flag to tasks table
+    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_admin_task BOOLEAN NOT NULL DEFAULT FALSE`);
 
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
@@ -2323,6 +2327,66 @@ app.get("/api/admin/tasks", async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
+// ─── Create Admin Task (no payment required) ─────────────────────────────────
+app.post("/api/admin/tasks", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { title, description, category, proofRequirements, link, totalSlots, earningPerSlot } = req.body;
+    if (!title || !description || !category || !link || !totalSlots || !earningPerSlot) {
+      return res.status(400).json({ error: "Title, description, category, link, slots, and reward are required" });
+    }
+
+    const slots = parseInt(totalSlots);
+    const reward = parseFloat(earningPerSlot);
+    if (isNaN(slots) || slots <= 0) return res.status(400).json({ error: "Invalid slot count" });
+    if (isNaN(reward) || reward <= 0) return res.status(400).json({ error: "Invalid reward amount" });
+
+    const newTaskId = "task-" + Math.random().toString(36).substr(2, 9);
+    const proofReq = proofRequirements || "Submit proof of completion (screenshot or username).";
+
+    const taskInsert = await pool.query(`
+      INSERT INTO tasks (id, title, description, category, proof_requirements, link, cost_per_slot, earning_per_slot, total_slots, filled_slots, status, advertiser_id, advertiser_name, is_admin_task, created_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$7,$8,0,'Active',$9,$10,true,$11) RETURNING *
+    `, [newTaskId, title, description, category, proofReq, link, reward, slots, user.id, user.name, new Date()]);
+
+    res.json({ success: true, task: mapTask(taskInsert.rows[0]) });
+  } catch (err) {
+    console.error("Admin create task error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Edit Admin Task ──────────────────────────────────────────────────────────
+app.put("/api/admin/tasks/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const taskRes = await pool.query("SELECT * FROM tasks WHERE id=$1 AND is_admin_task=true", [req.params.id]);
+    if (taskRes.rows.length === 0) return res.status(404).json({ error: "Admin task not found" });
+
+    const { title, description, category, proofRequirements, link, totalSlots, earningPerSlot } = req.body;
+    const slots = parseInt(totalSlots);
+    const reward = parseFloat(earningPerSlot);
+    if (!title || !description || !category || !link) return res.status(400).json({ error: "Required fields missing" });
+    if (isNaN(slots) || slots <= 0) return res.status(400).json({ error: "Invalid slot count" });
+    if (isNaN(reward) || reward <= 0) return res.status(400).json({ error: "Invalid reward amount" });
+
+    const proofReq = proofRequirements || "Submit proof of completion (screenshot or username).";
+    const result = await pool.query(`
+      UPDATE tasks SET title=$1, description=$2, category=$3, proof_requirements=$4, link=$5, total_slots=$6, earning_per_slot=$7, cost_per_slot=$7
+      WHERE id=$8 AND is_admin_task=true RETURNING *
+    `, [title, description, category, proofReq, link, slots, reward, req.params.id]);
+
+    res.json({ success: true, task: mapTask(result.rows[0]) });
+  } catch (err) {
+    console.error("Admin edit task error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 app.put("/api/admin/tasks/:id/status", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
@@ -2353,7 +2417,9 @@ app.delete("/api/admin/tasks/:id", async (req, res) => {
       const remainingSlots = task.totalSlots - task.filledSlots;
       refundAmount = remainingSlots * task.costPerSlot;
 
-      if (refundAmount > 0 && task.advertiserId) {
+      // Only refund to the advertiser if this is NOT an admin-created task
+      // (admin tasks require no payment so there is nothing to refund)
+      if (refundAmount > 0 && task.advertiserId && !task.isAdminTask) {
         await client.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2", [refundAmount, task.advertiserId]);
         await client.query(`
           INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
@@ -2366,6 +2432,7 @@ app.delete("/api/admin/tasks/:id", async (req, res) => {
           new Date()
         ]);
       }
+      if (task.isAdminTask) refundAmount = 0; // no refund for admin tasks
 
       await client.query("DELETE FROM submissions WHERE task_id=$1 AND status='Pending'", [task.id]);
       await client.query("DELETE FROM tasks WHERE id=$1", [task.id]);
