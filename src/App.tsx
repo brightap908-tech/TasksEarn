@@ -10,7 +10,8 @@ import {
   Transaction, 
   Announcement, 
   Banner, 
-  WebsiteSettings 
+  WebsiteSettings,
+  EarnerNotification
 } from "./types";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
@@ -98,6 +99,11 @@ export default function App() {
   const [forgotEmail, setForgotEmail] = React.useState("");
   const [forgotSuccess, setForgotSuccess] = React.useState(false);
   const [toast, setToast] = React.useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  // Earner notification state
+  const [earnerNotifications, setEarnerNotifications] = React.useState<EarnerNotification[]>([]);
+  const earnerUnreadCount = earnerNotifications.filter(n => !n.read).length;
+  const earnerWsRef = React.useRef<WebSocket | null>(null);
 
   // Email Verification State
   const [verificationEmail, setVerificationEmail] = React.useState("");
@@ -303,6 +309,89 @@ export default function App() {
       }
     }
   };
+
+  // Fetch unread earner notification count from API
+  const fetchEarnerUnreadCount = async () => {
+    try {
+      const data = await apiFetch("/api/earner/notifications");
+      if (Array.isArray(data)) {
+        setEarnerNotifications(data as EarnerNotification[]);
+      }
+    } catch (e) {}
+  };
+
+  // Set up WebSocket for earner real-time notifications
+  React.useEffect(() => {
+    if (!user || user.role !== UserRole.EARNER) return;
+
+    // Fetch current notifications on mount / login
+    fetchEarnerUnreadCount();
+
+    // Register service worker for push notifications
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").then((reg) => {
+        console.log("[SW] Registered:", reg.scope);
+        // Listen for navigate messages from service worker
+        navigator.serviceWorker.addEventListener("message", (e) => {
+          if (e.data?.type === "navigate" && e.data?.url) {
+            const url: string = e.data.url;
+            if (url.includes("/earner/")) {
+              const section = url.split("/earner/")[1] || "notifications";
+              setCurrentView("earner-" + section);
+            }
+          }
+        });
+      }).catch(() => {});
+
+      // Request push notification permission
+      if (Notification.permission === "default") {
+        Notification.requestPermission().catch(() => {});
+      }
+    }
+
+    // Open WebSocket for real-time task notifications
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
+    earnerWsRef.current = ws;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "register-earner", userId: user.id }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === "earner-new-task" && msg.notification) {
+          const newNotif: EarnerNotification = {
+            id: "ws-" + Date.now(),
+            ...msg.notification,
+            read: false
+          };
+          setEarnerNotifications(prev => [newNotif, ...prev]);
+
+          // Show in-app toast
+          showToast(`🔔 New task: ${msg.notification.taskTitle} — Earn ₦${msg.notification.reward?.toLocaleString()}`, "success");
+
+          // Show browser push notification if permission granted
+          if (Notification.permission === "granted") {
+            new Notification("🔔 TasksEarn — New Task Available!", {
+              body: msg.notification.message || `New task: ${msg.notification.taskTitle}`,
+              tag: "te-new-task-" + msg.notification.taskId,
+            });
+          }
+        }
+      } catch (e) {}
+    };
+
+    ws.onerror = () => {};
+
+    return () => {
+      ws.close();
+      earnerWsRef.current = null;
+    };
+  }, [user?.id]);
 
   React.useEffect(() => {
     const runStartup = async () => {
@@ -686,6 +775,7 @@ export default function App() {
         onOpenDeposit={() => setDepositOpen(true)}
         isDarkMode={isDarkMode}
         onToggleDarkMode={toggleDarkMode}
+        earnerUnreadCount={earnerUnreadCount}
       />
 
       {/* Main Dynamic Content View Stage */}
@@ -1518,6 +1608,15 @@ export default function App() {
                 onNavigate={(view) => setCurrentView(view)}
                 apiFetch={apiFetch}
                 showToast={showToast}
+                earnerNotifications={earnerNotifications}
+                onMarkNotificationRead={(id) => {
+                  apiFetch(`/api/earner/notifications/${id}/read`, { method: "POST" }).catch(() => {});
+                  setEarnerNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+                }}
+                onMarkAllNotificationsRead={() => {
+                  apiFetch("/api/earner/notifications/read-all", { method: "POST" }).catch(() => {});
+                  setEarnerNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                }}
               />
             </div>
           ) : (<Navigate to="/login" replace />)

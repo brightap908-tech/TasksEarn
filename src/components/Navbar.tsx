@@ -1,6 +1,6 @@
 import React from "react";
 import { User, UserRole } from "../types";
-import { Coins, LogOut, Shield, User as UserIcon, Wallet, Menu, X, Sun, Moon, Zap } from "lucide-react";
+import { Coins, LogOut, Shield, User as UserIcon, Wallet, Menu, X, Sun, Moon, Zap, Bell } from "lucide-react";
 
 interface NavbarProps {
   user: User | null;
@@ -10,9 +10,10 @@ interface NavbarProps {
   onOpenDeposit: () => void;
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
+  earnerUnreadCount?: number;
 }
 
-export default function Navbar({ user, currentView, onNavigate, onLogout, onOpenDeposit, isDarkMode, onToggleDarkMode }: NavbarProps) {
+export default function Navbar({ user, currentView, onNavigate, onLogout, onOpenDeposit, isDarkMode, onToggleDarkMode, earnerUnreadCount = 0 }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   const navLinkClass = (view: string) =>
@@ -173,6 +174,29 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                 )}
               </div>
 
+              {/* Earner notification bell */}
+              {user.role === UserRole.EARNER && (
+                <button
+                  onClick={() => onNavigate("earner-notifications")}
+                  className="relative rounded-full p-2 transition-all cursor-pointer"
+                  style={isDarkMode
+                    ? { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }
+                    : { background: "#F8FAFC", border: "1px solid #E2E8F0" }}
+                  title="Notifications"
+                  aria-label="View Notifications"
+                >
+                  <Bell className="h-4 w-4" style={{ color: earnerUnreadCount > 0 ? "#2563EB" : "#94a3b8" }} />
+                  {earnerUnreadCount > 0 && (
+                    <span
+                      className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-black text-white"
+                      style={{ background: "#EF4444", minWidth: "1rem" }}
+                    >
+                      {earnerUnreadCount > 99 ? "99+" : earnerUnreadCount}
+                    </span>
+                  )}
+                </button>
+              )}
+
               {/* Profile */}
               <div
                 className="flex items-center gap-3 pl-3"
@@ -266,6 +290,26 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
             </div>
           )}
 
+          {/* Mobile notification bell for earners */}
+          {user && user.role === UserRole.EARNER && (
+            <button
+              onClick={() => onNavigate("earner-notifications")}
+              className="relative rounded-full p-2 transition-colors cursor-pointer"
+              style={isDarkMode ? { background: "rgba(255,255,255,0.04)" } : { background: "#F8FAFC" }}
+              aria-label="Notifications"
+            >
+              <Bell className="h-4 w-4" style={{ color: earnerUnreadCount > 0 ? "#2563EB" : "#94a3b8" }} />
+              {earnerUnreadCount > 0 && (
+                <span
+                  className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[7px] font-black text-white"
+                  style={{ background: "#EF4444" }}
+                >
+                  {earnerUnreadCount > 9 ? "9+" : earnerUnreadCount}
+                </span>
+              )}
+            </button>
+          )}
+
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="rounded-lg p-1.5 transition-colors cursor-pointer"
@@ -320,6 +364,18 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                       style={{ color: isDarkMode ? "#94a3b8" : "#475569" }}
                     >{label}</span>
                   ))}
+                  <button
+                    onClick={() => { onNavigate("earner-notifications"); setMobileMenuOpen(false); }}
+                    className="w-full text-left flex items-center justify-between py-2.5 text-sm font-medium rounded-xl px-3 transition-colors"
+                    style={{ color: isDarkMode ? "#94a3b8" : "#475569" }}
+                  >
+                    <span>Notifications</span>
+                    {earnerUnreadCount > 0 && (
+                      <span className="rounded-full text-[9px] font-black text-white px-1.5 py-0.5" style={{ background: "#EF4444" }}>
+                        {earnerUnreadCount}
+                      </span>
+                    )}
+                  </button>
                 </>
               )}
 

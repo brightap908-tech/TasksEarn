@@ -209,6 +209,18 @@ export interface AdminNotification {
   read: boolean;
 }
 
+export interface EarnerNotification {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  platform: string;
+  category: string;
+  reward: number;
+  message: string;
+  createdAt: string;
+  read: boolean;
+}
+
 export enum Platform {
   INSTAGRAM = "Instagram",
   FACEBOOK = "Facebook",

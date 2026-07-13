@@ -14,6 +14,7 @@ export const VIEW_TO_PATH: Record<string, string> = {
   "earner-tasks": "/earner/tasks",
   "earner-submissions": "/earner/history",
   "earner-referrals": "/earner/referrals",
+  "earner-notifications": "/earner/notifications",
   "advertiser-dashboard": "/advertiser/overview",
   "advertiser-tasks": "/advertiser/manage",
   "advertiser-submissions": "/advertiser/audit",
@@ -31,6 +32,7 @@ export function pathToView(pathname: string): string {
   if (pathname === "/earner/tasks") return "earner-tasks";
   if (pathname === "/earner/history") return "earner-submissions";
   if (pathname === "/earner/referrals") return "earner-referrals";
+  if (pathname === "/earner/notifications") return "earner-notifications";
   if (pathname.startsWith("/earner/")) return "earner-dashboard";
   if (pathname === "/advertiser/manage") return "advertiser-tasks";
   if (pathname === "/advertiser/audit") return "advertiser-submissions";

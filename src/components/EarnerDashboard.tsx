@@ -8,10 +8,12 @@ import {
   Referral, 
   TaskCategory, 
   SubmissionStatus, 
-  TransactionStatus 
+  TransactionStatus,
+  EarnerNotification
 } from "../types";
 import { usePlatforms } from "../lib/platformsStore";
 import PlatformIcon from "./PlatformIcon";
+import EarnerNotifications from "./EarnerNotifications";
 import { 
   Briefcase, 
   DollarSign, 
@@ -35,7 +37,8 @@ import {
   UploadCloud,
   Trash2,
   FileText,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Bell
 } from "lucide-react";
 
 interface EarnerDashboardProps {
@@ -44,6 +47,9 @@ interface EarnerDashboardProps {
   onNavigate: (view: string) => void;
   apiFetch: (endpoint: string, options?: RequestInit) => Promise<any>;
   showToast: (message: string, type?: "success" | "error") => void;
+  earnerNotifications?: EarnerNotification[];
+  onMarkNotificationRead?: (id: string) => void;
+  onMarkAllNotificationsRead?: () => void;
 }
 
 interface NigerianBank { name: string; code: string; }
@@ -64,9 +70,10 @@ const FALLBACK_BANKS: NigerianBank[] = [
   { name: "Kuda Bank", code: "50211" }, { name: "VFD Microfinance Bank", code: "566" }
 ];
 
-export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFetch, showToast }: EarnerDashboardProps) {
-  type EarnerTab = "overview" | "tasks" | "history" | "referrals" | "withdraw" | "profile";
-  const VALID_EARNER_TABS: EarnerTab[] = ["overview", "tasks", "history", "referrals", "withdraw", "profile"];
+export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFetch, showToast, earnerNotifications = [], onMarkNotificationRead, onMarkAllNotificationsRead }: EarnerDashboardProps) {
+  type EarnerTab = "overview" | "tasks" | "history" | "referrals" | "withdraw" | "profile" | "notifications";
+  const VALID_EARNER_TABS: EarnerTab[] = ["overview", "tasks", "history", "referrals", "withdraw", "profile", "notifications"];
+  const earnerUnreadCount = earnerNotifications.filter(n => !n.read).length;
   const { section } = useParams<{ section?: string }>();
   const navigate = useNavigate();
   const activeTab: EarnerTab = (VALID_EARNER_TABS.includes(section as EarnerTab) ? section : "overview") as EarnerTab;
@@ -251,6 +258,9 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
     fetchLimits();
     fetchBankList();
   }, [user.walletBalance]);
+
+  // Task to highlight from notification click
+  const [highlightTaskId, setHighlightTaskId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (activeTab === "overview") fetchDashboardStats();
@@ -540,6 +550,25 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
           >
             <span>Account Settings</span>
             <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+          <button 
+            onClick={() => setActiveTab("notifications")}
+            className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
+              activeTab === "notifications" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Bell className="h-3.5 w-3.5" />
+              <span>Notifications</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {earnerUnreadCount > 0 && (
+                <span className="rounded-full text-[8px] font-black text-white px-1.5 py-0.5" style={{ background: "#EF4444" }}>
+                  {earnerUnreadCount > 99 ? "99+" : earnerUnreadCount}
+                </span>
+              )}
+              <ChevronRight className="h-3.5 w-3.5" />
+            </div>
           </button>
         </div>
 
@@ -1414,6 +1443,24 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
               </form>
             </div>
           </div>
+        )}
+
+        {/* TAB 7: NOTIFICATIONS */}
+        {activeTab === "notifications" && (
+          <EarnerNotifications
+            notifications={earnerNotifications}
+            onMarkRead={(id) => {
+              if (onMarkNotificationRead) onMarkNotificationRead(id);
+            }}
+            onMarkAllRead={() => {
+              if (onMarkAllNotificationsRead) onMarkAllNotificationsRead();
+            }}
+            onNavigate={onNavigate}
+            onTaskClick={(taskId) => {
+              setHighlightTaskId(taskId);
+              setActiveTab("tasks");
+            }}
+          />
         )}
 
       </div>
