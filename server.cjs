@@ -120,7 +120,7 @@ function hashPassword(password) {
 function mapUser(row) {
   if (!row) return null;
   const role = row.role;
-  const isActivated = role !== "Earner" ? true : row.is_activated === true || row.is_activated === "true";
+  const isActivated = true;
   let notificationPrefs = row.notification_prefs;
   if (typeof notificationPrefs === "string") {
     try {
@@ -522,8 +522,10 @@ async function bootstrapTables() {
       )
     `);
     await client.query(`
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_activated BOOLEAN NOT NULL DEFAULT FALSE
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_activated BOOLEAN NOT NULL DEFAULT TRUE
     `);
+    await client.query(`ALTER TABLE users ALTER COLUMN is_activated SET DEFAULT TRUE`);
+    await client.query(`UPDATE users SET is_activated = true WHERE is_activated = false`);
     await client.query(`
       ALTER TABLE social_platforms ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL
     `);
@@ -1364,9 +1366,6 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
-    if (!user.isActivated) {
-      return res.status(403).json({ error: "Account activation required. Please pay the \u20A6500 activation fee to start completing tasks." });
-    }
     const taskId = req.params.id;
     const { proofText, proofScreenshot } = req.body;
     if (!proofText) return res.status(400).json({ error: "Proof details are required" });
@@ -1464,154 +1463,6 @@ app.get("/api/earner/referrals", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: "Server error" });
-  }
-});
-app.post("/api/earner/activation/initialize", async (req, res) => {
-  try {
-    const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
-    if (user.isActivated) {
-      return res.json({ alreadyActivated: true, message: "Account is already activated." });
-    }
-    const ACTIVATION_FEE = 500;
-    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
-    if (!paystackKey) {
-      return res.status(400).json({ error: "Payment gateway is not configured. Please contact support." });
-    }
-    const ref = "ACT-" + Date.now() + "-" + Math.floor(1e3 + Math.random() * 9e3);
-    const txId = "tx-" + Math.random().toString(36).substr(2, 9);
-    await pool.query(`
-      INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, gateway, created_at)
-      VALUES ($1,$2,$3,$4,$5,'Activation Fee','Pending','Account Activation Fee \u2014 One-time \u20A6500 payment',$6,'Paystack',$7)
-      ON CONFLICT (reference) DO NOTHING
-    `, [txId, user.id, user.name, user.role, ACTIVATION_FEE, ref, /* @__PURE__ */ new Date()]);
-    const origin = req.headers.referer || req.headers.origin || `http://localhost:${PORT}`;
-    const baseOrigin = origin.replace(/\/+$/, "").replace(/\?.*$/, "").replace(/#.*$/, "");
-    const callbackUrl = `${baseOrigin}/#paystack_activation_ref=${ref}`;
-    const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${paystackKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: user.email,
-        amount: Math.round(ACTIVATION_FEE * 100),
-        reference: ref,
-        callback_url: callbackUrl,
-        metadata: { user_id: user.id, type: "earner_activation" }
-      })
-    });
-    const paystackData = await paystackRes.json();
-    if (paystackData?.status && paystackData?.data) {
-      return res.json({ success: true, authorization_url: paystackData.data.authorization_url, reference: ref });
-    } else {
-      return res.status(500).json({ error: paystackData.message || "Failed to initialize activation payment" });
-    }
-  } catch (err) {
-    console.error("Activation initialize error:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-app.post("/api/earner/activation/verify", async (req, res) => {
-  try {
-    const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
-    if (user.isActivated) {
-      const { password: _2, verificationCode: __2, verificationCodeExpires: ___2, verificationCodeLastSent: ____2, ...safe } = user;
-      return res.json({ success: true, activated: true, alreadyActivated: true, user: safe });
-    }
-    const { reference } = req.body;
-    if (!reference) return res.status(400).json({ error: "Payment reference is required" });
-    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
-    if (!paystackKey) return res.status(400).json({ error: "PAYSTACK_SECRET_KEY is not configured." });
-    const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-      method: "GET",
-      headers: { "Authorization": `Bearer ${paystackKey}` }
-    });
-    const paystackData = await paystackRes.json();
-    if (!paystackData?.status || !paystackData?.data) {
-      return res.status(500).json({ error: "Could not verify payment with Paystack. Please contact support." });
-    }
-    const pStatus = paystackData.data.status;
-    const pAmount = paystackData.data.amount / 100;
-    const pEmail = (paystackData.data.customer?.email || "").toLowerCase();
-    const pReference = paystackData.data.reference || "";
-    const pMeta = paystackData.data.metadata || {};
-    if (pStatus !== "success") {
-      return res.status(400).json({ error: `Payment not successful. Status: ${pStatus}. If you were charged, please contact support.` });
-    }
-    if (Math.abs(pAmount - 500) > 1) {
-      return res.status(400).json({ error: "Payment amount mismatch. Please contact support." });
-    }
-    if (pReference !== reference) {
-      return res.status(400).json({ error: "Reference mismatch in Paystack response. Please contact support." });
-    }
-    if (pEmail && pEmail !== user.email.toLowerCase()) {
-      return res.status(403).json({ error: "Payment reference does not belong to your account." });
-    }
-    if (pMeta.type && pMeta.type !== "earner_activation") {
-      return res.status(403).json({ error: "Payment reference is not an activation payment." });
-    }
-    const client = await pool.connect();
-    let alreadyDone = false;
-    try {
-      await client.query("BEGIN");
-      const pendingTxRes = await client.query(
-        `SELECT id FROM transactions
-         WHERE reference = $1
-           AND user_id   = $2
-           AND type      = 'Activation Fee'
-           AND status    = 'Pending'
-         FOR UPDATE`,
-        [reference, user.id]
-      );
-      if (pendingTxRes.rows.length === 0) {
-        await client.query("ROLLBACK");
-        return res.status(403).json({
-          error: "Invalid or already-used payment reference. Please initiate a new activation payment."
-        });
-      }
-      const pendingTxId = pendingTxRes.rows[0].id;
-      const userRes = await client.query("SELECT is_activated FROM users WHERE id=$1 FOR UPDATE", [user.id]);
-      if (userRes.rows[0]?.is_activated === true) {
-        await client.query("ROLLBACK");
-        alreadyDone = true;
-      } else {
-        await client.query("UPDATE users SET is_activated = true WHERE id=$1", [user.id]);
-        await client.query(
-          "UPDATE transactions SET status='Success' WHERE id=$1",
-          [pendingTxId]
-        );
-        await client.query("COMMIT");
-      }
-    } catch (txErr) {
-      await client.query("ROLLBACK");
-      throw txErr;
-    } finally {
-      client.release();
-    }
-    if (!alreadyDone) {
-      await creditAdminCommission({
-        type: "activation_fee",
-        amount: 500,
-        description: `Earner activation fee \u2014 ${user.name} (${user.email})`,
-        reference: "COMM-ACT-" + reference,
-        userId: user.id,
-        userName: user.name,
-        relatedRef: reference
-      });
-    }
-    const freshUserRes = await pool.query("SELECT * FROM users WHERE id=$1", [user.id]);
-    const mappedUser = mapUser(freshUserRes.rows[0]);
-    const { password: _, verificationCode: __, verificationCodeExpires: ___, verificationCodeLastSent: ____, ...safeUser } = mappedUser;
-    res.json({
-      success: true,
-      activated: true,
-      alreadyActivated: alreadyDone,
-      user: safeUser,
-      message: "Account activated! You can now complete tasks and earn Naira."
-    });
-  } catch (err) {
-    console.error("Activation verify error:", err);
-    res.status(500).json({ error: "Server error during activation verification" });
   }
 });
 app.get("/api/banks", async (req, res) => {
