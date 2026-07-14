@@ -26,7 +26,6 @@ import {
   User as UserIcon, 
   Search, 
   Share2, 
-  Link, 
   AlertCircle, 
   Send, 
   Check, 
@@ -104,7 +103,6 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
 
   // Task Submission Form
   const [proofText, setProofText] = React.useState("");
-  const [proofLink, setProofLink] = React.useState("");
   const [proofScreenshot, setProofScreenshot] = React.useState("");
   const [fileName, setFileName] = React.useState("");
   const [fileSize, setFileSize] = React.useState("");
@@ -322,8 +320,8 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
     e.preventDefault();
     if (!selectedTask) return;
     
-    if (!proofText && !proofLink) {
-      setSubmitError("Please provide verification notes or a proof link.");
+    if (!proofText && !proofScreenshot) {
+      setSubmitError("Please provide verification notes or upload a screenshot.");
       return;
     }
 
@@ -331,18 +329,16 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
     setSubmitError("");
     setSubmitSuccess(false);
 
-    // Formulate a beautiful, structured text summary
-    const combinedProof = [
-      proofLink.trim() ? `🔗 Proof URL/Link: ${proofLink.trim()}` : "",
-      proofText.trim() ? `📝 Earner Notes:\n${proofText.trim()}` : ""
-    ].filter(Boolean).join("\n\n");
+    const finalProofText = proofText.trim()
+      ? `📝 Earner Notes:\n${proofText.trim()}`
+      : "See uploaded screenshot proof.";
 
     try {
       const res = await apiFetch(`/api/earner/tasks/${selectedTask.id}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          proofText: combinedProof || "See uploaded screenshot proof.",
+          proofText: finalProofText,
           proofScreenshot: proofScreenshot || ""
         })
       });
@@ -352,16 +348,19 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
       } else {
         setSubmitSuccess(true);
         setProofText("");
-        setProofLink("");
         setProofScreenshot("");
         setFileName("");
         setFileSize("");
+        // Refresh submissions so the "Waiting for Approval" list is up-to-date,
+        // then navigate there so the earner sees their pending task immediately.
+        fetchSubmissions();
+        fetchAvailableTasks();
+        fetchDashboardStats();
         setTimeout(() => {
           setSelectedTask(null);
           setSubmitSuccess(false);
-          fetchAvailableTasks();
-          fetchDashboardStats();
-        }, 3000);
+          setActiveTab("history");
+        }, 2000);
       }
     } catch (err) {
       setSubmitError("Failed to submit proof. Please try again.");
@@ -521,7 +520,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
               activeTab === "history" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
             }`}
           >
-            <span>Task Submission History</span>
+            <span>My Tasks & History</span>
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
           <button 
@@ -624,7 +623,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                       className="p-1 text-blue-100 hover:text-white bg-blue-700/50 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer" 
                       title="Copy Invite Link"
                     >
-                      <Link className="h-3.5 w-3.5" />
+                      <Share2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
@@ -794,7 +793,6 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                     onClick={() => {
                       setSelectedTask(null);
                       setProofText("");
-                      setProofLink("");
                       setProofScreenshot("");
                       setFileName("");
                       setFileSize("");
@@ -823,8 +821,9 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                 {/* Proof Submit Form */}
                 {submitSuccess ? (
                   <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-center animate-fadeIn">
+                    <CheckCircle2 className="h-6 w-6 text-blue-600 mx-auto mb-2" />
                     <p className="text-xs font-bold text-blue-800">Proof submitted successfully!</p>
-                    <p className="text-[10px] text-blue-600 mt-1">Pending advertiser audit. This task slots will be credited upon approval.</p>
+                    <p className="text-[10px] text-blue-600 mt-1">Moving to <strong>Waiting for Approval</strong>… you'll be redirected in a moment.</p>
                   </div>
                 ) : (
                   <form onSubmit={handleSubmitProof} className="bg-white rounded-xl border border-gray-100 p-5 space-y-4 shadow-xs">
@@ -845,27 +844,13 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                       </div>
                     )}
                     
-                    {/* Proof URL Input */}
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 flex items-center gap-1">
-                        <Link className="h-3 w-3 text-gray-400" /> Proof Link / URL (Optional)
-                      </label>
-                      <input
-                        type="url"
-                        value={proofLink}
-                        onChange={(e) => setProofLink(e.target.value)}
-                        placeholder="e.g., https://twitter.com/your_username/status/123456"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-none"
-                      />
-                    </div>
-
                     {/* Proof Text Textarea */}
                     <div>
                       <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
-                        Proof Text & Username / Notes (Required if no link is provided)
+                        Verification Notes / Username
+                        <span className="ml-1 text-gray-400 normal-case font-normal">(required if no screenshot)</span>
                       </label>
                       <textarea
-                        required={!proofLink}
                         rows={3}
                         value={proofText}
                         onChange={(e) => setProofText(e.target.value)}
@@ -877,7 +862,8 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                     {/* Screenshot Upload / Drag & Drop Area */}
                     <div>
                       <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1.5 flex items-center gap-1">
-                        <ImageIcon className="h-3 w-3 text-gray-400" /> Screenshot Proof (Optional)
+                        <ImageIcon className="h-3 w-3 text-gray-400" /> Screenshot Proof
+                        <span className="ml-1 text-gray-400 normal-case font-normal">(required if no notes)</span>
                       </label>
 
                       {!proofScreenshot ? (
@@ -1021,7 +1007,6 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                         onClick={() => {
                           setSelectedTask(task);
                           setProofText("");
-                          setProofLink("");
                           setProofScreenshot("");
                           setFileName("");
                           setFileSize("");
@@ -1044,57 +1029,148 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
           </div>
         )}
 
-        {/* TAB 3: SUBMISSION HISTORY */}
+        {/* TAB 3: SUBMISSION HISTORY — split into 3 sections */}
         {activeTab === "history" && (
           <div className="space-y-6">
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Task Submission History</h3>
-              
-              {submissions.length === 0 ? (
-                <div className="text-center py-12 text-xs text-gray-400">
-                  No task submissions found in history logs.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase text-[9px] tracking-wider">
-                        <th className="py-3 px-2">Task Title</th>
-                        <th className="py-3 px-2">Reward</th>
-                        <th className="py-3 px-2">Submitted</th>
-                        <th className="py-3 px-2">Proof Details</th>
-                        <th className="py-3 px-2">Verification Status</th>
-                        <th className="py-3 px-2">Reviewer Feedback</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {submissions.map((sub, idx) => (
-                        <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                          <td className="py-3.5 px-2 font-bold text-gray-800 max-w-xs truncate">
-                            <div className="flex items-center gap-1.5">
-                              <PlatformIcon category={sub.category} size={13} className="shrink-0" />
-                              <span className="truncate">{sub.taskTitle}</span>
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-2 font-mono text-blue-600 font-bold">₦{sub.reward}</td>
-                          <td className="py-3.5 px-2 text-gray-400 whitespace-nowrap">{new Date(sub.submittedAt).toLocaleDateString()}</td>
-                          <td className="py-3.5 px-2 max-w-xs truncate font-mono text-gray-500 text-[10px]">{sub.proofText}</td>
-                          <td className="py-3.5 px-2 whitespace-nowrap">
-                            <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                              sub.status === SubmissionStatus.APPROVED ? "bg-blue-50 text-blue-700" :
-                              sub.status === SubmissionStatus.PENDING ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"
-                            }`}>
-                              {sub.status}
+
+            {/* ── SECTION 1: Waiting for Approval (Pending) ── */}
+            {(() => {
+              const pending = submissions.filter(s => s.status === SubmissionStatus.PENDING);
+              return (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/40 shadow-sm overflow-hidden">
+                  <div className="flex items-center gap-3 px-5 py-4 border-b border-amber-100 bg-amber-50">
+                    <Clock className="h-4 w-4 text-amber-600 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-display text-sm font-bold text-amber-900">Waiting for Approval</h3>
+                      <p className="text-[10px] text-amber-600 mt-0.5">These tasks have been submitted and are awaiting advertiser review.</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-amber-100 border border-amber-200 px-2.5 py-0.5 text-[10px] font-black text-amber-700">
+                      {pending.length} pending
+                    </span>
+                  </div>
+
+                  {pending.length === 0 ? (
+                    <div className="text-center py-10 text-xs text-amber-500">
+                      No tasks currently waiting for approval. Submit proof on the Browse Microtasks page to get started!
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-amber-100">
+                      {pending.map((sub, idx) => (
+                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 hover:bg-amber-50/60 transition-colors">
+                          <PlatformIcon category={sub.category} size={14} showBg className="shrink-0 hidden sm:block" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-gray-800 truncate">{sub.taskTitle}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{sub.category} · Submitted {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                            {sub.proofText && (
+                              <p className="text-[10px] text-gray-500 mt-1 line-clamp-1 font-mono">{sub.proofText}</p>
+                            )}
+                          </div>
+                          <div className="flex sm:flex-col items-center sm:items-end gap-3 shrink-0">
+                            <span className="font-mono text-sm font-black text-gray-700">₦{sub.reward}</span>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-200 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-amber-700">
+                              <Clock className="h-2.5 w-2.5" /> Pending Approval
                             </span>
-                          </td>
-                          <td className="py-3.5 px-2 text-[10px] text-gray-400 italic font-medium">{sub.feedback || "Awaiting verification..."}</td>
-                        </tr>
+                          </div>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })()}
+
+            {/* ── SECTION 2: Completed Tasks (Approved) ── */}
+            {(() => {
+              const approved = submissions.filter(s => s.status === SubmissionStatus.APPROVED);
+              return (
+                <div className="rounded-2xl border border-blue-100 bg-white shadow-sm overflow-hidden">
+                  <div className="flex items-center gap-3 px-5 py-4 border-b border-blue-50 bg-blue-50/50">
+                    <CheckCircle2 className="h-4 w-4 text-blue-600 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-display text-sm font-bold text-blue-900">Completed Tasks</h3>
+                      <p className="text-[10px] text-blue-600 mt-0.5">Approved submissions — earnings have been credited to your wallet.</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-blue-100 border border-blue-200 px-2.5 py-0.5 text-[10px] font-black text-blue-700">
+                      {approved.length} completed
+                    </span>
+                  </div>
+
+                  {approved.length === 0 ? (
+                    <div className="text-center py-10 text-xs text-gray-400">
+                      No completed tasks yet. Approved submissions will appear here with your credited earnings.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-50">
+                      {approved.map((sub, idx) => (
+                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 hover:bg-gray-50/50 transition-colors">
+                          <PlatformIcon category={sub.category} size={14} showBg className="shrink-0 hidden sm:block" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-gray-800 truncate">{sub.taskTitle}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{sub.category} · Submitted {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                          </div>
+                          <div className="flex sm:flex-col items-center sm:items-end gap-3 shrink-0">
+                            <span className="font-mono text-sm font-black text-blue-600">+₦{sub.reward}</span>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-blue-700">
+                              <CheckCircle2 className="h-2.5 w-2.5" /> Approved
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── SECTION 3: Rejected Tasks ── */}
+            {(() => {
+              const rejected = submissions.filter(s => s.status === SubmissionStatus.REJECTED);
+              return (
+                <div className="rounded-2xl border border-red-100 bg-white shadow-sm overflow-hidden">
+                  <div className="flex items-center gap-3 px-5 py-4 border-b border-red-50 bg-red-50/40">
+                    <XCircle className="h-4 w-4 text-red-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-display text-sm font-bold text-red-900">Rejected Tasks</h3>
+                      <p className="text-[10px] text-red-500 mt-0.5">Review the rejection reason below and re-submit if eligible.</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-red-100 border border-red-200 px-2.5 py-0.5 text-[10px] font-black text-red-600">
+                      {rejected.length} rejected
+                    </span>
+                  </div>
+
+                  {rejected.length === 0 ? (
+                    <div className="text-center py-10 text-xs text-gray-400">
+                      No rejected submissions. Keep it up!
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-red-50">
+                      {rejected.map((sub, idx) => (
+                        <div key={idx} className="flex flex-col sm:flex-row sm:items-start gap-3 px-5 py-4 hover:bg-red-50/30 transition-colors">
+                          <PlatformIcon category={sub.category} size={14} showBg className="shrink-0 hidden sm:block mt-0.5" />
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <p className="text-xs font-bold text-gray-800 truncate">{sub.taskTitle}</p>
+                            <p className="text-[10px] text-gray-400">{sub.category} · Submitted {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                            {sub.feedback && (
+                              <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 flex items-start gap-2">
+                                <AlertCircle className="h-3 w-3 text-red-400 shrink-0 mt-0.5" />
+                                <p className="text-[10px] text-red-700 font-medium leading-relaxed">{sub.feedback}</p>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex sm:flex-col items-center sm:items-end gap-3 shrink-0">
+                            <span className="font-mono text-sm font-black text-gray-400">₦{sub.reward}</span>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-red-600">
+                              <XCircle className="h-2.5 w-2.5" /> Rejected
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
           </div>
         )}
 
