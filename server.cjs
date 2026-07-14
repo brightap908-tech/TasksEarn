@@ -1384,12 +1384,19 @@ app.get("/api/earner/tasks", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
-    const tasks = await pool.query("SELECT * FROM tasks WHERE status = 'Active' ORDER BY created_at DESC");
-    const subs = await pool.query("SELECT task_id, status FROM submissions WHERE earner_id = $1", [user.id]);
-    const submittedMap = new Map(subs.rows.map((s) => [s.task_id, s.status]));
+    const tasks = await pool.query(`
+      SELECT t.*, s.status AS sub_status, s.feedback AS sub_feedback
+      FROM tasks t
+      LEFT JOIN submissions s
+        ON s.task_id = t.id AND s.earner_id = $1
+      WHERE t.status = 'Active'
+        AND (s.id IS NULL OR s.status = 'Rejected')
+      ORDER BY t.created_at DESC
+    `, [user.id]);
     res.json(tasks.rows.map((r) => ({
       ...mapTask(r),
-      submissionStatus: submittedMap.get(r.id) || null
+      submissionStatus: r.sub_status || null,
+      submissionFeedback: r.sub_feedback || null
     })));
   } catch (err) {
     res.status(500).json({ error: "Server error" });
@@ -1415,20 +1422,41 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       return res.status(404).json({ error: "Task is not active or not found" });
     }
     const task = mapTask(taskRes.rows[0]);
+    const screenshot = proofScreenshot || null;
+    const finalProofText = proofText || "See uploaded screenshot proof.";
     const alreadySub = await client.query(
-      "SELECT id FROM submissions WHERE task_id = $1 AND earner_id = $2",
+      "SELECT id, status FROM submissions WHERE task_id = $1 AND earner_id = $2",
       [taskId, user.id]
     );
     if (alreadySub.rows.length > 0) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "You have already submitted a proof for this task" });
+      const existing = alreadySub.rows[0];
+      if (existing.status === "Pending" /* PENDING */) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Your submission is already pending review. Please wait for the advertiser's decision." });
+      }
+      if (existing.status === "Approved" /* APPROVED */) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "You have already successfully completed this task." });
+      }
+      await client.query(
+        `UPDATE submissions
+            SET proof_text      = $1,
+                proof_screenshot = $2,
+                status           = 'Pending',
+                feedback         = '',
+                submitted_at     = $3
+          WHERE id = $4`,
+        [finalProofText, screenshot, /* @__PURE__ */ new Date(), existing.id]
+      );
+      await client.query("COMMIT");
+      notifyAdmin({ type: "submission", message: `Task resubmission from ${user.name} for "${task.title}"`, referenceId: existing.id });
+      const subRes2 = await pool.query("SELECT * FROM submissions WHERE id = $1", [existing.id]);
+      return res.status(200).json({ success: true, message: "Task resubmitted successfully", submission: mapSubmission(subRes2.rows[0]) });
     }
     if (task.filledSlots >= task.totalSlots) {
       await client.query("ROLLBACK");
       return res.status(400).json({ error: "This task has reached its submission limit" });
     }
-    const screenshot = proofScreenshot || null;
-    const finalProofText = proofText || "See uploaded screenshot proof.";
     const subId = "sub-" + Math.random().toString(36).substr(2, 9);
     await client.query(`
       INSERT INTO submissions (id, task_id, task_title, category, earner_id, earner_name, proof_text, proof_screenshot, status, reward, submitted_at)
