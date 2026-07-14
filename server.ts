@@ -277,6 +277,23 @@ async function creditAdminCommission(opts: {
   }
 }
 
+// Deletes the proof screenshot/image for a submission after it has been approved.
+// This only clears the (potentially large) image data to save storage space; all
+// other submission fields (earner, advertiser, task, dates, payment records, etc.)
+// are left intact for audit purposes. Must only be called after the approval
+// transaction has already committed successfully. Any failure here is logged and
+// swallowed so it never affects the approval response already sent to the client.
+async function cleanupApprovedSubmissionProof(submissionId: string) {
+  try {
+    await pool.query(
+      "UPDATE submissions SET proof_screenshot = NULL WHERE id = $1 AND status = $2 AND proof_screenshot IS NOT NULL",
+      [submissionId, SubmissionStatus.APPROVED]
+    );
+  } catch (err) {
+    console.error(`[ProofCleanup] Failed to delete proof screenshot for submission ${submissionId}:`, err);
+  }
+}
+
 async function getSettings(): Promise<ReturnType<typeof mapSettings>> {
   const res = await pool.query("SELECT * FROM settings ORDER BY id ASC LIMIT 1");
   return res.rows.length > 0 ? mapSettings(res.rows[0]) : {
@@ -2225,6 +2242,13 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
       client.release();
     }
 
+    // Delete the proof screenshot now that approval has been committed successfully.
+    // Only runs for approved submissions; pending/rejected ones keep their proof intact.
+    if (updatedSubmission?.status === SubmissionStatus.APPROVED) {
+      await cleanupApprovedSubmissionProof(updatedSubmission.id);
+      updatedSubmission.proofScreenshot = null;
+    }
+
     // Credit admin platform commission after commit (prevents double-crediting via ON CONFLICT)
     if (commissionData) {
       await creditAdminCommission({
@@ -2767,6 +2791,13 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
       throw txErr;
     } finally {
       client.release();
+    }
+
+    // Delete the proof screenshot now that approval has been committed successfully.
+    // Only runs for approved submissions; pending/rejected ones keep their proof intact.
+    if (updatedSubmission?.status === SubmissionStatus.APPROVED) {
+      await cleanupApprovedSubmissionProof(updatedSubmission.id);
+      updatedSubmission.proofScreenshot = null;
     }
 
     // Credit admin platform commission after commit
