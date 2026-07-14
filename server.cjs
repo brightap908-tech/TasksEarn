@@ -334,9 +334,9 @@ async function getSettings() {
   return res.rows.length > 0 ? mapSettings(res.rows[0]) : {
     platformName: "TasksEarn",
     referralReward: 200,
-    withdrawalFee: 100,
-    minWithdrawal: 200,
-    minDeposit: 200,
+    withdrawalFee: 50,
+    minWithdrawal: 250,
+    minDeposit: 1e3,
     contactEmail: "support@tasksearn.com",
     contactPhone: "09164444315",
     telegramChannel: "https://t.me/tasksearn_ng",
@@ -464,9 +464,9 @@ async function bootstrapTables() {
         id SERIAL PRIMARY KEY,
         platform_name VARCHAR(100) NOT NULL DEFAULT 'TasksEarn',
         referral_reward DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
-        withdrawal_fee DECIMAL(10, 2) NOT NULL DEFAULT 100.00,
-        min_withdrawal DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
-        min_deposit DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
+        withdrawal_fee DECIMAL(10, 2) NOT NULL DEFAULT 50.00,
+        min_withdrawal DECIMAL(10, 2) NOT NULL DEFAULT 250.00,
+        min_deposit DECIMAL(10, 2) NOT NULL DEFAULT 1000.00,
         contact_email VARCHAR(150) NOT NULL DEFAULT 'support@tasksearn.com',
         contact_phone VARCHAR(50) NOT NULL DEFAULT '09164444315',
         telegram_channel VARCHAR(255) NULL,
@@ -585,6 +585,11 @@ async function bootstrapTables() {
         hidden_at   TIMESTAMP NOT NULL DEFAULT NOW(),
         UNIQUE(earner_id, task_id)
       )
+    `);
+    await client.query(`
+      UPDATE settings
+      SET withdrawal_fee = 50, min_withdrawal = 250, min_deposit = 1000
+      WHERE withdrawal_fee IN (100, 200) OR min_withdrawal IN (200, 2000) OR min_deposit IN (200, 500)
     `);
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
@@ -847,7 +852,7 @@ A submission is rejected if you did not follow the instructions, if you did not 
     ]);
     await client.query(`
       INSERT INTO settings (platform_name, referral_reward, withdrawal_fee, min_withdrawal, min_deposit, contact_email, contact_phone, telegram_channel, whatsapp_group)
-      VALUES ('TasksEarn', 0, 100, 200, 200, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
+      VALUES ('TasksEarn', 0, 50, 250, 1000, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
     `);
     const pricing = getInitialPricing();
     for (const p of pricing) {
@@ -1729,8 +1734,8 @@ app.post("/api/earner/withdraw", async (req, res) => {
     }
     const settings = await getSettings();
     const withdrawAmount = parseFloat(amount);
-    if (isNaN(withdrawAmount) || withdrawAmount < (settings?.minWithdrawal || 200)) {
-      return res.status(400).json({ error: `Minimum withdrawal amount is \u20A6${settings?.minWithdrawal}` });
+    if (isNaN(withdrawAmount) || withdrawAmount < (settings?.minWithdrawal || 250)) {
+      return res.status(400).json({ error: `Minimum withdrawal amount is \u20A6${settings?.minWithdrawal || 250}` });
     }
     const pendingRes = await pool.query(
       "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE user_id = $1 AND type = 'Withdrawal' AND status = 'Pending'",
@@ -2049,8 +2054,8 @@ app.post("/api/advertiser/deposit/initialize", async (req, res) => {
     if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
     const settings = await getSettings();
     const depositAmount = parseFloat(req.body.amount);
-    if (isNaN(depositAmount) || depositAmount < (settings?.minDeposit || 200)) {
-      return res.status(400).json({ error: `Minimum deposit amount is \u20A6${settings?.minDeposit}` });
+    if (isNaN(depositAmount) || depositAmount < (settings?.minDeposit || 1e3)) {
+      return res.status(400).json({ error: `Minimum deposit amount is \u20A6${settings?.minDeposit || 1e3}` });
     }
     const txId = "tx-" + Math.random().toString(36).substr(2, 9);
     const ref = "DEP-" + Math.floor(1e7 + Math.random() * 9e7);
@@ -2565,7 +2570,7 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
         }
         await client.query("UPDATE transactions SET status='Success' WHERE id=$1", [transaction.id]);
         const settings = await getSettings();
-        const fee = settings?.withdrawalFee || 100;
+        const fee = settings?.withdrawalFee || 50;
         if (fee > 0) {
           wdCommData = { fee, txRef: transaction.reference || transaction.id, userName: transaction.userName || "", userId: transaction.userId };
         }
