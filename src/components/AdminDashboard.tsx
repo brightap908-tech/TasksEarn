@@ -1400,9 +1400,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                             onClick={() => {
                               setSelectedUserForBalance(usr);
                               setAdjustBalanceAmount(usr.walletBalance.toString());
-                              setTimeout(() => {
-                                window.scrollBy({ top: -120, behavior: "smooth" });
-                              }, 100);
+                              window.scrollTo({ top: 0, behavior: "smooth" });
                             }}
                             className="rounded bg-gray-100 hover:bg-red-50 hover:text-red-600 text-[10px] font-bold text-gray-700 px-2 py-1"
                           >

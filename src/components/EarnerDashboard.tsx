@@ -111,9 +111,18 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
   const [submitError, setSubmitError] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
 
+  // Scroll to top whenever the active tab changes
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [activeTab]);
+
   // History list
   const [submissions, setSubmissions] = React.useState<TaskSubmission[]>([]);
   const [transactions, setTransactions] = React.useState<any[]>([]);
+
+  // Task delete (hide) state
+  const [deleteConfirmTask, setDeleteConfirmTask] = React.useState<Task | null>(null);
+  const [deleting, setDeleting] = React.useState(false);
 
   // Referrals state
   const [referralsData, setReferralsData] = React.useState({
@@ -181,6 +190,23 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  // Hide (delete from view) a task for this earner only
+  const handleHideTask = async (task: Task) => {
+    setDeleting(true);
+    try {
+      await apiFetch(`/api/earner/tasks/${task.id}/hide`, { method: "POST" });
+      // Remove from local state immediately for instant UX
+      setTasks(prev => prev.filter(t => t.id !== task.id));
+      if (selectedTask?.id === task.id) setSelectedTask(null);
+    } catch (e) {
+      // Fallback: remove locally even if API fails (task will reappear on refresh if API failed)
+      setTasks(prev => prev.filter(t => t.id !== task.id));
+    } finally {
+      setDeleting(false);
+      setDeleteConfirmTask(null);
     }
   };
 
@@ -991,38 +1017,92 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                       <p className="text-[11px] text-gray-500 mt-1 line-clamp-2 leading-relaxed">{task.description}</p>
                     </div>
 
-                    <div className="border-t border-gray-50 mt-4 pt-3 flex items-center justify-between">
-                      <span className="text-[10px] text-gray-400 font-mono">
-                        Slots: {task.filledSlots}/{task.totalSlots} Completed
+                    <div className="border-t border-gray-50 mt-4 pt-3 flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-gray-400 font-mono shrink-0">
+                        {task.filledSlots}/{task.totalSlots} slots
                       </span>
-                      <button
-                        onClick={() => {
-                          setSelectedTask(task);
-                          setProofText("");
-                          setProofScreenshot("");
-                          setFileName("");
-                          setFileSize("");
-                          setSubmitError("");
-                          // Scroll down to the submission form
-                          setTimeout(() => {
-                            window.scrollBy({ top: 120, behavior: "smooth" });
-                          }, 100);
-                        }}
-                        className={`rounded-lg px-3 py-1.5 text-[10px] font-bold text-white transition-all cursor-pointer ${
-                          (task as any).submissionStatus === "Rejected"
-                            ? "bg-red-500 hover:bg-red-600"
-                            : "bg-gray-900 hover:bg-blue-600"
-                        }`}
-                      >
-                        {(task as any).submissionStatus === "Rejected" ? "Fix & Resubmit" : "Accept & Do Job"}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setDeleteConfirmTask(task)}
+                          title="Remove this task from your list"
+                          className="rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-red-500 border border-red-200 bg-red-50 hover:bg-red-100 transition-all cursor-pointer flex items-center gap-1"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Delete
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedTask(task);
+                            setProofText("");
+                            setProofScreenshot("");
+                            setFileName("");
+                            setFileSize("");
+                            setSubmitError("");
+                          }}
+                          className={`rounded-lg px-3 py-1.5 text-[10px] font-bold text-white transition-all cursor-pointer ${
+                            (task as any).submissionStatus === "Rejected"
+                              ? "bg-red-500 hover:bg-red-600"
+                              : "bg-gray-900 hover:bg-blue-600"
+                          }`}
+                        >
+                          {(task as any).submissionStatus === "Rejected" ? "Fix & Resubmit" : "Accept & Do Job"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
 
-          </div>
+          {/* ── Delete-task confirmation modal ── */}
+          {deleteConfirmTask && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }}>
+              <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+                <div className="mb-1 flex items-center gap-2">
+                  <div className="h-9 w-9 rounded-full bg-red-100 flex items-center justify-center">
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                  </div>
+                  <h3 className="font-display text-sm font-bold text-gray-900">Remove Task</h3>
+                </div>
+                <p className="mt-3 text-xs text-gray-500 leading-relaxed">
+                  Are you sure you want to remove{" "}
+                  <span className="font-bold text-gray-800">"{deleteConfirmTask.title}"</span>{" "}
+                  from your task list?
+                </p>
+                <p className="mt-2 text-[10px] text-gray-400 leading-relaxed">
+                  This only removes it from <span className="font-semibold">your</span> view. The task remains active for other earners and the advertiser's campaign is unaffected.
+                </p>
+                <div className="mt-5 flex gap-3">
+                  <button
+                    onClick={() => setDeleteConfirmTask(null)}
+                    disabled={deleting}
+                    className="flex-1 rounded-xl border border-gray-200 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleHideTask(deleteConfirmTask)}
+                    disabled={deleting}
+                    className="flex-1 rounded-xl bg-red-500 hover:bg-red-600 py-2.5 text-xs font-bold text-white shadow-sm transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    {deleting ? (
+                      <>
+                        <span className="h-3 w-3 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                        Removing…
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-3 w-3" />
+                        Yes, Remove Task
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
         )}
 
         {/* TAB 3: SUBMISSION HISTORY — split into 3 sections */}

@@ -977,7 +977,7 @@ export default function AdvertiserDashboard({
                           <td className="py-3 px-1 font-mono text-gray-500 max-w-xs truncate">{sub.proofText}</td>
                           <td className="py-3 px-1 text-right">
                             <button
-                              onClick={() => { setAuditingSub(sub); setTimeout(() => window.scrollBy({ top: 120, behavior: "smooth" }), 100); }}
+                              onClick={() => { setAuditingSub(sub); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                               className="rounded-lg px-2.5 py-1 text-[10px] font-bold text-white transition-all"
                               style={{ background: "#2563EB" }}
                             >
