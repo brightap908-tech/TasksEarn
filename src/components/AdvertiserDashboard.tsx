@@ -529,6 +529,7 @@ export default function AdvertiserDashboard({
         <div className="hidden lg:block rounded-2xl border border-slate-200 bg-white p-3 shadow-sm space-y-1">
           {navBtn("overview", "Dashboard", <LayoutDashboard className="h-4 w-4 text-slate-400" />)}
           {navBtn("create", "Create Campaign", <PlusCircle className="h-4 w-4 text-slate-400" />)}
+          {navBtn("price-list", "Task Price List", <Tags className="h-4 w-4 text-slate-400" />)}
           {navBtn("manage", `My Campaigns (${campaigns.length || stats.campaignsCount})`, <Briefcase className="h-4 w-4 text-slate-400" />)}
           {navBtn("wallet", "Wallet", <Wallet className="h-4 w-4 text-slate-400" />)}
           {navBtn("fund", "Fund Wallet", <Coins className="h-4 w-4 text-slate-400" />)}
@@ -1087,7 +1088,7 @@ export default function AdvertiserDashboard({
                     <Tags className="h-5 w-5 text-blue-500" /> Task Price List
                   </h2>
                   <p className="text-xs text-slate-500 mt-1">
-                    Advertiser campaign fees per completed task slot. Prices are set by the platform administrator and are subject to change.
+                    These are the current advertising prices. Your wallet will be charged according to the selected platform and the number of task slots you create.
                   </p>
                 </div>
                 <button
@@ -1121,13 +1122,35 @@ export default function AdvertiserDashboard({
                   </p>
                 </div>
 
-                <div className="overflow-x-auto">
+                {/* Mobile card list (visible below md) */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {advertiserPricing.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between px-4 py-4 hover:bg-blue-50/20 transition-colors">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-10 w-10 rounded-xl border border-slate-100 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                          {item.logoUrl ? (
+                            <img src={item.logoUrl} alt={item.platform} className="h-full w-full object-contain p-1" />
+                          ) : (
+                            <span className="text-sm font-black text-blue-600">{item.platform.substring(0, 2).toUpperCase()}</span>
+                          )}
+                        </div>
+                        <span className="font-bold text-slate-800 text-sm truncate">{item.platform}</span>
+                      </div>
+                      <div className="text-right shrink-0 ml-3">
+                        <span className="font-mono font-extrabold text-blue-600 text-base">₦{item.costPerSlot.toLocaleString()}</span>
+                        <span className="block text-[10px] text-slate-400 mt-0.5">per task</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop table (hidden below md) */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="bg-slate-50/60 text-[10px] text-slate-400 font-extrabold tracking-wider uppercase border-b border-slate-200">
                         <th className="px-5 py-4 w-1/2">Platform</th>
-                        <th className="px-5 py-4">Price per Completed Task</th>
-                        <th className="px-5 py-4 text-right">Example: 100 Slots</th>
+                        <th className="px-5 py-4">Advertiser Price Per Task (₦)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1149,10 +1172,7 @@ export default function AdvertiserDashboard({
                             <span className="inline-flex items-center gap-1 font-mono font-extrabold text-blue-600 text-base">
                               ₦{item.costPerSlot.toLocaleString()}
                             </span>
-                            <span className="text-[10px] text-slate-400 font-sans ml-1">/ slot</span>
-                          </td>
-                          <td className="px-5 py-4 text-right">
-                            <span className="font-mono font-bold text-slate-700">₦{(item.costPerSlot * 100).toLocaleString()}</span>
+                            <span className="text-[10px] text-slate-400 font-sans ml-1">/ task</span>
                           </td>
                         </tr>
                       ))}
@@ -1162,10 +1182,10 @@ export default function AdvertiserDashboard({
 
                 {/* CTA footer */}
                 <div className="border-t border-slate-100 bg-slate-50/40 px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <p className="text-[11px] text-slate-400">Prices include all platform service fees. Shown in Nigerian Naira (₦).</p>
+                  <p className="text-[11px] text-slate-400">All prices are in Nigerian Naira (₦) and include platform service fees.</p>
                   <button
                     onClick={() => setActiveTab("create")}
-                    className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2 text-xs font-bold text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2 text-xs font-bold text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-sm w-full sm:w-auto justify-center"
                   >
                     <PlusCircle className="h-3.5 w-3.5" /> Build a Campaign
                   </button>
