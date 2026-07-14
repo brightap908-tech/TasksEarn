@@ -9,6 +9,9 @@ channel = "stable-25_05"
 
 [userenv.shared]
 RESEND_FROM = "TasksEarn <noreply@tasksearn.name.ng>"
+VAPID_PRIVATE_KEY = "-jJrPHPChFYbKA1DsYKiWLRL8ncaZPuxO8aaT8rs70E"
+VAPID_PUBLIC_KEY = "BBSvaVRwuHlby78OvPeTwYqcNuj-QsfKQggCpJ4_ZafuByDhFiY-hcee6Bbze9rBlEB8N7AbOs3SzA1416m9yDk"
+VAPID_SUBJECT = "mailto:admin@tasksearn.com"
 
 [userenv.development]
 PORT = "5000"

@@ -14,6 +14,7 @@ import {
 import { usePlatforms } from "../lib/platformsStore";
 import PlatformIcon from "./PlatformIcon";
 import EarnerNotifications from "./EarnerNotifications";
+import PushNotificationSettings from "./PushNotificationSettings";
 import { 
   Briefcase, 
   DollarSign, 
@@ -1753,6 +1754,9 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
         {/* TAB: SETTINGS */}
         {activeTab === "settings" && (
           <div className="space-y-6">
+            {/* Push Notification Settings Card */}
+            <PushNotificationSettings apiFetch={apiFetch} showToast={showToast} />
+
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
               <h3 className="font-display text-sm font-bold text-gray-900 mb-6 flex items-center gap-2">
                 <Lock className="h-4 w-4 text-blue-500" /> Account Settings

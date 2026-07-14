@@ -9,6 +9,7 @@ import nodemailer from "nodemailer";
 import { createServer as createViteServer } from "vite";
 import { createServer as createHttpServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import webpush from "web-push";
 import {
   UserRole,
   TaskStatus,
@@ -25,6 +26,18 @@ import {
 const { Pool } = pg;
 
 const PORT = Number(process.env.PORT) || 5000;
+
+// ─── Web Push / VAPID Setup ───────────────────────────────────────────────────
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@tasksearn.com";
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  console.log("[Push] VAPID keys configured — browser push notifications enabled.");
+} else {
+  console.warn("[Push] VAPID keys not set — browser push notifications disabled. Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY.");
+}
 
 // Prefer the externally-hosted Neon database when configured; falls back to
 // the platform-provisioned DATABASE_URL only if NEON_DATABASE_URL is absent.
@@ -609,6 +622,21 @@ async function bootstrapTables() {
     // 21. Migrate: optional clickable link/button on login popup announcements.
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS link_url TEXT NULL`);
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS button_text TEXT NULL`);
+
+    // 22b. Browser Push Notification Subscriptions (Web Push / VAPID)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notification_subscriptions (
+        id           VARCHAR(50) PRIMARY KEY,
+        user_id      VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        endpoint     TEXT NOT NULL,
+        p256dh_key   TEXT NOT NULL,
+        auth_key     TEXT NOT NULL,
+        active       BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE(user_id, endpoint)
+      )
+    `);
 
     // 22. Earner-specific task hide list — tasks dismissed by individual earners.
     //     Deleting a task from this table does NOT affect the task itself or other earners.
@@ -1795,6 +1823,101 @@ app.post("/api/earner/notifications/:id/read", async (req, res) => {
     );
     res.json({ success: true, notification: result.rows.length > 0 ? mapEarnerNotification(result.rows[0]) : null });
   } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// ─── Browser Push Notification Endpoints ─────────────────────────────────────
+
+// GET /api/notifications/vapid-public-key — returns the VAPID public key for SW subscription
+app.get("/api/notifications/vapid-public-key", (_req, res) => {
+  if (!VAPID_PUBLIC_KEY) return res.status(503).json({ error: "Push notifications not configured on this server." });
+  res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+// GET /api/notifications/status — check if current earner has an active subscription
+app.get("/api/notifications/status", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query(
+      "SELECT created_at FROM notification_subscriptions WHERE user_id=$1 AND active=true ORDER BY created_at DESC LIMIT 1",
+      [user.id]
+    );
+    if (result.rows.length > 0) {
+      res.json({ subscribed: true, lastSubscribed: result.rows[0].created_at });
+    } else {
+      res.json({ subscribed: false });
+    }
+  } catch (err) {
+    console.error("[Push] Status check error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// POST /api/notifications/subscribe — save a browser push subscription for an earner
+app.post("/api/notifications/subscribe", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+    const { endpoint, p256dh, auth } = req.body;
+    if (!endpoint || !p256dh || !auth) {
+      return res.status(400).json({ error: "Missing subscription fields: endpoint, p256dh, auth" });
+    }
+
+    const id = "psub-" + Math.random().toString(36).substr(2, 9);
+    const now = new Date();
+
+    // Upsert: if this (user, endpoint) pair already exists, reactivate it and update keys
+    await pool.query(`
+      INSERT INTO notification_subscriptions (id, user_id, endpoint, p256dh_key, auth_key, active, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, true, $6, $6)
+      ON CONFLICT (user_id, endpoint)
+      DO UPDATE SET p256dh_key=$4, auth_key=$5, active=true, updated_at=$6
+    `, [id, user.id, endpoint, p256dh, auth, now]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[Push] Subscribe error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// POST /api/notifications/unsubscribe — deactivate an earner's push subscription
+app.post("/api/notifications/unsubscribe", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+    await pool.query(
+      "UPDATE notification_subscriptions SET active=false, updated_at=NOW() WHERE user_id=$1",
+      [user.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[Push] Unsubscribe error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// POST /api/notifications/send — admin endpoint to manually trigger push to all earners
+app.post("/api/notifications/send", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { title, body, url } = req.body;
+    const pushTitle = title || "🎉 New Task Available";
+    const pushBody = body || "A new earning task has been posted. Tap to complete it before it fills up.";
+    const pushUrl = url || "/earner/tasks";
+
+    const payload = JSON.stringify({ title: pushTitle, body: pushBody, url: pushUrl });
+    const sent = await sendBrowserPushToAllEarners(payload);
+    res.json({ success: true, sent });
+  } catch (err) {
+    console.error("[Push] Send error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // Note: Earner account activation fees have been removed. Earners are always
@@ -3620,6 +3743,50 @@ server.on("upgrade", (request, socket, head) => {
   }
 });
 
+// ─── Browser Push Helper ──────────────────────────────────────────────────────
+
+/**
+ * Sends a Web Push notification to every earner with an active subscription.
+ * Returns the count of successful deliveries.
+ */
+async function sendBrowserPushToAllEarners(payloadJson: string): Promise<number> {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return 0;
+
+  let sent = 0;
+  try {
+    const result = await pool.query(
+      "SELECT id, user_id, endpoint, p256dh_key, auth_key FROM notification_subscriptions WHERE active=true"
+    );
+
+    for (const row of result.rows) {
+      const pushSubscription = {
+        endpoint: row.endpoint,
+        keys: { p256dh: row.p256dh_key, auth: row.auth_key }
+      };
+      try {
+        await webpush.sendNotification(pushSubscription, payloadJson, {
+          TTL: 86400 // deliver within 24 hours even if browser is offline
+        });
+        sent++;
+      } catch (pushErr: any) {
+        // 410 Gone or 404 means the subscription is no longer valid
+        if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+          await pool.query(
+            "UPDATE notification_subscriptions SET active=false, updated_at=NOW() WHERE id=$1",
+            [row.id]
+          );
+          console.log(`[Push] Invalidated stale subscription ${row.id} for user ${row.user_id}`);
+        } else {
+          console.error(`[Push] Failed to send to ${row.user_id}:`, pushErr.message || pushErr);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Push] Error fetching subscriptions:", err);
+  }
+  return sent;
+}
+
 // ─── Earner Notification Broadcasting ────────────────────────────────────────
 
 async function notifyEarners(task: { id: string; title: string; category: string; earningPerSlot: number }) {
@@ -3663,6 +3830,19 @@ async function notifyEarners(task: { id: string; title: string; category: string
         client.send(broadcastPayload);
       }
     });
+
+    // Send browser push notifications to all earners with active subscriptions (fire-and-forget)
+    const pushPayload = JSON.stringify({
+      title: "🎉 New Task Available",
+      body: `A new earning task has been posted. Tap to complete it before it fills up.`,
+      url: "/earner/tasks",
+      tag: "tasksearn-new-task"
+    });
+    sendBrowserPushToAllEarners(pushPayload)
+      .then((sent) => {
+        if (sent > 0) console.log(`[Push] Sent browser push to ${sent} subscriber(s) for task: ${task.title}`);
+      })
+      .catch(() => {});
 
     console.log(`[Earner Notify] Notified ${earnersRes.rows.length} earner(s) about task: ${task.title}`);
   } catch (err) {

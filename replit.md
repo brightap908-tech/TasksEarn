@@ -47,6 +47,12 @@ The server starts on port **5000** and serves both the Express API and the Vite 
 | `SMTP_HOST/PORT/USER/PASSWORD/FROM` | Optional | Email via SMTP (fallback to Resend) |
 | `PAYSTACK_SECRET_KEY` | Optional | Required to accept real deposits |
 | `GEMINI_API_KEY` | Optional | AI features |
+| `VAPID_PUBLIC_KEY` | Set | Auto-generated VAPID public key for Web Push notifications |
+| `VAPID_PRIVATE_KEY` | Set | Auto-generated VAPID private key (store as Replit Secret) |
+| `VAPID_SUBJECT` | Set | VAPID contact email for Web Push (e.g. `mailto:admin@tasksearn.com`) |
+| `VAPID_PUBLIC_KEY` | Set | Auto-generated VAPID public key for Web Push |
+| `VAPID_PRIVATE_KEY` | Set | Auto-generated VAPID private key for Web Push |
+| `VAPID_SUBJECT` | Set | VAPID contact email (`mailto:admin@tasksearn.com`) |
 
 ## Theme
 
