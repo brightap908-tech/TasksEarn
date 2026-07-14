@@ -577,6 +577,15 @@ async function bootstrapTables() {
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL`);
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS link_url TEXT NULL`);
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS button_text TEXT NULL`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS hidden_tasks (
+        id          TEXT PRIMARY KEY,
+        earner_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        task_id     TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        hidden_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE(earner_id, task_id)
+      )
+    `);
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
   } catch (err) {
@@ -1410,8 +1419,11 @@ app.get("/api/earner/tasks", async (req, res) => {
       FROM tasks t
       LEFT JOIN submissions s
         ON s.task_id = t.id AND s.earner_id = $1
+      LEFT JOIN hidden_tasks ht
+        ON ht.task_id = t.id AND ht.earner_id = $1
       WHERE t.status = 'Active'
         AND (s.id IS NULL OR s.status = 'Rejected')
+        AND ht.id IS NULL
       ORDER BY t.created_at DESC
     `, [user.id]);
     res.json(tasks.rows.map((r) => ({
@@ -1420,6 +1432,24 @@ app.get("/api/earner/tasks", async (req, res) => {
       submissionFeedback: r.sub_feedback || null
     })));
   } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.post("/api/earner/tasks/:id/hide", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    const taskId = req.params.id;
+    const id = `ht_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    await pool.query(
+      `INSERT INTO hidden_tasks (id, earner_id, task_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (earner_id, task_id) DO NOTHING`,
+      [id, user.id, taskId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error hiding task:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
