@@ -665,6 +665,37 @@ async function bootstrapTables() {
       WHERE withdrawal_fee IN (100, 200) OR min_withdrawal IN (250, 2000) OR min_deposit IN (200, 500)
     `);
 
+    // 24. Update task_pricing to the official advertiser price list.
+    //     Each UPDATE is guarded on the OLD default values so any admin-edited
+    //     rows are left untouched. Idempotent on every restart.
+    const _pricingV2 = [
+      { platform: "Instagram",   cost: 20, earn: 13, oldCost: 15, oldEarn: 10 },
+      { platform: "Facebook",    cost: 20, earn: 13, oldCost: 15, oldEarn: 10 },
+      { platform: "TikTok",      cost: 25, earn: 17, oldCost: 15, oldEarn: 10 },
+      { platform: "YouTube",     cost: 30, earn: 20, oldCost: 25, oldEarn: 18 },
+      { platform: "X (Twitter)", cost: 20, earn: 13, oldCost: 15, oldEarn: 10 },
+      { platform: "Telegram",    cost: 15, earn: 10, oldCost: 18, oldEarn: 12 },
+      { platform: "WhatsApp",    cost: 15, earn: 10, oldCost: 18, oldEarn: 12 },
+      { platform: "Snapchat",    cost: 25, earn: 17, oldCost: 15, oldEarn: 10 },
+      { platform: "LinkedIn",    cost: 30, earn: 20, oldCost: 20, oldEarn: 14 },
+      { platform: "Threads",     cost: 20, earn: 13, oldCost: 15, oldEarn: 10 },
+      { platform: "Pinterest",   cost: 20, earn: 13, oldCost: 15, oldEarn: 10 },
+      { platform: "Reddit",      cost: 25, earn: 17, oldCost: 18, oldEarn: 12 },
+      { platform: "Discord",     cost: 20, earn: 13, oldCost: 20, oldEarn: 14 },
+      { platform: "Messenger",   cost: 15, earn: 10, oldCost: 15, oldEarn: 10 },
+      { platform: "Kwai",        cost: 20, earn: 13, oldCost: 15, oldEarn: 10 },
+      { platform: "Likee",       cost: 20, earn: 13, oldCost: 15, oldEarn: 10 },
+    ];
+    for (const p of _pricingV2) {
+      await client.query(
+        `UPDATE task_pricing
+         SET cost_per_slot = $1, earning_per_slot = $2
+         WHERE LOWER(platform) = LOWER($3)
+           AND cost_per_slot = $4 AND earning_per_slot = $5`,
+        [p.cost, p.earn, p.platform, p.oldCost, p.oldEarn]
+      );
+    }
+
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
   } catch (err) {
@@ -681,22 +712,22 @@ async function bootstrapTables() {
 function getInitialPricing(): TaskPricing[] {
   const platforms = Object.values(Platform);
   const defaults: Record<Platform, { cost: number; earn: number }> = {
-    [Platform.INSTAGRAM]: { cost: 15, earn: 10 },
-    [Platform.FACEBOOK]: { cost: 15, earn: 10 },
-    [Platform.TIKTOK]: { cost: 15, earn: 10 },
-    [Platform.YOUTUBE]: { cost: 25, earn: 18 },
-    [Platform.X_TWITTER]: { cost: 15, earn: 10 },
-    [Platform.TELEGRAM]: { cost: 18, earn: 12 },
-    [Platform.WHATSAPP]: { cost: 18, earn: 12 },
-    [Platform.SNAPCHAT]: { cost: 15, earn: 10 },
-    [Platform.LINKEDIN]: { cost: 20, earn: 14 },
-    [Platform.THREADS]: { cost: 15, earn: 10 },
-    [Platform.PINTEREST]: { cost: 15, earn: 10 },
-    [Platform.REDDIT]: { cost: 18, earn: 12 },
-    [Platform.DISCORD]: { cost: 20, earn: 14 },
+    [Platform.INSTAGRAM]: { cost: 20, earn: 13 },
+    [Platform.FACEBOOK]: { cost: 20, earn: 13 },
+    [Platform.TIKTOK]: { cost: 25, earn: 17 },
+    [Platform.YOUTUBE]: { cost: 30, earn: 20 },
+    [Platform.X_TWITTER]: { cost: 20, earn: 13 },
+    [Platform.TELEGRAM]: { cost: 15, earn: 10 },
+    [Platform.WHATSAPP]: { cost: 15, earn: 10 },
+    [Platform.SNAPCHAT]: { cost: 25, earn: 17 },
+    [Platform.LINKEDIN]: { cost: 30, earn: 20 },
+    [Platform.THREADS]: { cost: 20, earn: 13 },
+    [Platform.PINTEREST]: { cost: 20, earn: 13 },
+    [Platform.REDDIT]: { cost: 25, earn: 17 },
+    [Platform.DISCORD]: { cost: 20, earn: 13 },
     [Platform.MESSENGER]: { cost: 15, earn: 10 },
-    [Platform.KWAI]: { cost: 15, earn: 10 },
-    [Platform.LIKEE]: { cost: 15, earn: 10 },
+    [Platform.KWAI]: { cost: 20, earn: 13 },
+    [Platform.LIKEE]: { cost: 20, earn: 13 },
     [Platform.CUSTOM]: { cost: 30, earn: 20 }
   };
   return platforms.map((plat, idx) => ({
