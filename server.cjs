@@ -575,6 +575,8 @@ async function bootstrapTables() {
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT TRUE`);
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS dismissible BOOLEAN NOT NULL DEFAULT TRUE`);
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL`);
+    await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS link_url TEXT NULL`);
+    await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS button_text TEXT NULL`);
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
   } catch (err) {
@@ -985,6 +987,8 @@ app.get("/api/public/announcements", async (_req, res) => {
       type: r.type,
       enabled: r.enabled,
       dismissible: r.dismissible,
+      linkUrl: r.link_url || null,
+      buttonText: r.button_text || null,
       createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at
     })));
   } catch (err) {
@@ -1007,6 +1011,8 @@ app.get("/api/user/login-popup", async (req, res) => {
         content: r.content,
         type: r.type,
         dismissible: r.dismissible,
+        linkUrl: r.link_url || null,
+        buttonText: r.button_text || null,
         createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at
       }
     });
@@ -2598,9 +2604,27 @@ function mapAnnouncement(r) {
     type: r.type,
     enabled: r.enabled,
     dismissible: r.dismissible,
+    linkUrl: r.link_url || null,
+    buttonText: r.button_text || null,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
     updatedAt: r.updated_at instanceof Date ? r.updated_at.toISOString() : r.updated_at
   };
+}
+function validateAnnouncementLink(linkUrl) {
+  if (linkUrl === void 0 || linkUrl === null || linkUrl === "") return null;
+  if (typeof linkUrl !== "string") throw new Error("Link URL must be text");
+  const trimmed = linkUrl.trim();
+  if (trimmed === "") return null;
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("Link URL must be a valid http:// or https:// URL");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Link URL must start with http:// or https://");
+  }
+  return trimmed;
 }
 app.get("/api/admin/announcements", async (req, res) => {
   try {
@@ -2616,13 +2640,20 @@ app.post("/api/admin/announcements", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
-    const { title, content, type, dismissible } = req.body;
+    const { title, content, type, dismissible, linkUrl, buttonText } = req.body;
     if (!title || !content) return res.status(400).json({ error: "Title and Content are required" });
+    let validatedLink;
+    try {
+      validatedLink = validateAnnouncementLink(linkUrl);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+    const finalButtonText = validatedLink ? buttonText && String(buttonText).trim() ? String(buttonText).trim() : "Learn More" : null;
     const id = "ann-" + Math.random().toString(36).substr(2, 9);
     const result = await pool.query(
-      `INSERT INTO announcements (id, title, content, type, enabled, dismissible, created_at)
-       VALUES ($1,$2,$3,$4,true,$5,$6) RETURNING *`,
-      [id, title, content, type || "info", dismissible !== false, /* @__PURE__ */ new Date()]
+      `INSERT INTO announcements (id, title, content, type, enabled, dismissible, link_url, button_text, created_at)
+       VALUES ($1,$2,$3,$4,true,$5,$6,$7,$8) RETURNING *`,
+      [id, title, content, type || "info", dismissible !== false, validatedLink, finalButtonText, /* @__PURE__ */ new Date()]
     );
     res.json({ success: true, announcement: mapAnnouncement(result.rows[0]) });
   } catch (err) {
@@ -2633,11 +2664,18 @@ app.put("/api/admin/announcements/:id", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
-    const { title, content, type, dismissible } = req.body;
+    const { title, content, type, dismissible, linkUrl, buttonText } = req.body;
     if (!title || !content) return res.status(400).json({ error: "Title and Content are required" });
+    let validatedLink;
+    try {
+      validatedLink = validateAnnouncementLink(linkUrl);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+    const finalButtonText = validatedLink ? buttonText && String(buttonText).trim() ? String(buttonText).trim() : "Learn More" : null;
     const result = await pool.query(
-      `UPDATE announcements SET title=$1, content=$2, type=$3, dismissible=$4, updated_at=$5 WHERE id=$6 RETURNING *`,
-      [title, content, type || "info", dismissible !== false, /* @__PURE__ */ new Date(), req.params.id]
+      `UPDATE announcements SET title=$1, content=$2, type=$3, dismissible=$4, link_url=$5, button_text=$6, updated_at=$7 WHERE id=$8 RETURNING *`,
+      [title, content, type || "info", dismissible !== false, validatedLink, finalButtonText, /* @__PURE__ */ new Date(), req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: "Announcement not found" });
     res.json({ success: true, announcement: mapAnnouncement(result.rows[0]) });
