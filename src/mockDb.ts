@@ -41,6 +41,18 @@ interface DBState {
 
 const STORAGE_KEY = "tasksearn_mock_db";
 
+// Only allow http:// or https:// URLs to be saved as an announcement link (mirrors server.ts).
+function validateAnnouncementLinkUrl(linkUrl: unknown): string | null {
+  if (linkUrl === undefined || linkUrl === null || linkUrl === "") return null;
+  if (typeof linkUrl !== "string") throw new Error("Link URL must be text");
+  const trimmed = linkUrl.trim();
+  if (trimmed === "") return null;
+  if (!/^https?:\/\/.+/i.test(trimmed)) {
+    throw new Error("Link URL must start with http:// or https://");
+  }
+  return trimmed;
+}
+
 function hashPassword(password: string): string {
   // Simple deterministic client-side hash
   let hash = 0;
@@ -286,6 +298,8 @@ function getInitialData(): DBState {
       type: "success",
       enabled: false,
       dismissible: true,
+      linkUrl: null,
+      buttonText: null,
       createdAt: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString()
     },
     {
@@ -295,6 +309,8 @@ function getInitialData(): DBState {
       type: "info",
       enabled: true,
       dismissible: true,
+      linkUrl: null,
+      buttonText: null,
       createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString()
     }
   ];
@@ -1331,6 +1347,13 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
       }
 
       if (endpoint === "/api/admin/announcements" && method === "POST") {
+        let validatedLink: string | null;
+        try {
+          validatedLink = validateAnnouncementLinkUrl(body.linkUrl);
+        } catch (e: any) {
+          resolve({ error: e.message });
+          return;
+        }
         const newAnn: Announcement = {
           id: `ann-${Date.now()}`,
           title: body.title,
@@ -1338,6 +1361,8 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
           type: body.type || "info",
           enabled: true,
           dismissible: body.dismissible !== false,
+          linkUrl: validatedLink,
+          buttonText: validatedLink ? (body.buttonText && String(body.buttonText).trim() ? String(body.buttonText).trim() : "Learn More") : null,
           createdAt: new Date().toISOString()
         };
         db.announcements.push(newAnn);
@@ -1365,10 +1390,19 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
         const annId = parts[4];
         const ann = db.announcements.find(a => a.id === annId);
         if (ann) {
+          let validatedLink: string | null;
+          try {
+            validatedLink = validateAnnouncementLinkUrl(body.linkUrl);
+          } catch (e: any) {
+            resolve({ error: e.message });
+            return;
+          }
           ann.title = body.title;
           ann.content = body.content;
           ann.type = body.type || "info";
           ann.dismissible = body.dismissible !== false;
+          ann.linkUrl = validatedLink;
+          ann.buttonText = validatedLink ? (body.buttonText && String(body.buttonText).trim() ? String(body.buttonText).trim() : "Learn More") : null;
           saveDB(db);
           resolve({ success: true, announcement: ann });
         } else {

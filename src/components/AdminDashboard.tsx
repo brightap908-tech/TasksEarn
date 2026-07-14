@@ -163,8 +163,11 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   const [annContent, setAnnContent] = React.useState("");
   const [annType, setAnnType] = React.useState<"info" | "success" | "warning">("info");
   const [annDismissible, setAnnDismissible] = React.useState(true);
+  const [annLinkUrl, setAnnLinkUrl] = React.useState("");
+  const [annButtonText, setAnnButtonText] = React.useState("");
   const [annEditingId, setAnnEditingId] = React.useState<string | null>(null);
   const [annSuccess, setAnnSuccess] = React.useState("");
+  const [annError, setAnnError] = React.useState("");
 
   // Banner state
   const [banTitle, setBanTitle] = React.useState("");
@@ -839,13 +842,24 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
     e.preventDefault();
     if (!annTitle || !annContent) return;
     setAnnSuccess("");
+    setAnnError("");
+
+    // Client-side validation mirrors the server: only allow http(s) links.
+    const trimmedLink = annLinkUrl.trim();
+    if (trimmedLink && !/^https?:\/\/.+/i.test(trimmedLink)) {
+      setAnnError("Link URL must start with http:// or https://");
+      return;
+    }
 
     try {
       const isEditing = !!annEditingId;
       const res = await apiFetch(isEditing ? `/api/admin/announcements/${annEditingId}` : "/api/admin/announcements", {
         method: isEditing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: annTitle, content: annContent, type: annType, dismissible: annDismissible })
+        body: JSON.stringify({
+          title: annTitle, content: annContent, type: annType, dismissible: annDismissible,
+          linkUrl: trimmedLink || null, buttonText: annButtonText.trim() || null
+        })
       });
 
       if (res && res.success) {
@@ -854,8 +868,12 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         setAnnContent("");
         setAnnType("info");
         setAnnDismissible(true);
+        setAnnLinkUrl("");
+        setAnnButtonText("");
         setAnnEditingId(null);
         fetchAnnouncementsAndBanners();
+      } else if (res && res.error) {
+        setAnnError(res.error);
       }
     } catch (e) {}
   };
@@ -867,7 +885,10 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
     setAnnContent(ann.content);
     setAnnType(ann.type);
     setAnnDismissible(ann.dismissible);
+    setAnnLinkUrl(ann.linkUrl || "");
+    setAnnButtonText(ann.buttonText || "");
     setAnnSuccess("");
+    setAnnError("");
   };
 
   const handleCancelEditAnnouncement = () => {
@@ -876,6 +897,9 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
     setAnnContent("");
     setAnnType("info");
     setAnnDismissible(true);
+    setAnnLinkUrl("");
+    setAnnButtonText("");
+    setAnnError("");
   };
 
   // Enable / disable the login popup announcement
@@ -2062,6 +2086,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
               </p>
 
               {annSuccess && <p className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs font-bold text-blue-800 mb-4">{annSuccess}</p>}
+              {annError && <p className="rounded-lg bg-red-50 border border-red-100 p-3 text-xs font-bold text-red-700 mb-4">{annError}</p>}
 
               <form onSubmit={handlePostAnnouncement} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2100,6 +2125,32 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                     placeholder="Provide the full message shown to earners and advertisers when they log in..."
                     className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-red-500"
                   ></textarea>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Link URL (optional)</label>
+                    <input
+                      type="url"
+                      value={annLinkUrl}
+                      onChange={(e) => setAnnLinkUrl(e.target.value)}
+                      placeholder="https://chat.whatsapp.com/..."
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Must start with http:// or https:// — e.g. a WhatsApp group, Telegram channel, or website link.</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Button Text (optional)</label>
+                    <input
+                      type="text"
+                      value={annButtonText}
+                      onChange={(e) => setAnnButtonText(e.target.value)}
+                      placeholder="e.g. Join WhatsApp Group"
+                      disabled={!annLinkUrl.trim()}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Defaults to "Learn More" if left blank. Only used when a Link URL is set.</p>
+                  </div>
                 </div>
 
                 <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -2143,8 +2194,16 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                         <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-slate-50 text-slate-500 border border-slate-200">
                           {ann.dismissible ? "Dismissible" : "Requires OK"}
                         </span>
+                        {ann.linkUrl && (
+                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-200">
+                            🔗 {ann.buttonText || "Learn More"}
+                          </span>
+                        )}
                       </div>
                       <p className="text-[11px] text-gray-500 mt-0.5">{ann.content}</p>
+                      {ann.linkUrl && (
+                        <p className="text-[10px] text-blue-500 mt-0.5 truncate max-w-xs">{ann.linkUrl}</p>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <button

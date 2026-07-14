@@ -1,5 +1,5 @@
 import React from "react";
-import { X, Info, CheckCircle2, AlertTriangle, Megaphone } from "lucide-react";
+import { X, Info, CheckCircle2, AlertTriangle, Megaphone, ExternalLink } from "lucide-react";
 import { Announcement } from "../types";
 
 interface LoginPopupModalProps {
@@ -61,12 +61,29 @@ export default function LoginPopupModal({ announcement, onClose }: LoginPopupMod
             {announcement.content}
           </p>
 
-          <button
-            onClick={onClose}
-            className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-sm font-bold text-white py-3 shadow-md transition-all cursor-pointer"
-          >
-            OK, Got It
-          </button>
+          <div className="space-y-2.5">
+            {announcement.linkUrl && (
+              <a
+                href={announcement.linkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-sm font-bold text-white py-3 px-4 shadow-md hover:shadow-lg transition-all cursor-pointer text-center break-words"
+              >
+                <ExternalLink className="h-4 w-4 shrink-0" />
+                <span>{announcement.buttonText || "Learn More"}</span>
+              </a>
+            )}
+            <button
+              onClick={onClose}
+              className={
+                announcement.linkUrl
+                  ? "w-full rounded-xl bg-blue-50 hover:bg-blue-100 text-sm font-bold text-blue-700 py-3 border border-blue-200 transition-all cursor-pointer"
+                  : "w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-sm font-bold text-white py-3 shadow-md transition-all cursor-pointer"
+              }
+            >
+              OK, Got It
+            </button>
+          </div>
         </div>
       </div>
     </div>

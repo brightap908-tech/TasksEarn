@@ -176,6 +176,8 @@ export interface Announcement {
   type: "info" | "success" | "warning";
   enabled: boolean;
   dismissible: boolean;
+  linkUrl?: string | null;
+  buttonText?: string | null;
   createdAt: string;
   updatedAt?: string;
 }
