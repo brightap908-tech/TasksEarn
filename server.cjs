@@ -396,7 +396,7 @@ async function bootstrapTables() {
         earner_id VARCHAR(50) NOT NULL,
         earner_name VARCHAR(150) NOT NULL,
         proof_text TEXT NOT NULL,
-        proof_screenshot VARCHAR(1000) NULL,
+        proof_screenshot TEXT NULL,
         status VARCHAR(50) NOT NULL DEFAULT 'Pending',
         feedback TEXT NULL,
         reward DECIMAL(10, 2) NOT NULL,
@@ -566,6 +566,9 @@ async function bootstrapTables() {
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs JSONB NULL`);
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_admin_task BOOLEAN NOT NULL DEFAULT FALSE`);
+    await client.query(
+      "ALTER TABLE submissions ALTER COLUMN proof_screenshot TYPE TEXT"
+    );
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
   } catch (err) {
@@ -1393,12 +1396,15 @@ app.get("/api/earner/tasks", async (req, res) => {
   }
 });
 app.post("/api/earner/tasks/:id/submit", async (req, res) => {
+  const client = await pool.connect();
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
     const taskId = req.params.id;
     const { proofText, proofScreenshot } = req.body;
-    if (!proofText) return res.status(400).json({ error: "Proof details are required" });
+    if (!proofText && !proofScreenshot) {
+      return res.status(400).json({ error: "Please provide proof details: notes, a link, or a screenshot." });
+    }
     const taskRes = await pool.query("SELECT * FROM tasks WHERE id = $1", [taskId]);
     if (taskRes.rows.length === 0 || taskRes.rows[0].status !== "Active" /* ACTIVE */) {
       return res.status(404).json({ error: "Task is not active or not found" });
@@ -1407,18 +1413,30 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
     const alreadySub = await pool.query("SELECT id FROM submissions WHERE task_id = $1 AND earner_id = $2", [taskId, user.id]);
     if (alreadySub.rows.length > 0) return res.status(400).json({ error: "You have already submitted a proof for this task" });
     if (task.filledSlots >= task.totalSlots) return res.status(400).json({ error: "This task has reached its submission limit" });
-    const screenshot = proofScreenshot || "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=300&auto=format&fit=crop&q=60";
+    const screenshot = proofScreenshot || null;
+    const finalProofText = proofText || "See uploaded screenshot proof.";
     const subId = "sub-" + Math.random().toString(36).substr(2, 9);
-    await pool.query(`
+    await client.query("BEGIN");
+    await client.query(`
       INSERT INTO submissions (id, task_id, task_title, category, earner_id, earner_name, proof_text, proof_screenshot, status, reward, submitted_at)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Pending',$9,$10)
-    `, [subId, taskId, task.title, task.category, user.id, user.name, proofText, screenshot, task.earningPerSlot, /* @__PURE__ */ new Date()]);
+    `, [subId, taskId, task.title, task.category, user.id, user.name, finalProofText, screenshot, task.earningPerSlot, /* @__PURE__ */ new Date()]);
+    await client.query("UPDATE tasks SET filled_slots = filled_slots + 1 WHERE id = $1", [taskId]);
+    await client.query("COMMIT");
     notifyAdmin({ type: "submission", message: `New task submission from ${user.name} for "${task.title}"`, referenceId: subId });
     const subRes = await pool.query("SELECT * FROM submissions WHERE id = $1", [subId]);
-    res.json({ success: true, submission: mapSubmission(subRes.rows[0]) });
+    res.status(201).json({ success: true, message: "Task submitted successfully", submission: mapSubmission(subRes.rows[0]) });
   } catch (err) {
-    console.error("Submit error:", err);
-    res.status(500).json({ error: "Server error" });
+    await client.query("ROLLBACK").catch(() => {
+    });
+    console.error("[Submit task] Error:", err);
+    const isDev = process.env.NODE_ENV !== "production";
+    res.status(500).json({
+      error: isDev ? err?.message || "Server error" : "Server error",
+      ...isDev && err?.detail ? { detail: err.detail } : {}
+    });
+  } finally {
+    client.release();
   }
 });
 app.get("/api/earner/submissions", async (req, res) => {
