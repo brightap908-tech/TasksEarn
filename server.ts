@@ -27,17 +27,14 @@ const { Pool } = pg;
 
 const PORT = Number(process.env.PORT) || 5000;
 
-// ─── Web Push / VAPID Setup ───────────────────────────────────────────────────
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
+// ─── Web Push / VAPID ─────────────────────────────────────────────────────────
+// Keys are NOT stored in environment variables or config files.
+// On first boot, the server generates a fresh VAPID keypair and persists
+// both keys in the `vapid_keys` database table. Subsequent boots reload
+// from the database, so the private key never appears in source or config.
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@tasksearn.com";
-
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-  console.log("[Push] VAPID keys configured — browser push notifications enabled.");
-} else {
-  console.warn("[Push] VAPID keys not set — browser push notifications disabled. Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY.");
-}
+let vapidPublicKey = "";   // populated by ensureVapidKeys() at startup
+let vapidPrivateKey = "";  // populated by ensureVapidKeys() at startup
 
 // Prefer the externally-hosted Neon database when configured; falls back to
 // the platform-provisioned DATABASE_URL only if NEON_DATABASE_URL is absent.
@@ -622,6 +619,16 @@ async function bootstrapTables() {
     // 21. Migrate: optional clickable link/button on login popup announcements.
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS link_url TEXT NULL`);
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS button_text TEXT NULL`);
+
+    // 22a. VAPID keypair — auto-generated on first boot, never stored in config files.
+    //      Only the server (via its DB connection) can read the private key.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS vapid_keys (
+        key        VARCHAR(20) PRIMARY KEY,
+        value      TEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
 
     // 22b. Browser Push Notification Subscriptions (Web Push / VAPID)
     await client.query(`
@@ -1829,8 +1836,8 @@ app.post("/api/earner/notifications/:id/read", async (req, res) => {
 
 // GET /api/notifications/vapid-public-key — returns the VAPID public key for SW subscription
 app.get("/api/notifications/vapid-public-key", (_req, res) => {
-  if (!VAPID_PUBLIC_KEY) return res.status(503).json({ error: "Push notifications not configured on this server." });
-  res.json({ publicKey: VAPID_PUBLIC_KEY });
+  if (!vapidPublicKey) return res.status(503).json({ error: "Push notifications not configured on this server." });
+  res.json({ publicKey: vapidPublicKey });
 });
 
 // GET /api/notifications/status — check if current earner has an active subscription
@@ -3750,7 +3757,7 @@ server.on("upgrade", (request, socket, head) => {
  * Returns the count of successful deliveries.
  */
 async function sendBrowserPushToAllEarners(payloadJson: string): Promise<number> {
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return 0;
+  if (!vapidPublicKey || !vapidPrivateKey) return 0;
 
   let sent = 0;
   try {
@@ -3905,6 +3912,38 @@ async function startServer() {
   });
 }
 
+// ─── VAPID Key Management ─────────────────────────────────────────────────────
+
+/**
+ * Loads or auto-generates the VAPID keypair.
+ * Keys are stored in the `vapid_keys` database table — never in env vars or config files.
+ * The private key is readable only via a direct database connection; it never
+ * appears in source code, `.replit`, or any committed file.
+ */
+async function ensureVapidKeys() {
+  const result = await pool.query("SELECT key, value FROM vapid_keys");
+  const keyMap: Record<string, string> = {};
+  for (const row of result.rows) keyMap[row.key] = row.value;
+
+  if (keyMap["public"] && keyMap["private"]) {
+    vapidPublicKey = keyMap["public"];
+    vapidPrivateKey = keyMap["private"];
+    webpush.setVapidDetails(VAPID_SUBJECT, vapidPublicKey, vapidPrivateKey);
+    console.log("[Push] VAPID keys loaded from database — push notifications enabled.");
+  } else {
+    // First boot: generate a fresh keypair and persist it
+    const keys = webpush.generateVAPIDKeys();
+    vapidPublicKey = keys.publicKey;
+    vapidPrivateKey = keys.privateKey;
+    await pool.query(`
+      INSERT INTO vapid_keys (key, value) VALUES ('public', $1), ('private', $2)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+    `, [vapidPublicKey, vapidPrivateKey]);
+    webpush.setVapidDetails(VAPID_SUBJECT, vapidPublicKey, vapidPrivateKey);
+    console.log("[Push] Generated new VAPID keypair and stored in database.");
+  }
+}
+
 // ─── Bootstrap & Start ────────────────────────────────────────────────────────
 
 (async () => {
@@ -3912,6 +3951,7 @@ async function startServer() {
     await bootstrapTables();
     await seedDatabase();
     await ensurePlatformsSeeded();
+    await ensureVapidKeys();
     await startServer();
   } catch (err) {
     console.error("FATAL: Failed to start server:", err);
