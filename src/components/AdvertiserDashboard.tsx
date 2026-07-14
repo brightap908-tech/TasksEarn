@@ -477,7 +477,7 @@ export default function AdvertiserDashboard({
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
       {/* ── Sidebar ── */}
-      <div className="lg:col-span-1 space-y-4">
+      <div className="lg:col-span-1 space-y-4 lg:sticky lg:top-20 lg:self-start">
 
         {/* Profile Card */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm text-center">

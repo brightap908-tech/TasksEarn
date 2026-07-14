@@ -1198,7 +1198,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
       
       {/* Left Sidebar Menu Rail */}
-      <div className="lg:col-span-1 space-y-1">
+      <div className="lg:col-span-1 space-y-1 lg:sticky lg:top-20 lg:self-start">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-2">Admin Dashboard</p>
 
         {([

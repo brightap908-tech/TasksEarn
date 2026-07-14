@@ -507,7 +507,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
       
       {/* Sidebar Nav Panels */}
-      <div className="lg:col-span-1 space-y-4">
+      <div className="lg:col-span-1 space-y-4 lg:sticky lg:top-20 lg:self-start">
         
         {/* Simple Profile Widget */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs text-center">

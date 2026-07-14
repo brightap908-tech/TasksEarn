@@ -1619,8 +1619,7 @@ export default function App() {
         {/* ROLE PROTECTED: EARNER DASHBOARD PANELS */}
         <Route path="/earner/:section" element={
           user && user.role === UserRole.EARNER ? (
-            <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-              <BackButton fallback="/" />
+            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
               <EarnerDashboard 
                 user={user} 
                 onRefreshUser={refreshUserSession}
@@ -1645,8 +1644,7 @@ export default function App() {
         {/* ROLE PROTECTED: ADVERTISER DASHBOARD PANELS */}
         <Route path="/advertiser/:section" element={
           user && user.role === UserRole.ADVERTISER ? (
-            <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-              <BackButton fallback="/" />
+            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
               <AdvertiserDashboard 
                 user={user} 
                 onRefreshUser={refreshUserSession}
@@ -1662,8 +1660,7 @@ export default function App() {
         {/* ROLE PROTECTED: ADMIN PANEL */}
         <Route path="/admin/:section" element={
           user && user.role === UserRole.ADMIN ? (
-            <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-              <BackButton fallback="/" />
+            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
               <AdminDashboard 
                 user={user} 
                 onRefreshUser={refreshUserSession}
