@@ -141,8 +141,8 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
   const [withdrawSuccess, setWithdrawSuccess] = React.useState(false);
   const [withdrawError, setWithdrawError] = React.useState("");
   const [withdrawSubmitting, setWithdrawSubmitting] = React.useState(false);
-  const [minWithdrawLimit, setMinWithdrawLimit] = React.useState(2000);
-  const [withdrawFee, setWithdrawFee] = React.useState(100);
+  const [minWithdrawLimit, setMinWithdrawLimit] = React.useState(250);
+  const [withdrawFee, setWithdrawFee] = React.useState(50);
 
   // Bank verification state
   const [verifying, setVerifying] = React.useState(false);
@@ -1353,9 +1353,13 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
           <div className="space-y-6">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
               <h3 className="font-display text-sm font-bold text-gray-900 mb-2">Request Withdrawal Payout</h3>
-              <p className="text-xs text-gray-400 mb-6">
-                Payouts are processed weekly to your local Nigerian bank. Processing fees: flat <strong>₦{withdrawFee}</strong> per transaction.
-              </p>
+              <div className="rounded-xl bg-blue-50 border border-blue-100 p-3 mb-5 flex flex-wrap items-center gap-3 text-xs">
+                <span className="font-bold text-blue-800">Minimum withdrawal: ₦{minWithdrawLimit.toLocaleString()}</span>
+                <span className="text-blue-400">•</span>
+                <span className="text-blue-700">Fixed processing fee: <strong>₦{withdrawFee}</strong> per request</span>
+                <span className="text-blue-400">•</span>
+                <span className="text-blue-600 italic">You receive amount minus ₦{withdrawFee} fee</span>
+              </div>
 
               {withdrawSuccess ? (
                 <div className="rounded-xl bg-blue-50 border border-blue-100 p-5 text-center animate-fadeIn space-y-2">
@@ -1394,6 +1398,13 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                       className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none font-mono"
                     />
                     <span className="block text-[10px] text-gray-400 mt-1">Available balance: ₦{user.walletBalance.toLocaleString()}</span>
+                    {withdrawAmount && !isNaN(parseFloat(withdrawAmount)) && parseFloat(withdrawAmount) >= minWithdrawLimit && (
+                      <div className="mt-2 rounded-lg border border-green-100 bg-green-50 px-3 py-2 text-[11px] font-semibold text-green-800 flex flex-wrap gap-x-4 gap-y-1">
+                        <span>Requested: <span className="font-mono">₦{parseFloat(withdrawAmount).toLocaleString()}</span></span>
+                        <span className="text-red-600">Fee: <span className="font-mono">−₦{withdrawFee}</span></span>
+                        <span className="text-green-700 font-bold">You receive: <span className="font-mono">₦{(parseFloat(withdrawAmount) - withdrawFee).toLocaleString()}</span></span>
+                      </div>
+                    )}
                   </div>
 
                   <div>

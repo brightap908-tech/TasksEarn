@@ -77,8 +77,8 @@ export default function App() {
   const [settings, setSettings] = React.useState<WebsiteSettings>({
     platformName: "TasksEarn",
     referralReward: 0,
-    withdrawalFee: 100,
-    minWithdrawal: 2000,
+    withdrawalFee: 50,
+    minWithdrawal: 250,
     minDeposit: 1000,
     contactEmail: "support@tasksearn.com",
     contactPhone: "09164444315",

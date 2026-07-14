@@ -1258,9 +1258,15 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Pending Withdrawals Queue</span>
                 <span className="block font-mono text-2xl font-black text-amber-500 mt-1">₦{stats.pendingWithdrawals.toLocaleString()}</span>
               </div>
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-                <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Advertisers Deposits</span>
-                <span className="block font-mono text-2xl font-black text-indigo-600 mt-1">₦{stats.totalDeposited.toLocaleString()}</span>
+              <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-5 shadow-sm">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <ArrowDownCircle className="h-3.5 w-3.5 text-indigo-400" />
+                  <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Total Advertiser Deposits</span>
+                </div>
+                <span className="block font-mono text-2xl font-black text-indigo-700">
+                  ₦{stats.totalDeposited.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+                <span className="block text-[10px] text-indigo-400 mt-1">All-time successful deposits</span>
               </div>
               <div className="rounded-2xl border border-blue-100 bg-blue-50/5 p-5 shadow-sm hover:bg-blue-50/20 transition-all cursor-pointer flex flex-col justify-between" onClick={() => setActiveTab("platform-earnings")}>
                 <div>

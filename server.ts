@@ -281,9 +281,9 @@ async function getSettings(): Promise<ReturnType<typeof mapSettings>> {
   return res.rows.length > 0 ? mapSettings(res.rows[0]) : {
     platformName: "TasksEarn",
     referralReward: 200,
-    withdrawalFee: 100,
-    minWithdrawal: 200,
-    minDeposit: 200,
+    withdrawalFee: 50,
+    minWithdrawal: 250,
+    minDeposit: 1000,
     contactEmail: "support@tasksearn.com",
     contactPhone: "09164444315",
     telegramChannel: "https://t.me/tasksearn_ng",
@@ -433,9 +433,9 @@ async function bootstrapTables() {
         id SERIAL PRIMARY KEY,
         platform_name VARCHAR(100) NOT NULL DEFAULT 'TasksEarn',
         referral_reward DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
-        withdrawal_fee DECIMAL(10, 2) NOT NULL DEFAULT 100.00,
-        min_withdrawal DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
-        min_deposit DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
+        withdrawal_fee DECIMAL(10, 2) NOT NULL DEFAULT 50.00,
+        min_withdrawal DECIMAL(10, 2) NOT NULL DEFAULT 250.00,
+        min_deposit DECIMAL(10, 2) NOT NULL DEFAULT 1000.00,
         contact_email VARCHAR(150) NOT NULL DEFAULT 'support@tasksearn.com',
         contact_phone VARCHAR(50) NOT NULL DEFAULT '09164444315',
         telegram_channel VARCHAR(255) NULL,
@@ -595,6 +595,14 @@ async function bootstrapTables() {
         hidden_at   TIMESTAMP NOT NULL DEFAULT NOW(),
         UNIQUE(earner_id, task_id)
       )
+    `);
+
+    // 23. Migrate: update settings to new minimums (₦50 fee, ₦250 min withdrawal, ₦1000 min deposit).
+    //     Runs on every boot; the WHERE guard makes it a no-op if already updated.
+    await client.query(`
+      UPDATE settings
+      SET withdrawal_fee = 50, min_withdrawal = 250, min_deposit = 1000
+      WHERE withdrawal_fee IN (100, 200) OR min_withdrawal IN (200, 2000) OR min_deposit IN (200, 500)
     `);
 
     await client.query("COMMIT");
@@ -882,7 +890,7 @@ A submission is rejected if you did not follow the instructions, if you did not 
     // Settings
     await client.query(`
       INSERT INTO settings (platform_name, referral_reward, withdrawal_fee, min_withdrawal, min_deposit, contact_email, contact_phone, telegram_channel, whatsapp_group)
-      VALUES ('TasksEarn', 0, 100, 200, 200, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
+      VALUES ('TasksEarn', 0, 50, 250, 1000, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
     `);
 
     // Task Pricing
@@ -1875,8 +1883,8 @@ app.post("/api/earner/withdraw", async (req, res) => {
 
     const settings = await getSettings();
     const withdrawAmount = parseFloat(amount);
-    if (isNaN(withdrawAmount) || withdrawAmount < (settings?.minWithdrawal || 200)) {
-      return res.status(400).json({ error: `Minimum withdrawal amount is ₦${settings?.minWithdrawal}` });
+    if (isNaN(withdrawAmount) || withdrawAmount < (settings?.minWithdrawal || 250)) {
+      return res.status(400).json({ error: `Minimum withdrawal amount is ₦${settings?.minWithdrawal || 250}` });
     }
 
     const pendingRes = await pool.query(
@@ -2236,8 +2244,8 @@ app.post("/api/advertiser/deposit/initialize", async (req, res) => {
 
     const settings = await getSettings();
     const depositAmount = parseFloat(req.body.amount);
-    if (isNaN(depositAmount) || depositAmount < (settings?.minDeposit || 200)) {
-      return res.status(400).json({ error: `Minimum deposit amount is ₦${settings?.minDeposit}` });
+    if (isNaN(depositAmount) || depositAmount < (settings?.minDeposit || 1000)) {
+      return res.status(400).json({ error: `Minimum deposit amount is ₦${settings?.minDeposit || 1000}` });
     }
 
     const txId = "tx-" + Math.random().toString(36).substr(2, 9);
@@ -2810,7 +2818,7 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
 
         // Capture withdrawal fee commission data for crediting after commit
         const settings = await getSettings();
-        const fee = settings?.withdrawalFee || 100;
+        const fee = settings?.withdrawalFee || 50;
         if (fee > 0) {
           wdCommData = { fee, txRef: transaction.reference || transaction.id, userName: transaction.userName || "", userId: transaction.userId };
         }
