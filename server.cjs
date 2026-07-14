@@ -227,9 +227,9 @@ function mapSettings(row) {
     // and /api/earner/referrals); this field is kept only as a legacy/admin-configurable value
     // that no longer affects earner payouts.
     referralReward: parseFloat(row.referral_reward) || 0,
-    withdrawalFee: parseFloat(row.withdrawal_fee) || 100,
+    withdrawalFee: parseFloat(row.withdrawal_fee) || 50,
     minWithdrawal: parseFloat(row.min_withdrawal) || 200,
-    minDeposit: parseFloat(row.min_deposit) || 200,
+    minDeposit: parseFloat(row.min_deposit) || 1e3,
     contactEmail: row.contact_email,
     contactPhone: row.contact_phone,
     telegramChannel: row.telegram_channel || void 0,
@@ -335,7 +335,7 @@ async function getSettings() {
     platformName: "TasksEarn",
     referralReward: 200,
     withdrawalFee: 50,
-    minWithdrawal: 250,
+    minWithdrawal: 200,
     minDeposit: 1e3,
     contactEmail: "support@tasksearn.com",
     contactPhone: "09164444315",
@@ -465,7 +465,7 @@ async function bootstrapTables() {
         platform_name VARCHAR(100) NOT NULL DEFAULT 'TasksEarn',
         referral_reward DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
         withdrawal_fee DECIMAL(10, 2) NOT NULL DEFAULT 50.00,
-        min_withdrawal DECIMAL(10, 2) NOT NULL DEFAULT 250.00,
+        min_withdrawal DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
         min_deposit DECIMAL(10, 2) NOT NULL DEFAULT 1000.00,
         contact_email VARCHAR(150) NOT NULL DEFAULT 'support@tasksearn.com',
         contact_phone VARCHAR(50) NOT NULL DEFAULT '09164444315',
@@ -588,8 +588,8 @@ async function bootstrapTables() {
     `);
     await client.query(`
       UPDATE settings
-      SET withdrawal_fee = 50, min_withdrawal = 250, min_deposit = 1000
-      WHERE withdrawal_fee IN (100, 200) OR min_withdrawal IN (200, 2000) OR min_deposit IN (200, 500)
+      SET withdrawal_fee = 50, min_withdrawal = 200, min_deposit = 1000
+      WHERE withdrawal_fee IN (100, 200) OR min_withdrawal IN (250, 2000) OR min_deposit IN (200, 500)
     `);
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
@@ -852,7 +852,7 @@ A submission is rejected if you did not follow the instructions, if you did not 
     ]);
     await client.query(`
       INSERT INTO settings (platform_name, referral_reward, withdrawal_fee, min_withdrawal, min_deposit, contact_email, contact_phone, telegram_channel, whatsapp_group)
-      VALUES ('TasksEarn', 0, 50, 250, 1000, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
+      VALUES ('TasksEarn', 0, 50, 200, 1000, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
     `);
     const pricing = getInitialPricing();
     for (const p of pricing) {
@@ -1734,8 +1734,8 @@ app.post("/api/earner/withdraw", async (req, res) => {
     }
     const settings = await getSettings();
     const withdrawAmount = parseFloat(amount);
-    if (isNaN(withdrawAmount) || withdrawAmount < (settings?.minWithdrawal || 250)) {
-      return res.status(400).json({ error: `Minimum withdrawal amount is \u20A6${settings?.minWithdrawal || 250}` });
+    if (isNaN(withdrawAmount) || withdrawAmount < (settings?.minWithdrawal || 200)) {
+      return res.status(400).json({ error: `Minimum withdrawal amount is \u20A6${settings?.minWithdrawal || 200}` });
     }
     const pendingRes = await pool.query(
       "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE user_id = $1 AND type = 'Withdrawal' AND status = 'Pending'",
