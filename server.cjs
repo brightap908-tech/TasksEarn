@@ -32,6 +32,7 @@ var import_nodemailer = __toESM(require("nodemailer"), 1);
 var import_vite = require("vite");
 var import_http = require("http");
 var import_ws = require("ws");
+var import_web_push = __toESM(require("web-push"), 1);
 
 // src/types.ts
 var Platform = /* @__PURE__ */ ((Platform2) => {
@@ -105,6 +106,9 @@ function getPlatformForCategory(category) {
 import_dotenv.default.config();
 var { Pool } = import_pg.default;
 var PORT = Number(process.env.PORT) || 5e3;
+var VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@tasksearn.com";
+var vapidPublicKey = "";
+var vapidPrivateKey = "";
 var DB_CONNECTION_STRING = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
 if (!DB_CONNECTION_STRING) {
   console.error("FATAL: No database connection string configured. Set NEON_DATABASE_URL (or DATABASE_URL).");
@@ -593,6 +597,26 @@ async function bootstrapTables() {
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL`);
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS link_url TEXT NULL`);
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS button_text TEXT NULL`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS vapid_keys (
+        key        VARCHAR(20) PRIMARY KEY,
+        value      TEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notification_subscriptions (
+        id           VARCHAR(50) PRIMARY KEY,
+        user_id      VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        endpoint     TEXT NOT NULL,
+        p256dh_key   TEXT NOT NULL,
+        auth_key     TEXT NOT NULL,
+        active       BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE(user_id, endpoint)
+      )
+    `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS hidden_tasks (
         id          TEXT PRIMARY KEY,
@@ -1659,6 +1683,80 @@ app.post("/api/earner/notifications/:id/read", async (req, res) => {
     );
     res.json({ success: true, notification: result.rows.length > 0 ? mapEarnerNotification(result.rows[0]) : null });
   } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.get("/api/notifications/vapid-public-key", (_req, res) => {
+  if (!vapidPublicKey) return res.status(503).json({ error: "Push notifications not configured on this server." });
+  res.json({ publicKey: vapidPublicKey });
+});
+app.get("/api/notifications/status", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    const result = await pool.query(
+      "SELECT created_at FROM notification_subscriptions WHERE user_id=$1 AND active=true ORDER BY created_at DESC LIMIT 1",
+      [user.id]
+    );
+    if (result.rows.length > 0) {
+      res.json({ subscribed: true, lastSubscribed: result.rows[0].created_at });
+    } else {
+      res.json({ subscribed: false });
+    }
+  } catch (err) {
+    console.error("[Push] Status check error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.post("/api/notifications/subscribe", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    const { endpoint, p256dh, auth } = req.body;
+    if (!endpoint || !p256dh || !auth) {
+      return res.status(400).json({ error: "Missing subscription fields: endpoint, p256dh, auth" });
+    }
+    const id = "psub-" + Math.random().toString(36).substr(2, 9);
+    const now = /* @__PURE__ */ new Date();
+    await pool.query(`
+      INSERT INTO notification_subscriptions (id, user_id, endpoint, p256dh_key, auth_key, active, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, true, $6, $6)
+      ON CONFLICT (user_id, endpoint)
+      DO UPDATE SET p256dh_key=$4, auth_key=$5, active=true, updated_at=$6
+    `, [id, user.id, endpoint, p256dh, auth, now]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[Push] Subscribe error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.post("/api/notifications/unsubscribe", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    await pool.query(
+      "UPDATE notification_subscriptions SET active=false, updated_at=NOW() WHERE user_id=$1",
+      [user.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[Push] Unsubscribe error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.post("/api/notifications/send", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const { title, body, url } = req.body;
+    const pushTitle = title || "\u{1F389} New Task Available";
+    const pushBody = body || "A new earning task has been posted. Tap to complete it before it fills up.";
+    const pushUrl = url || "/earner/tasks";
+    const payload = JSON.stringify({ title: pushTitle, body: pushBody, url: pushUrl });
+    const sent = await sendBrowserPushToAllEarners(payload);
+    res.json({ success: true, sent });
+  } catch (err) {
+    console.error("[Push] Send error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -3308,6 +3406,41 @@ server.on("upgrade", (request, socket, head) => {
     wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
   }
 });
+async function sendBrowserPushToAllEarners(payloadJson) {
+  if (!vapidPublicKey || !vapidPrivateKey) return 0;
+  let sent = 0;
+  try {
+    const result = await pool.query(
+      "SELECT id, user_id, endpoint, p256dh_key, auth_key FROM notification_subscriptions WHERE active=true"
+    );
+    for (const row of result.rows) {
+      const pushSubscription = {
+        endpoint: row.endpoint,
+        keys: { p256dh: row.p256dh_key, auth: row.auth_key }
+      };
+      try {
+        await import_web_push.default.sendNotification(pushSubscription, payloadJson, {
+          TTL: 86400
+          // deliver within 24 hours even if browser is offline
+        });
+        sent++;
+      } catch (pushErr) {
+        if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+          await pool.query(
+            "UPDATE notification_subscriptions SET active=false, updated_at=NOW() WHERE id=$1",
+            [row.id]
+          );
+          console.log(`[Push] Invalidated stale subscription ${row.id} for user ${row.user_id}`);
+        } else {
+          console.error(`[Push] Failed to send to ${row.user_id}:`, pushErr.message || pushErr);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Push] Error fetching subscriptions:", err);
+  }
+  return sent;
+}
 async function notifyEarners(task) {
   try {
     const platform = getPlatformForCategory(task.category);
@@ -3341,6 +3474,16 @@ async function notifyEarners(task) {
       if (client.readyState === import_ws.WebSocket.OPEN) {
         client.send(broadcastPayload);
       }
+    });
+    const pushPayload = JSON.stringify({
+      title: "\u{1F389} New Task Available",
+      body: `A new earning task has been posted. Tap to complete it before it fills up.`,
+      url: "/earner/tasks",
+      tag: "tasksearn-new-task"
+    });
+    sendBrowserPushToAllEarners(pushPayload).then((sent) => {
+      if (sent > 0) console.log(`[Push] Sent browser push to ${sent} subscriber(s) for task: ${task.title}`);
+    }).catch(() => {
     });
     console.log(`[Earner Notify] Notified ${earnersRes.rows.length} earner(s) about task: ${task.title}`);
   } catch (err) {
@@ -3396,11 +3539,33 @@ async function startServer() {
     console.log("=".repeat(60));
   });
 }
+async function ensureVapidKeys() {
+  const result = await pool.query("SELECT key, value FROM vapid_keys");
+  const keyMap = {};
+  for (const row of result.rows) keyMap[row.key] = row.value;
+  if (keyMap["public"] && keyMap["private"]) {
+    vapidPublicKey = keyMap["public"];
+    vapidPrivateKey = keyMap["private"];
+    import_web_push.default.setVapidDetails(VAPID_SUBJECT, vapidPublicKey, vapidPrivateKey);
+    console.log("[Push] VAPID keys loaded from database \u2014 push notifications enabled.");
+  } else {
+    const keys = import_web_push.default.generateVAPIDKeys();
+    vapidPublicKey = keys.publicKey;
+    vapidPrivateKey = keys.privateKey;
+    await pool.query(`
+      INSERT INTO vapid_keys (key, value) VALUES ('public', $1), ('private', $2)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+    `, [vapidPublicKey, vapidPrivateKey]);
+    import_web_push.default.setVapidDetails(VAPID_SUBJECT, vapidPublicKey, vapidPrivateKey);
+    console.log("[Push] Generated new VAPID keypair and stored in database.");
+  }
+}
 (async () => {
   try {
     await bootstrapTables();
     await seedDatabase();
     await ensurePlatformsSeeded();
+    await ensureVapidKeys();
     await startServer();
   } catch (err) {
     console.error("FATAL: Failed to start server:", err);
