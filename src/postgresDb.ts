@@ -191,7 +191,7 @@ export async function bootstrapTables() {
       CREATE TABLE IF NOT EXISTS settings (
         id SERIAL PRIMARY KEY,
         platform_name VARCHAR(100) NOT NULL DEFAULT 'TasksEarn',
-        referral_reward DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
+        referral_reward DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
         withdrawal_fee DECIMAL(10, 2) NOT NULL DEFAULT 100.00,
         min_withdrawal DECIMAL(10, 2) NOT NULL DEFAULT 2000.00,
         min_deposit DECIMAL(10, 2) NOT NULL DEFAULT 1000.00,

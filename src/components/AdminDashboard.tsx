@@ -144,7 +144,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   // Platform settings
   const [settings, setSettings] = React.useState<WebsiteSettings>({
     platformName: "TasksEarn",
-    referralReward: 200,
+    referralReward: 0,
     withdrawalFee: 100,
     minWithdrawal: 2000,
     minDeposit: 1000,
@@ -162,6 +162,8 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   const [annTitle, setAnnTitle] = React.useState("");
   const [annContent, setAnnContent] = React.useState("");
   const [annType, setAnnType] = React.useState<"info" | "success" | "warning">("info");
+  const [annDismissible, setAnnDismissible] = React.useState(true);
+  const [annEditingId, setAnnEditingId] = React.useState<string | null>(null);
   const [annSuccess, setAnnSuccess] = React.useState("");
 
   // Banner state
@@ -832,25 +834,55 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
     } catch (e) {}
   };
 
-  // Announcement post
+  // Announcement create / edit (login popup)
   const handlePostAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!annTitle || !annContent) return;
     setAnnSuccess("");
 
     try {
-      const res = await apiFetch("/api/admin/announcements", {
-        method: "POST",
+      const isEditing = !!annEditingId;
+      const res = await apiFetch(isEditing ? `/api/admin/announcements/${annEditingId}` : "/api/admin/announcements", {
+        method: isEditing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: annTitle, content: annContent, type: annType })
+        body: JSON.stringify({ title: annTitle, content: annContent, type: annType, dismissible: annDismissible })
       });
 
       if (res && res.success) {
-        setAnnSuccess("Announcement published successfully on user boards!");
+        setAnnSuccess(isEditing ? "Announcement updated successfully!" : "Announcement published — it will pop up for Earners & Advertisers on next login!");
         setAnnTitle("");
         setAnnContent("");
+        setAnnType("info");
+        setAnnDismissible(true);
+        setAnnEditingId(null);
         fetchAnnouncementsAndBanners();
       }
+    } catch (e) {}
+  };
+
+  // Load an existing announcement into the form for editing
+  const handleEditAnnouncement = (ann: Announcement) => {
+    setAnnEditingId(ann.id);
+    setAnnTitle(ann.title);
+    setAnnContent(ann.content);
+    setAnnType(ann.type);
+    setAnnDismissible(ann.dismissible);
+    setAnnSuccess("");
+  };
+
+  const handleCancelEditAnnouncement = () => {
+    setAnnEditingId(null);
+    setAnnTitle("");
+    setAnnContent("");
+    setAnnType("info");
+    setAnnDismissible(true);
+  };
+
+  // Enable / disable the login popup announcement
+  const handleToggleAnnouncement = async (id: string) => {
+    try {
+      const res = await apiFetch(`/api/admin/announcements/${id}/toggle`, { method: "PUT" });
+      if (res && res.success) fetchAnnouncementsAndBanners();
     } catch (e) {}
   };
 
@@ -859,7 +891,10 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
     if (!window.confirm("Delete this notice?")) return;
     try {
       const res = await apiFetch(`/api/admin/announcements/${id}`, { method: "DELETE" });
-      if (res && res.success) fetchAnnouncementsAndBanners();
+      if (res && res.success) {
+        if (annEditingId === id) handleCancelEditAnnouncement();
+        fetchAnnouncementsAndBanners();
+      }
     } catch (e) {}
   };
 
@@ -2018,17 +2053,20 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         {/* TAB 5: CMS NOTICES & BANNERS */}
         {activeTab === "announcements" && (
           <div className="space-y-6">
-            
-            {/* Announcement creator */}
+
+            {/* Login popup creator / editor */}
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Post Global Notice Announcement</h3>
-              
+              <h3 className="font-display text-sm font-bold text-gray-900 mb-1">{annEditingId ? "Edit Login Popup" : "Create Login Popup Announcement"}</h3>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                The latest <strong>enabled</strong> announcement below is automatically shown as a popup to every Earner and Advertiser the moment they log in, before they can use their dashboard.
+              </p>
+
               {annSuccess && <p className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs font-bold text-blue-800 mb-4">{annSuccess}</p>}
 
               <form onSubmit={handlePostAnnouncement} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Notice Title</label>
+                    <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Popup Title</label>
                     <input 
                       type="text" 
                       required
@@ -2053,39 +2091,81 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Detailed Message Content</label>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Popup Message Body</label>
                   <textarea 
                     required
                     rows={3}
                     value={annContent}
                     onChange={(e) => setAnnContent(e.target.value)}
-                    placeholder="Provide full details of the notice for earners and advertisers dashboards..."
+                    placeholder="Provide the full message shown to earners and advertisers when they log in..."
                     className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-red-500"
                   ></textarea>
                 </div>
 
-                <button type="submit" className="rounded-xl bg-red-600 hover:bg-red-700 text-xs font-bold text-white px-5 py-2.5">
-                  Publish Notice Now
-                </button>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={annDismissible}
+                    onChange={(e) => setAnnDismissible(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-xs font-semibold text-gray-600">
+                    Dismissible (users can close it anytime). Uncheck to require users to click "OK, Got It" before continuing.
+                  </span>
+                </label>
+
+                <div className="flex items-center gap-3">
+                  <button type="submit" className="rounded-xl bg-red-600 hover:bg-red-700 text-xs font-bold text-white px-5 py-2.5">
+                    {annEditingId ? "Save Changes" : "Publish Login Popup"}
+                  </button>
+                  {annEditingId && (
+                    <button type="button" onClick={handleCancelEditAnnouncement} className="rounded-xl border border-gray-200 hover:bg-gray-50 text-xs font-bold text-gray-600 px-5 py-2.5">
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </form>
             </div>
 
             {/* Notices list */}
             <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Active Notices Bulletin</h3>
+              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">All Announcements</h3>
               <div className="space-y-3">
-                {announcements.map((ann, idx) => (
-                  <div key={idx} className="flex justify-between items-start border-b border-gray-50 pb-3 last:border-0">
-                    <div>
-                      <p className="font-bold text-gray-800">{ann.title}</p>
+                {announcements.length === 0 && <p className="text-xs text-gray-400">No announcements created yet.</p>}
+                {announcements.map((ann) => (
+                  <div key={ann.id} className="flex justify-between items-start gap-4 border-b border-gray-50 pb-3 last:border-0">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-gray-800">{ann.title}</p>
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${ann.enabled ? "bg-emerald-50 text-emerald-600 border border-emerald-200" : "bg-gray-100 text-gray-400 border border-gray-200"}`}>
+                          {ann.enabled ? "Live Popup" : "Disabled"}
+                        </span>
+                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-slate-50 text-slate-500 border border-slate-200">
+                          {ann.dismissible ? "Dismissible" : "Requires OK"}
+                        </span>
+                      </div>
                       <p className="text-[11px] text-gray-500 mt-0.5">{ann.content}</p>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteAnnouncement(ann.id)}
-                      className="text-red-600 hover:underline text-[10px] font-bold"
-                    >
-                      Remove
-                    </button>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <button
+                        onClick={() => handleToggleAnnouncement(ann.id)}
+                        className={`text-[10px] font-bold hover:underline ${ann.enabled ? "text-amber-600" : "text-emerald-600"}`}
+                      >
+                        {ann.enabled ? "Disable" : "Enable"}
+                      </button>
+                      <button
+                        onClick={() => handleEditAnnouncement(ann)}
+                        className="text-blue-600 hover:underline text-[10px] font-bold"
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteAnnouncement(ann.id)}
+                        className="text-red-600 hover:underline text-[10px] font-bold"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -2169,13 +2249,15 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Referral Reward (₦)</label>
+                    <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Earner Referral Reward (₦)</label>
                     <input 
                       type="number" 
-                      value={settings.referralReward}
-                      onChange={(e) => setSettings({ ...settings, referralReward: parseFloat(e.target.value) || 0 })}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-xs focus:outline-none font-mono"
+                      value={0}
+                      disabled
+                      readOnly
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs focus:outline-none font-mono text-gray-400 cursor-not-allowed"
                     />
+                    <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">Disabled platform-wide — earners no longer receive a commission for referrals.</p>
                   </div>
                 </div>
 

@@ -117,7 +117,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
   // Referrals state
   const [referralsData, setReferralsData] = React.useState({
     referralCode: "",
-    referralReward: 200,
+    referralReward: 0,
     referrals: [] as Referral[]
   });
 
@@ -587,7 +587,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
               </div>
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-xs font-medium text-blue-100 uppercase tracking-widest">Available Wallet Balance</p>
+                  <p className="text-xs font-semibold text-blue-50 uppercase tracking-widest">Available Wallet Balance</p>
                   <p className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight mt-1.5">
                     ₦{metrics.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
@@ -602,25 +602,25 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
               
               <div className="border-t border-blue-500/30 mt-6 pt-5 grid grid-cols-2 gap-4">
                 <div>
-                  <span className="block text-[10px] font-medium text-blue-200 uppercase tracking-wider">Total Accumulated Earnings</span>
+                  <span className="block text-[10px] font-semibold text-blue-50 uppercase tracking-wider">Total Accumulated Earnings</span>
                   <span className="font-mono text-sm font-bold text-blue-50 mt-0.5">₦{metrics.totalEarned.toLocaleString()}</span>
                 </div>
                 <div>
-                  <span className="block text-[10px] font-medium text-blue-200 uppercase tracking-wider">Referral Code</span>
+                  <span className="block text-[10px] font-semibold text-blue-50 uppercase tracking-wider">Referral Code</span>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="font-mono text-sm font-bold text-blue-50">
                       {user.referralCode}
                     </span>
                     <button 
                       onClick={copyReferralCode} 
-                      className="p-1 text-blue-100 hover:text-white bg-blue-700/50 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer" 
+                      className="p-1 text-blue-50 hover:text-white bg-blue-700/50 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer" 
                       title="Copy Referral Code"
                     >
                       <Copy className="h-3.5 w-3.5" />
                     </button>
                     <button 
                       onClick={copyReferralLink} 
-                      className="p-1 text-blue-100 hover:text-white bg-blue-700/50 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer" 
+                      className="p-1 text-blue-50 hover:text-white bg-blue-700/50 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer" 
                       title="Copy Invite Link"
                     >
                       <Share2 className="h-3.5 w-3.5" />
@@ -675,8 +675,8 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
 
             {/* General Information Banner / Notice Board */}
             <div className="rounded-2xl bg-gray-900 text-white p-6 relative overflow-hidden">
-              <h3 className="font-display text-sm font-bold text-blue-400 uppercase tracking-widest">Earner Guidelines Checklist</h3>
-              <ul className="mt-3 text-xs text-gray-300 space-y-2.5 leading-relaxed">
+              <h3 className="font-display text-sm font-bold text-blue-300 uppercase tracking-widest">Earner Guidelines Checklist</h3>
+              <ul className="mt-3 text-xs text-gray-200 font-medium space-y-2.5 leading-relaxed">
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0"></span>
                   <span><strong>Do not unfollow/unsubscribe:</strong> Our crawlers audit accounts weekly. Unsubscribing within 6 months will lock your earnings and trigger penalties.</span>
@@ -1207,9 +1207,9 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
             {/* Promo banner */}
             <div className="rounded-2xl border border-blue-100 bg-blue-50 p-6 flex flex-col sm:flex-row gap-4 justify-between items-center">
               <div>
-                <h3 className="font-display text-base font-bold text-blue-900">Invite & Earn ₦{referralsData.referralReward}</h3>
+                <h3 className="font-display text-base font-bold text-blue-900">Invite Friends to TasksEarn</h3>
                 <p className="text-xs text-blue-700 mt-1 leading-relaxed">
-                  Earn unlimited Naira bonuses for every friend you refer! Simply copy your referral link below and share on WhatsApp, Telegram, or Facebook. Once your referral completes 1 verification, you get paid.
+                  Share your referral link with friends on WhatsApp, Telegram, or Facebook to help grow the community. Referral bonuses for earners are currently ₦0 — check back later for updates.
                 </p>
               </div>
               <button

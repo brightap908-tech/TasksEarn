@@ -161,7 +161,10 @@ function mapSettings(row: any) {
   if (!row) return null;
   return {
     platformName: row.platform_name,
-    referralReward: parseFloat(row.referral_reward) || 200,
+    // Note: earner referral commission is hardcoded to ₦0 platform-wide (see /api/auth/register
+    // and /api/earner/referrals); this field is kept only as a legacy/admin-configurable value
+    // that no longer affects earner payouts.
+    referralReward: parseFloat(row.referral_reward) || 0,
     withdrawalFee: parseFloat(row.withdrawal_fee) || 100,
     minWithdrawal: parseFloat(row.min_withdrawal) || 200,
     minDeposit: parseFloat(row.min_deposit) || 200,
@@ -429,7 +432,7 @@ async function bootstrapTables() {
       CREATE TABLE IF NOT EXISTS settings (
         id SERIAL PRIMARY KEY,
         platform_name VARCHAR(100) NOT NULL DEFAULT 'TasksEarn',
-        referral_reward DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
+        referral_reward DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
         withdrawal_fee DECIMAL(10, 2) NOT NULL DEFAULT 100.00,
         min_withdrawal DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
         min_deposit DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
@@ -570,6 +573,14 @@ async function bootstrapTables() {
     await client.query(
       "ALTER TABLE submissions ALTER COLUMN proof_screenshot TYPE TEXT"
     );
+
+    // 20. Migrate: admin-controlled login popup fields on announcements.
+    //     `enabled` toggles whether the announcement is currently shown; `dismissible`
+    //     controls whether users can close it freely (X / click-outside) or must click
+    //     the "OK, Got it" button to continue.
+    await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT TRUE`);
+    await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS dismissible BOOLEAN NOT NULL DEFAULT TRUE`);
+    await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL`);
 
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
@@ -747,10 +758,10 @@ async function seedDatabase() {
       new Date(Date.now() - 1 * 24 * 3600 * 1000)
     ]);
 
-    // Referrals
+    // Referrals (seed demo data — reward is 0 since the earner referral commission is disabled)
     await client.query(`
       INSERT INTO referrals (id, referrer_id, referee_id, referee_name, referee_email, reward_earned, created_at)
-      VALUES ('ref-1', $1, 'u-referee-1', 'Sola Alabi', 'sola@example.com', 200, $2)
+      VALUES ('ref-1', $1, 'u-referee-1', 'Sola Alabi', 'sola@example.com', 0, $2)
     `, [earnerId, new Date(Date.now() - 5 * 24 * 3600 * 1000)]);
 
     // Announcements
@@ -856,7 +867,7 @@ A submission is rejected if you did not follow the instructions, if you did not 
     // Settings
     await client.query(`
       INSERT INTO settings (platform_name, referral_reward, withdrawal_fee, min_withdrawal, min_deposit, contact_email, contact_phone, telegram_channel, whatsapp_group)
-      VALUES ('TasksEarn', 200, 100, 200, 200, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
+      VALUES ('TasksEarn', 0, 100, 200, 200, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
     `);
 
     // Task Pricing
@@ -997,8 +1008,32 @@ app.get("/api/public/announcements", async (_req, res) => {
     const result = await pool.query("SELECT * FROM announcements ORDER BY created_at DESC");
     res.json(result.rows.map(r => ({
       id: r.id, title: r.title, content: r.content, type: r.type,
+      enabled: r.enabled, dismissible: r.dismissible,
       createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at
     })));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// Returns the latest ENABLED announcement to show as a login popup for Earners/Advertisers.
+// Admins never see this popup. Returns { announcement: null } when nothing is enabled.
+app.get("/api/user/login-popup", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role === UserRole.ADMIN) return res.json({ announcement: null });
+
+    const result = await pool.query(
+      "SELECT * FROM announcements WHERE enabled = true ORDER BY created_at DESC LIMIT 1"
+    );
+    if (result.rows.length === 0) return res.json({ announcement: null });
+
+    const r = result.rows[0];
+    res.json({
+      announcement: {
+        id: r.id, title: r.title, content: r.content, type: r.type,
+        dismissible: r.dismissible,
+        createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at
+      }
+    });
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
@@ -1082,29 +1117,19 @@ app.post("/api/auth/register", async (req, res) => {
         verificationCode, verificationCodeExpires, verificationCodeLastSent, new Date()]);
 
     if (referredByUserId) {
-      const settings = await getSettings();
       const referrer = await pool.query("SELECT * FROM users WHERE id = $1", [referredByUserId]);
       if (referrer.rows.length > 0) {
-        const referrerUser = mapUser(referrer.rows[0]);
-        const reward = settings?.referralReward || 200;
-        await pool.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2", [reward, referredByUserId]);
+        // Earner referral commission has been disabled platform-wide: earners no longer receive
+        // any wallet reward for referring new users. We still record the referral relationship
+        // (for the referrals list / network tracking) with reward_earned = 0, but we do NOT
+        // credit the referrer's wallet or create a "Referral Bonus" transaction.
+        const reward = 0;
 
         const refId = "ref-" + Math.random().toString(36).substr(2, 9);
         await pool.query(`
           INSERT INTO referrals (id, referrer_id, referee_id, referee_name, referee_email, reward_earned, created_at)
           VALUES ($1,$2,$3,$4,$5,$6,$7)
         `, [refId, referredByUserId, userId, name, email, reward, new Date()]);
-
-        await pool.query(`
-          INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
-          VALUES ($1,$2,$3,$4,$5,'Referral Bonus','Success',$6,$7,$8)
-        `, [
-          "tx-" + Math.random().toString(36).substr(2, 9),
-          referredByUserId, referrerUser?.name || "", referrerUser?.role || "",
-          reward, `Referral bonus for inviting ${name}`,
-          "R-REF-" + Math.floor(10000000 + Math.random() * 90000000),
-          new Date()
-        ]);
       }
     }
 
@@ -1645,11 +1670,12 @@ app.get("/api/earner/referrals", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
 
-    const settings = await getSettings();
     const refs = await pool.query("SELECT * FROM referrals WHERE referrer_id = $1 ORDER BY created_at DESC", [user.id]);
     res.json({
       referralCode: user.referralCode,
-      referralReward: settings?.referralReward || 200,
+      // Earner referral commission is permanently disabled — always ₦0, regardless of the
+      // legacy `referral_reward` platform setting (which now only applies to future non-earner use).
+      referralReward: 0,
       referrals: refs.rows.map(r => ({
         id: r.id,
         referrerId: r.referrer_id,
@@ -2808,16 +2834,22 @@ app.get("/api/admin/referrals", async (req, res) => {
 });
 
 // Announcements
+function mapAnnouncement(r: any) {
+  return {
+    id: r.id, title: r.title, content: r.content, type: r.type,
+    enabled: r.enabled, dismissible: r.dismissible,
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
+    updatedAt: r.updated_at instanceof Date ? r.updated_at.toISOString() : r.updated_at
+  };
+}
+
 app.get("/api/admin/announcements", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
     const result = await pool.query("SELECT * FROM announcements ORDER BY created_at DESC");
-    res.json(result.rows.map(r => ({
-      id: r.id, title: r.title, content: r.content, type: r.type,
-      createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at
-    })));
+    res.json(result.rows.map(mapAnnouncement));
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
@@ -2826,15 +2858,49 @@ app.post("/api/admin/announcements", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-    const { title, content, type } = req.body;
+    const { title, content, type, dismissible } = req.body;
     if (!title || !content) return res.status(400).json({ error: "Title and Content are required" });
 
     const id = "ann-" + Math.random().toString(36).substr(2, 9);
-    await pool.query(
-      "INSERT INTO announcements (id, title, content, type, created_at) VALUES ($1,$2,$3,$4,$5)",
-      [id, title, content, type || "info", new Date()]
+    const result = await pool.query(
+      `INSERT INTO announcements (id, title, content, type, enabled, dismissible, created_at)
+       VALUES ($1,$2,$3,$4,true,$5,$6) RETURNING *`,
+      [id, title, content, type || "info", dismissible !== false, new Date()]
     );
-    res.json({ success: true, announcement: { id, title, content, type: type || "info", createdAt: new Date().toISOString() } });
+    res.json({ success: true, announcement: mapAnnouncement(result.rows[0]) });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.put("/api/admin/announcements/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { title, content, type, dismissible } = req.body;
+    if (!title || !content) return res.status(400).json({ error: "Title and Content are required" });
+
+    const result = await pool.query(
+      `UPDATE announcements SET title=$1, content=$2, type=$3, dismissible=$4, updated_at=$5 WHERE id=$6 RETURNING *`,
+      [title, content, type || "info", dismissible !== false, new Date(), req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "Announcement not found" });
+
+    res.json({ success: true, announcement: mapAnnouncement(result.rows[0]) });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.put("/api/admin/announcements/:id/toggle", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query(
+      "UPDATE announcements SET enabled = NOT enabled, updated_at = $1 WHERE id=$2 RETURNING *",
+      [new Date(), req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "Announcement not found" });
+
+    res.json({ success: true, announcement: mapAnnouncement(result.rows[0]) });
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 

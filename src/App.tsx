@@ -15,6 +15,7 @@ import {
 } from "./types";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import LoginPopupModal from "./components/LoginPopupModal";
 import PublicPages from "./components/PublicPages";
 import EarnerDashboard from "./components/EarnerDashboard";
 import AdvertiserDashboard from "./components/AdvertiserDashboard";
@@ -75,7 +76,7 @@ export default function App() {
   // Platform settings
   const [settings, setSettings] = React.useState<WebsiteSettings>({
     platformName: "TasksEarn",
-    referralReward: 200,
+    referralReward: 0,
     withdrawalFee: 100,
     minWithdrawal: 2000,
     minDeposit: 1000,
@@ -119,6 +120,17 @@ export default function App() {
 
   const [showAdvertiserPasswordPrompt, setShowAdvertiserPasswordPrompt] = React.useState(false);
   const [advertiserPasswordPromptValue, setAdvertiserPasswordPromptValue] = React.useState("");
+
+  // Admin-controlled login popup shown once per login to Earners/Advertisers
+  const [loginPopup, setLoginPopup] = React.useState<Announcement | null>(null);
+
+  const maybeShowLoginPopup = async (loggedInUser: User) => {
+    if (loggedInUser.role === UserRole.ADMIN) return;
+    try {
+      const data = await apiFetch("/api/user/login-popup");
+      if (data && data.announcement) setLoginPopup(data.announcement);
+    } catch (e) {}
+  };
 
   // Dark Theme State
   const [isDarkMode, setIsDarkMode] = React.useState<boolean>(() => {
@@ -452,6 +464,7 @@ export default function App() {
 
         localStorage.setItem("tasksearn_uid", data.user.id);
         setUser(data.user);
+        maybeShowLoginPopup(data.user);
         
         // Navigation depending on role
         if (data.user.role === UserRole.EARNER) {
@@ -523,6 +536,7 @@ export default function App() {
       } else if (data && data.user) {
         localStorage.setItem("tasksearn_uid", data.user.id);
         setUser(data.user);
+        maybeShowLoginPopup(data.user);
         showToast("Email address successfully verified!", "success");
 
         if (data.user.role === UserRole.EARNER) {
@@ -605,6 +619,7 @@ export default function App() {
 
         localStorage.setItem("tasksearn_uid", data.user.id);
         setUser(data.user);
+        maybeShowLoginPopup(data.user);
         
         // Navigation depending on role
         if (data.user.role === UserRole.EARNER) {
@@ -765,7 +780,11 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen flex-col font-sans" style={{ background: isDarkMode ? "#0b1220" : "#FFFFFF", color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>
-      
+
+      {loginPopup && (
+        <LoginPopupModal announcement={loginPopup} onClose={() => setLoginPopup(null)} />
+      )}
+
       {/* Navigation Header */}
       <Navbar 
         user={user} 

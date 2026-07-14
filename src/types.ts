@@ -174,7 +174,10 @@ export interface Announcement {
   title: string;
   content: string;
   type: "info" | "success" | "warning";
+  enabled: boolean;
+  dismissible: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Banner {

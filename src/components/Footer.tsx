@@ -56,7 +56,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                 </div>
                 <div
                   className="flex items-center gap-1 mt-1"
-                  style={{ fontFamily: "var(--font-mono)", fontSize: "0.5rem", letterSpacing: "0.16em", color: "rgba(186,230,253,0.75)", textTransform: "uppercase", fontWeight: 700 }}
+                  style={{ fontFamily: "var(--font-mono)", fontSize: "0.5rem", letterSpacing: "0.16em", color: "rgba(224,242,254,0.90)", textTransform: "uppercase", fontWeight: 700 }}
                 >
                   <Zap style={{ width: "6px", height: "6px" }} />
                   MICRO-EXCHANGE
@@ -64,7 +64,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
               </div>
             </div>
 
-            <p className="text-xs leading-relaxed" style={{ color: "rgba(219,234,254,0.80)", maxWidth: "240px" }}>
+            <p className="text-xs leading-relaxed font-medium" style={{ color: "rgba(224,242,254,0.92)", maxWidth: "240px" }}>
               Nigeria's premier social media microtask exchange. Connecting advertisers with earners for organic, verified growth.
             </p>
 
@@ -96,10 +96,10 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                 <li key={item.view}>
                   <span
                     onClick={() => onNavigate(item.view)}
-                    className="cursor-pointer transition-colors flex items-center gap-1.5"
-                    style={{ color: "rgba(186,230,253,0.85)" }}
+                    className="cursor-pointer transition-colors flex items-center gap-1.5 font-semibold"
+                    style={{ color: "rgba(224,242,254,0.96)" }}
                     onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
-                    onMouseLeave={e => (e.currentTarget.style.color = "rgba(186,230,253,0.85)")}
+                    onMouseLeave={e => (e.currentTarget.style.color = "rgba(224,242,254,0.96)")}
                   >
                     {item.icon}
                     {item.label}
@@ -121,10 +121,10 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
               <li>
                 <span
                   onClick={() => onNavigate("terms")}
-                  className="cursor-pointer transition-colors flex items-center gap-1.5"
-                  style={{ color: "rgba(186,230,253,0.85)" }}
+                  className="cursor-pointer transition-colors flex items-center gap-1.5 font-semibold"
+                  style={{ color: "rgba(224,242,254,0.96)" }}
                   onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
-                  onMouseLeave={e => (e.currentTarget.style.color = "rgba(186,230,253,0.85)")}
+                  onMouseLeave={e => (e.currentTarget.style.color = "rgba(224,242,254,0.96)")}
                 >
                   <FileText className="h-3.5 w-3.5 text-yellow-300" />
                   Terms of Service
@@ -133,10 +133,10 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
               <li>
                 <span
                   onClick={() => onNavigate("privacy")}
-                  className="cursor-pointer transition-colors flex items-center gap-1.5"
-                  style={{ color: "rgba(186,230,253,0.85)" }}
+                  className="cursor-pointer transition-colors flex items-center gap-1.5 font-semibold"
+                  style={{ color: "rgba(224,242,254,0.96)" }}
                   onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
-                  onMouseLeave={e => (e.currentTarget.style.color = "rgba(186,230,253,0.85)")}
+                  onMouseLeave={e => (e.currentTarget.style.color = "rgba(224,242,254,0.96)")}
                 >
                   <ShieldCheck className="h-3.5 w-3.5 text-blue-300" />
                   Privacy Policy
@@ -163,10 +163,10 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                 </div>
                 <a
                   href={`mailto:${settings.contactEmail}`}
-                  className="transition-colors"
-                  style={{ color: "rgba(186,230,253,0.85)" }}
+                  className="transition-colors font-semibold"
+                  style={{ color: "rgba(224,242,254,0.96)" }}
                   onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
-                  onMouseLeave={e => (e.currentTarget.style.color = "rgba(186,230,253,0.85)")}
+                  onMouseLeave={e => (e.currentTarget.style.color = "rgba(224,242,254,0.96)")}
                 >
                   {settings.contactEmail}
                 </a>
@@ -180,10 +180,10 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                 </div>
                 <a
                   href={`tel:${settings.contactPhone}`}
-                  className="transition-colors font-mono"
-                  style={{ color: "rgba(186,230,253,0.85)" }}
+                  className="transition-colors font-mono font-semibold"
+                  style={{ color: "rgba(224,242,254,0.96)" }}
                   onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
-                  onMouseLeave={e => (e.currentTarget.style.color = "rgba(186,230,253,0.85)")}
+                  onMouseLeave={e => (e.currentTarget.style.color = "rgba(224,242,254,0.96)")}
                 >
                   {settings.contactPhone}
                 </a>
@@ -216,7 +216,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                 >
                   <Landmark className="h-3.5 w-3.5 text-blue-200" />
                 </div>
-                <span style={{ color: "rgba(186,230,253,0.75)" }}>12, Herbert Macaulay Way, Yaba, Lagos, Nigeria</span>
+                <span className="font-medium" style={{ color: "rgba(224,242,254,0.90)" }}>12, Herbert Macaulay Way, Yaba, Lagos, Nigeria</span>
               </li>
             </ul>
           </div>
@@ -225,15 +225,15 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
         {/* Bottom bar */}
         <div
           className="mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.12)", color: "rgba(186,230,253,0.70)" }}
+          style={{ borderTop: "1px solid rgba(255,255,255,0.12)", color: "rgba(224,242,254,0.88)" }}
         >
-          <p>© {new Date().getFullYear()} {platformName}. Built for Nigerian Earners &amp; Advertisers. All rights reserved.</p>
+          <p className="font-medium">© {new Date().getFullYear()} {platformName}. Built for Nigerian Earners &amp; Advertisers. All rights reserved.</p>
           <div className="flex items-center gap-2">
             <span
               className="h-1.5 w-1.5 rounded-full inline-block"
               style={{ background: "#22c55e", boxShadow: "0 0 6px #22c55e", animation: "pulse 2s infinite" }}
             />
-            <span style={{ color: "rgba(186,230,253,0.70)" }}>Secure Payouts via Paystack &amp; Flutterwave</span>
+            <span className="font-medium" style={{ color: "rgba(224,242,254,0.88)" }}>Secure Payouts via Paystack &amp; Flutterwave</span>
           </div>
         </div>
       </div>

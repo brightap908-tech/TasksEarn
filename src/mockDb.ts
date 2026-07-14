@@ -284,6 +284,8 @@ function getInitialData(): DBState {
       title: "Welcome to TasksEarn Platform",
       content: "Welcome Nigerians to the most trusted social media microtask exchange platform! Advertisers can publish tasks, and Earners can complete simple tasks and earn directly in Naira (₦) paid to their local bank accounts.",
       type: "success",
+      enabled: false,
+      dismissible: true,
       createdAt: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString()
     },
     {
@@ -291,6 +293,8 @@ function getInitialData(): DBState {
       title: "Withdrawal Process Audits",
       content: "Withdrawal requests are processed every Friday at 12:00 PM. Please ensure your submitted bank details are accurate and your name matches your verification profile to avoid rejections.",
       type: "info",
+      enabled: true,
+      dismissible: true,
       createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString()
     }
   ];
@@ -367,7 +371,7 @@ For every friend you refer using your unique link who completes at least one tas
 
   const settings: WebsiteSettings = {
     platformName: "TasksEarn",
-    referralReward: 200,
+    referralReward: 0,
     withdrawalFee: 100,
     minWithdrawal: 2000,
     minDeposit: 1000,
@@ -1332,11 +1336,50 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
           title: body.title,
           content: body.content,
           type: body.type || "info",
+          enabled: true,
+          dismissible: body.dismissible !== false,
           createdAt: new Date().toISOString()
         };
         db.announcements.push(newAnn);
         saveDB(db);
         resolve({ success: true, announcement: newAnn });
+        return;
+      }
+
+      if (endpoint.startsWith("/api/admin/announcements/") && method === "PUT" && endpoint.endsWith("/toggle")) {
+        const parts = endpoint.split("/");
+        const annId = parts[4];
+        const ann = db.announcements.find(a => a.id === annId);
+        if (ann) {
+          ann.enabled = !ann.enabled;
+          saveDB(db);
+          resolve({ success: true, announcement: ann });
+        } else {
+          resolve({ error: "Announcement not found" });
+        }
+        return;
+      }
+
+      if (endpoint.startsWith("/api/admin/announcements/") && method === "PUT") {
+        const parts = endpoint.split("/");
+        const annId = parts[4];
+        const ann = db.announcements.find(a => a.id === annId);
+        if (ann) {
+          ann.title = body.title;
+          ann.content = body.content;
+          ann.type = body.type || "info";
+          ann.dismissible = body.dismissible !== false;
+          saveDB(db);
+          resolve({ success: true, announcement: ann });
+        } else {
+          resolve({ error: "Announcement not found" });
+        }
+        return;
+      }
+
+      if (endpoint === "/api/user/login-popup" && method === "GET") {
+        const latest = [...db.announcements].filter(a => a.enabled).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+        resolve({ announcement: latest || null });
         return;
       }
 

@@ -17,10 +17,10 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   const navLinkClass = (view: string) =>
-    `text-sm font-medium transition-all cursor-pointer px-1 py-0.5 ${
+    `text-sm font-semibold transition-all cursor-pointer px-1 py-0.5 ${
       currentView === view
-        ? isDarkMode ? "text-[#2563EB] font-semibold" : "text-[#2563EB] font-semibold"
-        : isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-[#2563EB]"
+        ? isDarkMode ? "text-[#60a5fa]" : "text-[#2563EB]"
+        : isDarkMode ? "text-slate-200 hover:text-white" : "text-slate-600 hover:text-[#2563EB]"
     }`;
 
   const isActive = (view: string) => currentView === view;
@@ -338,7 +338,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
               className="block py-2.5 text-sm font-semibold rounded-xl px-3 cursor-pointer transition-colors"
               style={isActive(v)
                 ? { background: "#DBEAFE", color: "#2563EB" }
-                : { color: isDarkMode ? "#94a3b8" : "#475569" }
+                : { color: isDarkMode ? "#e2e8f0" : "#475569" }
               }
             >
               {v.charAt(0).toUpperCase() + v.slice(1)}
@@ -360,14 +360,14 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                     ["earner-referrals","Referrals Network"]
                   ].map(([v, label]) => (
                     <span key={v} onClick={() => { onNavigate(v); setMobileMenuOpen(false); }}
-                      className="block py-2.5 text-sm font-medium rounded-xl px-3 cursor-pointer transition-colors"
-                      style={{ color: isDarkMode ? "#94a3b8" : "#475569" }}
+                      className="block py-2.5 text-sm font-semibold rounded-xl px-3 cursor-pointer transition-colors"
+                      style={{ color: isDarkMode ? "#e2e8f0" : "#475569" }}
                     >{label}</span>
                   ))}
                   <button
                     onClick={() => { onNavigate("earner-notifications"); setMobileMenuOpen(false); }}
-                    className="w-full text-left flex items-center justify-between py-2.5 text-sm font-medium rounded-xl px-3 transition-colors"
-                    style={{ color: isDarkMode ? "#94a3b8" : "#475569" }}
+                    className="w-full text-left flex items-center justify-between py-2.5 text-sm font-semibold rounded-xl px-3 transition-colors"
+                    style={{ color: isDarkMode ? "#e2e8f0" : "#475569" }}
                   >
                     <span>Notifications</span>
                     {earnerUnreadCount > 0 && (
@@ -387,8 +387,8 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                     ["advertiser-submissions","Review Proofs"]
                   ].map(([v, label]) => (
                     <span key={v} onClick={() => { onNavigate(v); setMobileMenuOpen(false); }}
-                      className="block py-2.5 text-sm font-medium rounded-xl px-3 cursor-pointer transition-colors"
-                      style={{ color: isDarkMode ? "#94a3b8" : "#475569" }}
+                      className="block py-2.5 text-sm font-semibold rounded-xl px-3 cursor-pointer transition-colors"
+                      style={{ color: isDarkMode ? "#e2e8f0" : "#475569" }}
                     >{label}</span>
                   ))}
                   <button
@@ -426,7 +426,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                 onClick={() => { onNavigate("login"); setMobileMenuOpen(false); }}
                 className="w-full py-2.5 text-center text-sm font-semibold rounded-xl transition-all"
                 style={isDarkMode
-                  ? { color: "#94a3b8", border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.02)" }
+                  ? { color: "#e2e8f0", border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.02)" }
                   : { color: "#475569", border: "1px solid #E2E8F0", background: "#F8FAFC" }}
               >
                 Sign In
