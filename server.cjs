@@ -1405,23 +1405,35 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
     if (!proofText && !proofScreenshot) {
       return res.status(400).json({ error: "Please provide proof details: notes, a link, or a screenshot." });
     }
-    const taskRes = await pool.query("SELECT * FROM tasks WHERE id = $1", [taskId]);
+    await client.query("BEGIN");
+    const taskRes = await client.query(
+      "SELECT * FROM tasks WHERE id = $1 FOR UPDATE",
+      [taskId]
+    );
     if (taskRes.rows.length === 0 || taskRes.rows[0].status !== "Active" /* ACTIVE */) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "Task is not active or not found" });
     }
     const task = mapTask(taskRes.rows[0]);
-    const alreadySub = await pool.query("SELECT id FROM submissions WHERE task_id = $1 AND earner_id = $2", [taskId, user.id]);
-    if (alreadySub.rows.length > 0) return res.status(400).json({ error: "You have already submitted a proof for this task" });
-    if (task.filledSlots >= task.totalSlots) return res.status(400).json({ error: "This task has reached its submission limit" });
+    const alreadySub = await client.query(
+      "SELECT id FROM submissions WHERE task_id = $1 AND earner_id = $2",
+      [taskId, user.id]
+    );
+    if (alreadySub.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "You have already submitted a proof for this task" });
+    }
+    if (task.filledSlots >= task.totalSlots) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "This task has reached its submission limit" });
+    }
     const screenshot = proofScreenshot || null;
     const finalProofText = proofText || "See uploaded screenshot proof.";
     const subId = "sub-" + Math.random().toString(36).substr(2, 9);
-    await client.query("BEGIN");
     await client.query(`
       INSERT INTO submissions (id, task_id, task_title, category, earner_id, earner_name, proof_text, proof_screenshot, status, reward, submitted_at)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Pending',$9,$10)
     `, [subId, taskId, task.title, task.category, user.id, user.name, finalProofText, screenshot, task.earningPerSlot, /* @__PURE__ */ new Date()]);
-    await client.query("UPDATE tasks SET filled_slots = filled_slots + 1 WHERE id = $1", [taskId]);
     await client.query("COMMIT");
     notifyAdmin({ type: "submission", message: `New task submission from ${user.name} for "${task.title}"`, referenceId: subId });
     const subRes = await pool.query("SELECT * FROM submissions WHERE id = $1", [subId]);
