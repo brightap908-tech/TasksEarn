@@ -145,8 +145,8 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   const [settings, setSettings] = React.useState<WebsiteSettings>({
     platformName: "TasksEarn",
     referralReward: 0,
-    withdrawalFee: 100,
-    minWithdrawal: 2000,
+    withdrawalFee: 50,
+    minWithdrawal: 200,
     minDeposit: 1000,
     contactEmail: "support@tasksearn.com",
     contactPhone: "09164444315",
@@ -1197,8 +1197,8 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
       
-      {/* Left Sidebar Menu Rail */}
-      <div className="lg:col-span-1 space-y-1 lg:sticky lg:top-20 lg:self-start">
+      {/* Left Sidebar Menu Rail (desktop only — mobile uses the bottom nav bar + hamburger menu) */}
+      <div className="hidden lg:block lg:col-span-1 space-y-1 lg:sticky lg:top-20 lg:self-start">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-2">Admin Dashboard</p>
 
         {([

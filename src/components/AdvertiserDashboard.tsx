@@ -47,8 +47,9 @@ interface AdvertiserDashboardProps {
   user: User;
   onRefreshUser: () => void;
   onNavigate: (view: string) => void;
-  onOpenDeposit: () => void;
+  onOpenDeposit: (amount?: string) => void;
   apiFetch: (endpoint: string, options?: RequestInit) => Promise<any>;
+  settings?: { minDeposit: number };
 }
 
 type Tab = "overview" | "create" | "manage" | "audit" | "transactions" | "price-list" | "profile" | "wallet" | "fund" | "pending-submissions" | "approved" | "rejected" | "notifications" | "settings";
@@ -64,8 +65,11 @@ export default function AdvertiserDashboard({
   onRefreshUser,
   onNavigate,
   onOpenDeposit,
-  apiFetch
+  apiFetch,
+  settings
 }: AdvertiserDashboardProps) {
+  const minDeposit = settings?.minDeposit || 1000;
+  const [fundAmount, setFundAmount] = React.useState(String(minDeposit));
   const VALID_ADVERTISER_TABS: Tab[] = ["overview", "create", "manage", "audit", "transactions", "price-list", "profile", "wallet", "fund", "pending-submissions", "approved", "rejected", "notifications", "settings"];
   const { section } = useParams<{ section?: string }>();
   const navigate = useNavigate();
@@ -521,8 +525,8 @@ export default function AdvertiserDashboard({
           </button>
         </div>
 
-        {/* Navigation */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm space-y-1">
+        {/* Navigation (desktop only — mobile uses the bottom nav bar + hamburger menu) */}
+        <div className="hidden lg:block rounded-2xl border border-slate-200 bg-white p-3 shadow-sm space-y-1">
           {navBtn("overview", "Dashboard", <LayoutDashboard className="h-4 w-4 text-slate-400" />)}
           {navBtn("create", "Create Campaign", <PlusCircle className="h-4 w-4 text-slate-400" />)}
           {navBtn("manage", `My Campaigns (${campaigns.length || stats.campaignsCount})`, <Briefcase className="h-4 w-4 text-slate-400" />)}
@@ -1548,34 +1552,48 @@ export default function AdvertiserDashboard({
 
         {/* ─── TAB: FUND WALLET ──────────────────────────────────────────── */}
         {activeTab === "fund" && (
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <Coins className="h-5 w-5 text-blue-500" />
-                <h3 className="font-display text-sm font-bold text-gray-900">Fund Your Ad Wallet</h3>
-              </div>
-              <p className="text-xs text-gray-400 mb-6">Add funds to your wallet to launch and manage campaigns. Payment is processed securely via Paystack.</p>
-              <div className="rounded-xl border border-blue-100 bg-blue-50 p-5 space-y-4 max-w-md">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl">🇳🇬</div>
-                  <div>
-                    <p className="text-sm font-bold text-blue-900">Paystack Secure Checkout</p>
-                    <p className="text-xs text-blue-600">Cards, Bank Transfer, USSD &amp; more</p>
-                  </div>
-                </div>
-                <div className="rounded-xl bg-white border border-blue-100 p-4 flex items-center justify-between">
-                  <span className="text-xs text-gray-600">Current wallet balance</span>
-                  <span className="font-mono font-bold text-blue-600">₦{user.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                </div>
-                <button
-                  onClick={onOpenDeposit}
-                  className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-3 text-sm font-bold text-white shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2"
-                >
-                  💳 Open Paystack Checkout
-                </button>
-                <p className="text-[10px] text-gray-400 text-center">You will be redirected to a secure Paystack payment window.</p>
-              </div>
+          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm max-w-md">
+            <div className="flex items-center gap-2 mb-1">
+              <Coins className="h-5 w-5 text-blue-500" />
+              <h3 className="font-display text-sm font-bold text-gray-900">Fund Your Ad Wallet</h3>
             </div>
+            <p className="text-xs text-gray-400 mb-5">Secured by Paystack — cards, bank transfer &amp; USSD.</p>
+
+            <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 flex items-center justify-between mb-4">
+              <span className="text-xs text-gray-600">Current wallet balance</span>
+              <span className="font-mono font-bold text-blue-600">₦{user.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            </div>
+
+            <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Amount to fund (₦)</label>
+            <input
+              type="number"
+              min={minDeposit}
+              value={fundAmount}
+              onChange={(e) => setFundAmount(e.target.value)}
+              placeholder={`Min: ₦${minDeposit.toLocaleString()}`}
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none font-mono mb-3"
+            />
+
+            <div className="flex flex-wrap gap-2 mb-5">
+              {[minDeposit, 5000, 10000, 20000].filter((v, i, arr) => arr.indexOf(v) === i).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setFundAmount(String(v))}
+                  className="rounded-full border border-blue-100 bg-blue-50 hover:bg-blue-100 px-3 py-1 text-[11px] font-bold text-blue-700 transition-all cursor-pointer"
+                >
+                  ₦{v.toLocaleString()}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => onOpenDeposit(fundAmount)}
+              className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-3 text-sm font-bold text-white shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              💳 Continue to Paystack Checkout
+            </button>
+            <p className="text-[10px] text-gray-400 text-center mt-2">You will be redirected to a secure Paystack payment window.</p>
           </div>
         )}
 

@@ -15,6 +15,8 @@ import {
 } from "./types";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import MobileBottomNav from "./components/MobileBottomNav";
+import RouteProgressBar from "./components/RouteProgressBar";
 import LoginPopupModal from "./components/LoginPopupModal";
 import PublicPages from "./components/PublicPages";
 import EarnerDashboard from "./components/EarnerDashboard";
@@ -163,6 +165,10 @@ export default function App() {
   // Paystack Deposit Modal State
   const [depositOpen, setDepositOpen] = React.useState(false);
   const [depositAmount, setDepositAmount] = React.useState("5000");
+  const openDeposit = (amount?: string) => {
+    if (amount) setDepositAmount(amount);
+    setDepositOpen(true);
+  };
   const [depositGateway, setDepositGateway] = React.useState("Paystack");
   const [depositProcessing, setDepositProcessing] = React.useState(false);
   const [depositSuccess, setDepositSuccess] = React.useState(false);
@@ -791,14 +797,17 @@ export default function App() {
         currentView={currentView} 
         onNavigate={(view) => setCurrentView(view)} 
         onLogout={handleLogout}
-        onOpenDeposit={() => setDepositOpen(true)}
+        onOpenDeposit={openDeposit}
         isDarkMode={isDarkMode}
         onToggleDarkMode={toggleDarkMode}
         earnerUnreadCount={earnerUnreadCount}
       />
 
+      {/* Route change loading indicator */}
+      <RouteProgressBar />
+
       {/* Main Dynamic Content View Stage */}
-      <main className="flex-grow">
+      <main className={`flex-grow ${user ? "pb-16 md:pb-0" : ""}`}>
 
         <AnimatePresence mode="wait" initial={false}>
         <motion.div
@@ -1649,8 +1658,9 @@ export default function App() {
                 user={user} 
                 onRefreshUser={refreshUserSession}
                 onNavigate={(view) => setCurrentView(view)}
-                onOpenDeposit={() => setDepositOpen(true)}
+                onOpenDeposit={openDeposit}
                 apiFetch={apiFetch}
+                settings={settings}
               />
             </div>
           ) : (<Navigate to="/advertiser-login" replace />)
@@ -1860,6 +1870,9 @@ export default function App() {
         platformName={settings.platformName}
         settings={settings}
       />
+
+      {/* Mobile-only fixed bottom navigation for logged-in dashboards */}
+      <MobileBottomNav user={user} isDarkMode={isDarkMode} earnerUnreadCount={earnerUnreadCount} />
 
     </div>
   );

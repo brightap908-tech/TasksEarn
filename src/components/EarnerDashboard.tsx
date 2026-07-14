@@ -141,7 +141,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
   const [withdrawSuccess, setWithdrawSuccess] = React.useState(false);
   const [withdrawError, setWithdrawError] = React.useState("");
   const [withdrawSubmitting, setWithdrawSubmitting] = React.useState(false);
-  const [minWithdrawLimit, setMinWithdrawLimit] = React.useState(250);
+  const [minWithdrawLimit, setMinWithdrawLimit] = React.useState(200);
   const [withdrawFee, setWithdrawFee] = React.useState(50);
 
   // Bank verification state
@@ -530,8 +530,8 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
           </div>
         </div>
 
-        {/* Navigation Menu */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs space-y-1">
+        {/* Navigation Menu (desktop only — mobile uses the bottom nav bar + hamburger menu) */}
+        <div className="hidden lg:block rounded-2xl border border-slate-200 bg-white p-3 shadow-xs space-y-1">
           {([
             { tab: "overview" as EarnerTab, label: "Dashboard" },
             { tab: "tasks" as EarnerTab, label: `Available Tasks (${tasks.length})` },

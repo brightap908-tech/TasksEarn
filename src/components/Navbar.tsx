@@ -353,38 +353,35 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
 
               {user.role === UserRole.EARNER && (
                 <>
+                  <p className="px-3 text-[9px] font-bold uppercase tracking-[0.12em] mb-1" style={{ color: "#94a3b8" }}>
+                    More Pages
+                  </p>
                   {[
-                    ["earner-dashboard","My Stats"],
-                    ["earner-tasks","Browse Tasks"],
-                    ["earner-submissions","Submission History"],
-                    ["earner-referrals","Referrals Network"]
+                    ["earner-pending","Waiting for Approval"],
+                    ["earner-completed","Completed Tasks"],
+                    ["earner-withdraw","Withdraw Funds"],
+                    ["earner-referrals","Referrals Network"],
+                    ["earner-settings","Settings"]
                   ].map(([v, label]) => (
                     <span key={v} onClick={() => { onNavigate(v); setMobileMenuOpen(false); }}
                       className="block py-2.5 text-sm font-semibold rounded-xl px-3 cursor-pointer transition-colors"
                       style={{ color: isDarkMode ? "#e2e8f0" : "#475569" }}
                     >{label}</span>
                   ))}
-                  <button
-                    onClick={() => { onNavigate("earner-notifications"); setMobileMenuOpen(false); }}
-                    className="w-full text-left flex items-center justify-between py-2.5 text-sm font-semibold rounded-xl px-3 transition-colors"
-                    style={{ color: isDarkMode ? "#e2e8f0" : "#475569" }}
-                  >
-                    <span>Notifications</span>
-                    {earnerUnreadCount > 0 && (
-                      <span className="rounded-full text-[9px] font-black text-white px-1.5 py-0.5" style={{ background: "#EF4444" }}>
-                        {earnerUnreadCount}
-                      </span>
-                    )}
-                  </button>
                 </>
               )}
 
               {user.role === UserRole.ADVERTISER && (
                 <>
+                  <p className="px-3 text-[9px] font-bold uppercase tracking-[0.12em] mb-1" style={{ color: "#94a3b8" }}>
+                    More Pages
+                  </p>
                   {[
-                    ["advertiser-dashboard","Campaign Stats"],
-                    ["advertiser-tasks","My Campaigns"],
-                    ["advertiser-submissions","Review Proofs"]
+                    ["advertiser-create","Create Campaign"],
+                    ["advertiser-pending-submissions","Pending Submissions"],
+                    ["advertiser-approved","Approved Tasks"],
+                    ["advertiser-rejected","Rejected Tasks"],
+                    ["advertiser-settings","Settings"]
                   ].map(([v, label]) => (
                     <span key={v} onClick={() => { onNavigate(v); setMobileMenuOpen(false); }}
                       className="block py-2.5 text-sm font-semibold rounded-xl px-3 cursor-pointer transition-colors"
@@ -402,12 +399,26 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
               )}
 
               {user.role === UserRole.ADMIN && (
-                <span onClick={() => { onNavigate("admin-dashboard"); setMobileMenuOpen(false); }}
-                  className="block py-2.5 text-sm font-semibold rounded-xl px-3 cursor-pointer transition-colors"
-                  style={{ color: "#818cf8" }}
-                >
-                  Super Admin Controls
-                </span>
+                <>
+                  <p className="px-3 text-[9px] font-bold uppercase tracking-[0.12em] mb-1" style={{ color: "#94a3b8" }}>
+                    More Pages
+                  </p>
+                  {[
+                    ["admin-advertisers","Advertiser Management"],
+                    ["admin-campaigns","Campaign Management"],
+                    ["admin-tasks","Task Management"],
+                    ["admin-pricing","Pricing Settings"],
+                    ["admin-wallet","Wallet & Commission"],
+                    ["admin-announcements","Popup Messages"],
+                    ["admin-reports","Reports"],
+                    ["admin-settings","Site Settings"]
+                  ].map(([v, label]) => (
+                    <span key={v} onClick={() => { onNavigate(v); setMobileMenuOpen(false); }}
+                      className="block py-2.5 text-sm font-semibold rounded-xl px-3 cursor-pointer transition-colors"
+                      style={{ color: isDarkMode ? "#e2e8f0" : "#475569" }}
+                    >{label}</span>
+                  ))}
+                </>
               )}
 
               <button
