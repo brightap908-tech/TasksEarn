@@ -353,7 +353,7 @@ async function bootstrapTables() {
         earner_id VARCHAR(50) NOT NULL,
         earner_name VARCHAR(150) NOT NULL,
         proof_text TEXT NOT NULL,
-        proof_screenshot VARCHAR(1000) NULL,
+        proof_screenshot TEXT NULL,
         status VARCHAR(50) NOT NULL DEFAULT 'Pending',
         feedback TEXT NULL,
         reward DECIMAL(10, 2) NOT NULL,
@@ -561,6 +561,15 @@ async function bootstrapTables() {
 
     // 18. Migrate: add is_admin_task flag to tasks table
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_admin_task BOOLEAN NOT NULL DEFAULT FALSE`);
+
+    // 19. Migrate: widen proof_screenshot from VARCHAR(1000) to TEXT so that
+    //     base64-encoded screenshot data URLs (which can be 100 KB+) are stored
+    //     without a "value too long for type character varying(1000)" error.
+    //     Casting VARCHAR -> TEXT is always safe in PostgreSQL and is a
+    //     near-no-op when the column already is TEXT.
+    await client.query(
+      "ALTER TABLE submissions ALTER COLUMN proof_screenshot TYPE TEXT"
+    );
 
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
@@ -1462,13 +1471,18 @@ app.get("/api/earner/tasks", async (req, res) => {
 });
 
 app.post("/api/earner/tasks/:id/submit", async (req, res) => {
+  const client = await pool.connect();
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
 
     const taskId = req.params.id;
     const { proofText, proofScreenshot } = req.body;
-    if (!proofText) return res.status(400).json({ error: "Proof details are required" });
+
+    // Require at least some proof — text, link, or a screenshot
+    if (!proofText && !proofScreenshot) {
+      return res.status(400).json({ error: "Please provide proof details: notes, a link, or a screenshot." });
+    }
 
     const taskRes = await pool.query("SELECT * FROM tasks WHERE id = $1", [taskId]);
     if (taskRes.rows.length === 0 || taskRes.rows[0].status !== TaskStatus.ACTIVE) {
@@ -1481,21 +1495,38 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
 
     if (task.filledSlots >= task.totalSlots) return res.status(400).json({ error: "This task has reached its submission limit" });
 
-    const screenshot = proofScreenshot || "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=300&auto=format&fit=crop&q=60";
+    // Screenshot is stored as-is (TEXT column now supports base64 data URLs of any length).
+    // Fall back to null so the column stays NULL rather than storing a placeholder URL.
+    const screenshot = proofScreenshot || null;
+    const finalProofText = proofText || "See uploaded screenshot proof.";
     const subId = "sub-" + Math.random().toString(36).substr(2, 9);
 
-    await pool.query(`
+    await client.query("BEGIN");
+
+    await client.query(`
       INSERT INTO submissions (id, task_id, task_title, category, earner_id, earner_name, proof_text, proof_screenshot, status, reward, submitted_at)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Pending',$9,$10)
-    `, [subId, taskId, task.title, task.category, user.id, user.name, proofText, screenshot, task.earningPerSlot, new Date()]);
+    `, [subId, taskId, task.title, task.category, user.id, user.name, finalProofText, screenshot, task.earningPerSlot, new Date()]);
+
+    // Increment filled_slots so slot tracking stays accurate
+    await client.query("UPDATE tasks SET filled_slots = filled_slots + 1 WHERE id = $1", [taskId]);
+
+    await client.query("COMMIT");
 
     notifyAdmin({ type: "submission", message: `New task submission from ${user.name} for "${task.title}"`, referenceId: subId });
 
     const subRes = await pool.query("SELECT * FROM submissions WHERE id = $1", [subId]);
-    res.json({ success: true, submission: mapSubmission(subRes.rows[0]) });
-  } catch (err) {
-    console.error("Submit error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(201).json({ success: true, message: "Task submitted successfully", submission: mapSubmission(subRes.rows[0]) });
+  } catch (err: any) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error("[Submit task] Error:", err);
+    const isDev = process.env.NODE_ENV !== "production";
+    res.status(500).json({
+      error: isDev ? (err?.message || "Server error") : "Server error",
+      ...(isDev && err?.detail ? { detail: err.detail } : {})
+    });
+  } finally {
+    client.release();
   }
 });
 
