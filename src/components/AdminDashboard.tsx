@@ -58,8 +58,8 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminDashboardProps) {
-  type AdminTab = "stats" | "users" | "campaigns" | "admin-tasks" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings" | "commissions";
-  const VALID_ADMIN_TABS: AdminTab[] = ["stats", "users", "campaigns", "admin-tasks", "withdrawals", "audits", "announcements", "cms", "settings", "pricing", "platforms", "platform-earnings", "commissions"];
+  type AdminTab = "stats" | "users" | "advertisers" | "campaigns" | "admin-tasks" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings" | "commissions" | "notifications" | "reports" | "profile";
+  const VALID_ADMIN_TABS: AdminTab[] = ["stats", "users", "advertisers", "campaigns", "admin-tasks", "withdrawals", "audits", "announcements", "cms", "settings", "pricing", "platforms", "platform-earnings", "commissions", "notifications", "reports", "profile"];
   const { section } = useParams<{ section?: string }>();
   const navigate = useNavigate();
   const activeTab: AdminTab = (VALID_ADMIN_TABS.includes(section as AdminTab) ? section : "stats") as AdminTab;
@@ -404,6 +404,9 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
       fetchPlatformStats();
       fetchCommissions();
     }
+    if (activeTab === "advertisers") fetchUsers();
+    if (activeTab === "notifications") { /* notifications already fetched on mount */ }
+    if (activeTab === "reports") { fetchStats(); fetchDepositsAndReferrals(); fetchAudits(); }
   }, [activeTab]);
 
   React.useEffect(() => {
@@ -1197,136 +1200,33 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
       {/* Left Sidebar Menu Rail */}
       <div className="lg:col-span-1 space-y-1">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-2">Admin Dashboard</p>
-        
-        <button 
-          onClick={() => setActiveTab("stats")}
-          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "stats" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-          }`}
-        >
-          <LayoutGrid className="h-4 w-4 text-slate-400" /> 
-          <span>System Status</span>
-        </button>
 
-        <button 
-          onClick={() => setActiveTab("users")}
-          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "users" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-          }`}
-        >
-          <Users className="h-4 w-4 text-slate-400" /> 
-          <span>Manage Users</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab("campaigns")}
-          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "campaigns" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-          }`}
-        >
-          <Briefcase className="h-4 w-4 text-slate-400" /> 
-          <span>Tasks & Campaigns</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab("admin-tasks")}
-          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "admin-tasks" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-          }`}
-        >
-          <ListTodo className="h-4 w-4 text-slate-400" /> 
-          <span>Admin Tasks ({adminTasksList.filter(t => t.status === TaskStatus.ACTIVE).length} active)</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab("withdrawals")}
-          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "withdrawals" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-          }`}
-        >
-          <CreditCard className="h-4 w-4 text-slate-400" /> 
-          <span>Payout requests ({withdrawalsList.filter(w => w.status === TransactionStatus.PENDING).length})</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab("audits")}
-          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "audits" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-          }`}
-        >
-          <ShieldAlert className="h-4 w-4 text-slate-400" /> 
-          <span>Auditing Center ({submissionsList.filter(s => s.status === SubmissionStatus.PENDING).length})</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab("announcements")}
-          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "announcements" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-          }`}
-        >
-          <Megaphone className="h-4 w-4 text-slate-400" /> 
-          <span>CMS Notices & Ads</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab("cms")}
-          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "cms" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-          }`}
-        >
-          <FileEdit className="h-4 w-4 text-slate-400" /> 
-          <span>Static Pages Editor</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab("settings")}
-          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "settings" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-          }`}
-        >
-          <Settings className="h-4 w-4 text-slate-400" /> 
-          <span>Platform Settings</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab("platforms")}
-          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "platforms" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-          }`}
-        >
-          <Share2 className="h-4 w-4 text-slate-400" /> 
-          <span>Social Media Platforms</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab("pricing")}
-          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "pricing" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-          }`}
-        >
-          <Coins className="h-4 w-4 text-slate-400" /> 
-          <span>Task Pricing</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab("platform-earnings")}
-          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "platform-earnings" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-          }`}
-        >
-          <TrendingUp className="h-4 w-4 text-slate-400" /> 
-          <span>Platform Earnings</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab("commissions")}
-          className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
-            activeTab === "commissions" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-          }`}
-        >
-          <BadgePercent className="h-4 w-4 text-slate-400" /> 
-          <span>Commission Ledger</span>
-        </button>
+        {([
+          { tab: "stats" as AdminTab, icon: <LayoutGrid className="h-4 w-4 text-slate-400" />, label: "Dashboard" },
+          { tab: "users" as AdminTab, icon: <Users className="h-4 w-4 text-slate-400" />, label: "User Management" },
+          { tab: "advertisers" as AdminTab, icon: <Megaphone className="h-4 w-4 text-slate-400" />, label: "Advertiser Management" },
+          { tab: "campaigns" as AdminTab, icon: <Briefcase className="h-4 w-4 text-slate-400" />, label: "Campaign Management" },
+          { tab: "admin-tasks" as AdminTab, icon: <ListTodo className="h-4 w-4 text-slate-400" />, label: `Task Management (${adminTasksList.filter(t => t.status === TaskStatus.ACTIVE).length})` },
+          { tab: "pricing" as AdminTab, icon: <Coins className="h-4 w-4 text-slate-400" />, label: "Pricing Settings" },
+          { tab: "platform-earnings" as AdminTab, icon: <TrendingUp className="h-4 w-4 text-slate-400" />, label: "Wallet & Commission" },
+          { tab: "withdrawals" as AdminTab, icon: <CreditCard className="h-4 w-4 text-slate-400" />, label: `Withdrawals (${withdrawalsList.filter(w => w.status === TransactionStatus.PENDING).length})` },
+          { tab: "announcements" as AdminTab, icon: <Megaphone className="h-4 w-4 text-slate-400" />, label: "Popup Messages" },
+          { tab: "notifications" as AdminTab, icon: <Bell className="h-4 w-4 text-slate-400" />, label: `Notifications (${unreadCount})` },
+          { tab: "reports" as AdminTab, icon: <TrendingUp className="h-4 w-4 text-slate-400" />, label: "Reports" },
+          { tab: "settings" as AdminTab, icon: <Settings className="h-4 w-4 text-slate-400" />, label: "Site Settings" },
+          { tab: "profile" as AdminTab, icon: <FolderSync className="h-4 w-4 text-slate-400" />, label: "Profile" },
+        ] as { tab: AdminTab; icon: React.ReactNode; label: string }[]).map(({ tab, icon, label }) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center gap-2.5 ${
+              activeTab === tab ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
+            }`}
+          >
+            {icon}
+            <span>{label}</span>
+          </button>
+        ))}
       </div>
 
       {/* Main Content Pane */}
@@ -2944,6 +2844,227 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB: ADVERTISER MANAGEMENT */}
+        {activeTab === "advertisers" && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display text-sm font-bold text-gray-900">Advertiser Management</h3>
+                <span className="text-[10px] font-bold text-gray-400 uppercase">
+                  {usersList.filter((u: any) => u.role === "Advertiser").length} advertisers
+                </span>
+              </div>
+              {usersList.filter((u: any) => u.role === "Advertiser").length === 0 ? (
+                <div className="text-center py-12 text-xs text-gray-400">No advertisers registered yet.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-gray-400 uppercase text-[9px] font-bold">
+                        <th className="py-3 px-2">Name</th>
+                        <th className="py-3 px-2">Email</th>
+                        <th className="py-3 px-2">Business</th>
+                        <th className="py-3 px-2">Wallet</th>
+                        <th className="py-3 px-2">Status</th>
+                        <th className="py-3 px-2">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usersList.filter((u: any) => u.role === "Advertiser").map((u: any, idx: number) => (
+                        <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50/50">
+                          <td className="py-3 px-2 font-bold text-gray-800">{u.name}</td>
+                          <td className="py-3 px-2 text-gray-500">{u.email}</td>
+                          <td className="py-3 px-2 text-gray-500">{u.businessName || "—"}</td>
+                          <td className="py-3 px-2 font-mono font-bold text-blue-600">₦{(u.walletBalance || 0).toLocaleString()}</td>
+                          <td className="py-3 px-2">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                              u.isVerified ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                            }`}>
+                              {u.isVerified ? "Verified" : "Unverified"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-2">
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => handleToggleVerification(u)}
+                                className="rounded-lg border border-gray-200 px-2 py-1 text-[10px] font-bold hover:bg-gray-50 transition-colors cursor-pointer">
+                                {u.isVerified ? "Unverify" : "Verify"}
+                              </button>
+                              <button onClick={() => setSelectedUserForBalance(u)}
+                                className="rounded-lg border border-blue-100 px-2 py-1 text-[10px] font-bold text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer">
+                                Adjust
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            {selectedUserForBalance && (
+              <form onSubmit={handleAdjustBalance} className="rounded-2xl border border-blue-100 bg-blue-50 p-5 shadow-sm space-y-3">
+                <h4 className="text-sm font-bold text-blue-900">Adjust Balance for {selectedUserForBalance.name}</h4>
+                <input type="number" required value={adjustBalanceAmount} onChange={e => setAdjustBalanceAmount(e.target.value)}
+                  placeholder="New wallet balance (₦)" className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm focus:outline-none bg-white" />
+                <div className="flex gap-3">
+                  <button type="submit" className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2 text-xs font-bold text-white transition-all">Apply</button>
+                  <button type="button" onClick={() => setSelectedUserForBalance(null)} className="rounded-xl border border-gray-200 px-5 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* TAB: NOTIFICATIONS PAGE */}
+        {activeTab === "notifications" && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-blue-500" />
+                  <h3 className="font-display text-sm font-bold text-gray-900">Notifications ({unreadCount} unread)</h3>
+                </div>
+                {unreadCount > 0 && (
+                  <button onClick={handleMarkAllRead}
+                    className="flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-700 hover:bg-blue-100 transition-all cursor-pointer">
+                    <CheckCheck className="h-3.5 w-3.5" /> Mark all read
+                  </button>
+                )}
+              </div>
+              {notifications.length === 0 ? (
+                <div className="text-center py-12">
+                  <Bell className="h-10 w-10 mx-auto stroke-1 mb-3 opacity-20 text-slate-400" />
+                  <p className="text-sm font-bold text-slate-400">All quiet — no notifications yet</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-50 space-y-0">
+                  {notifications.map((notif) => (
+                    <div key={notif.id} onClick={() => handleNotificationClick(notif)}
+                      className={`py-4 px-3 rounded-xl transition-all flex gap-3 cursor-pointer items-start ${
+                        notif.read ? "hover:bg-slate-50/50" : "bg-blue-50/40 hover:bg-blue-50"
+                      }`}>
+                      <div className={`rounded-full p-2 shrink-0 ${notif.type === "submission" ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600"}`}>
+                        {notif.type === "submission" ? <ShieldAlert className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs leading-tight ${notif.read ? "text-slate-600 font-medium" : "text-slate-900 font-bold"}`}>{notif.message}</p>
+                        <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {new Date(notif.createdAt).toLocaleString("en-NG", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                      {!notif.read && <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0 mt-2" />}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB: REPORTS */}
+        {activeTab === "reports" && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { label: "Total Earners", value: stats.earnersCount, color: "text-slate-800" },
+                { label: "Total Advertisers", value: stats.advertisersCount, color: "text-slate-800" },
+                { label: "Active Campaigns", value: stats.tasksCount, color: "text-blue-600" },
+                { label: "Pending Withdrawals", value: `₦${stats.pendingWithdrawals.toLocaleString()}`, color: "text-amber-600" },
+                { label: "Total Earner Payouts", value: `₦${stats.totalEarned.toLocaleString()}`, color: "text-blue-600" },
+                { label: "Total Ad Deposits", value: `₦${stats.totalDeposited.toLocaleString()}`, color: "text-indigo-600" },
+                { label: "Platform Revenue", value: `₦${platformStats.totalPlatformRevenue.toLocaleString()}`, color: "text-emerald-600" },
+                { label: "Pending Audits", value: submissionsList.filter(s => s.status === SubmissionStatus.PENDING).length, color: "text-rose-600" },
+              ].map((item, idx) => (
+                <div key={idx} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                  <span className="block text-[10px] font-bold text-gray-400 uppercase">{item.label}</span>
+                  <span className={`block font-mono text-lg font-black mt-1 ${item.color}`}>{item.value}</span>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <h3 className="font-display text-xs font-bold text-gray-900 flex items-center gap-1.5 uppercase tracking-wider mb-4">
+                  <ArrowDownCircle className="h-4 w-4 text-blue-500" /> Recent Deposits
+                </h3>
+                {depositsList.length === 0 ? (
+                  <p className="text-center py-4 text-xs text-gray-400">No deposits.</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {depositsList.slice(0, 10).map((dep, idx) => (
+                      <div key={idx} className="flex justify-between text-xs border-b border-gray-50 pb-2">
+                        <div>
+                          <p className="font-bold text-gray-800">{dep.userName}</p>
+                          <p className="text-[10px] text-gray-400">{new Date(dep.createdAt).toLocaleDateString()}</p>
+                        </div>
+                        <span className="font-mono font-bold text-blue-600">+₦{dep.amount.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <h3 className="font-display text-xs font-bold text-gray-900 flex items-center gap-1.5 uppercase tracking-wider mb-4">
+                  <Share2 className="h-4 w-4 text-blue-500" /> Recent Referrals
+                </h3>
+                {referralsList.length === 0 ? (
+                  <p className="text-center py-4 text-xs text-gray-400">No referrals yet.</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {referralsList.slice(0, 10).map((ref: any, idx: number) => (
+                      <div key={idx} className="flex justify-between text-xs border-b border-gray-50 pb-2">
+                        <div>
+                          <p className="font-bold text-gray-800">{ref.refereeName}</p>
+                          <p className="text-[10px] text-gray-400">Referred by: {ref.referrerName}</p>
+                        </div>
+                        <span className="font-mono font-bold text-indigo-600">₦{ref.rewardEarned}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: PROFILE */}
+        {activeTab === "profile" && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <h3 className="font-display text-sm font-bold text-gray-900 mb-6">Admin Profile</h3>
+              <div className="flex items-center gap-5 mb-6 pb-6 border-b border-gray-100">
+                <div className="h-16 w-16 rounded-full flex items-center justify-center text-white font-display text-2xl font-black shadow-sm"
+                  style={{ background: "linear-gradient(135deg,#1e3a8a,#2563EB)" }}>
+                  {user.name.substring(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-base font-bold text-gray-900">{user.name}</p>
+                  <p className="text-xs text-gray-400">{user.email}</p>
+                  <span className="inline-flex items-center gap-1 mt-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-[10px] font-bold text-blue-700 border border-blue-100">
+                    ⚡ Super Admin
+                  </span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {[
+                  { label: "Total Earners", value: stats.earnersCount },
+                  { label: "Total Advertisers", value: stats.advertisersCount },
+                  { label: "Active Campaigns", value: stats.tasksCount },
+                  { label: "Platform Revenue", value: `₦${platformStats.totalPlatformRevenue.toLocaleString()}` },
+                  { label: "Available Balance", value: `₦${platformStats.availableBalance.toLocaleString()}` },
+                  { label: "Pending Withdrawals", value: `₦${stats.pendingWithdrawals.toLocaleString()}` },
+                ].map((item, idx) => (
+                  <div key={idx} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                    <span className="block text-[10px] font-bold text-gray-400 uppercase">{item.label}</span>
+                    <span className="block font-mono text-sm font-black text-gray-800 mt-1">{item.value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}

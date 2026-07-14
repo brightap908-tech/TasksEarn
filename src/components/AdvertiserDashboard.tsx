@@ -51,7 +51,7 @@ interface AdvertiserDashboardProps {
   apiFetch: (endpoint: string, options?: RequestInit) => Promise<any>;
 }
 
-type Tab = "overview" | "create" | "manage" | "audit" | "transactions" | "price-list" | "profile";
+type Tab = "overview" | "create" | "manage" | "audit" | "transactions" | "price-list" | "profile" | "wallet" | "fund" | "pending-submissions" | "approved" | "rejected" | "notifications" | "settings";
 
 const COUNTRIES = [
   "Nigeria", "Ghana", "Kenya", "South Africa", "Uganda", "Tanzania", "Rwanda",
@@ -66,7 +66,7 @@ export default function AdvertiserDashboard({
   onOpenDeposit,
   apiFetch
 }: AdvertiserDashboardProps) {
-  const VALID_ADVERTISER_TABS: Tab[] = ["overview", "create", "manage", "audit", "transactions", "price-list", "profile"];
+  const VALID_ADVERTISER_TABS: Tab[] = ["overview", "create", "manage", "audit", "transactions", "price-list", "profile", "wallet", "fund", "pending-submissions", "approved", "rejected", "notifications", "settings"];
   const { section } = useParams<{ section?: string }>();
   const navigate = useNavigate();
   const activeTab: Tab = (VALID_ADVERTISER_TABS.includes(section as Tab) ? section : "overview") as Tab;
@@ -244,8 +244,8 @@ export default function AdvertiserDashboard({
   React.useEffect(() => {
     if (activeTab === "overview") fetchStats();
     if (activeTab === "manage") fetchCampaigns();
-    if (activeTab === "audit") fetchSubmissions();
-    if (activeTab === "transactions") fetchTransactions();
+    if (activeTab === "audit" || activeTab === "pending-submissions" || activeTab === "approved" || activeTab === "rejected") fetchSubmissions();
+    if (activeTab === "transactions" || activeTab === "wallet") fetchTransactions();
     if (activeTab === "price-list") fetchAdvertiserPricing();
   }, [activeTab]);
 
@@ -523,13 +523,17 @@ export default function AdvertiserDashboard({
 
         {/* Navigation */}
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm space-y-1">
-          {navBtn("overview", "Overview & Stats", <LayoutDashboard className="h-4 w-4 text-slate-400" />)}
-          {navBtn("create", "Build Campaign", <PlusCircle className="h-4 w-4 text-slate-400" />)}
-          {navBtn("manage", `Manage Campaigns (${campaigns.length || stats.campaignsCount})`, <Briefcase className="h-4 w-4 text-slate-400" />)}
-          {navBtn("audit", "Auditing Desk", <CheckSquare className="h-4 w-4 text-slate-400" />, stats.pendingSubmissionsCount)}
-          {navBtn("transactions", "Payment Records", <History className="h-4 w-4 text-slate-400" />)}
-          {navBtn("price-list", "Task Price List", <Tags className="h-4 w-4 text-slate-400" />)}
-          {navBtn("profile", "Profile Settings", <UserCircle className="h-4 w-4 text-slate-400" />)}
+          {navBtn("overview", "Dashboard", <LayoutDashboard className="h-4 w-4 text-slate-400" />)}
+          {navBtn("create", "Create Campaign", <PlusCircle className="h-4 w-4 text-slate-400" />)}
+          {navBtn("manage", `My Campaigns (${campaigns.length || stats.campaignsCount})`, <Briefcase className="h-4 w-4 text-slate-400" />)}
+          {navBtn("wallet", "Wallet", <Wallet className="h-4 w-4 text-slate-400" />)}
+          {navBtn("fund", "Fund Wallet", <Coins className="h-4 w-4 text-slate-400" />)}
+          {navBtn("pending-submissions", "Pending Submissions", <CheckSquare className="h-4 w-4 text-slate-400" />, stats.pendingSubmissionsCount)}
+          {navBtn("approved", "Approved Tasks", <Check className="h-4 w-4 text-slate-400" />)}
+          {navBtn("rejected", "Rejected Tasks", <X className="h-4 w-4 text-slate-400" />)}
+          {navBtn("notifications", "Notifications", <Bell className="h-4 w-4 text-slate-400" />)}
+          {navBtn("profile", "Profile", <UserCircle className="h-4 w-4 text-slate-400" />)}
+          {navBtn("settings", "Settings", <Shield className="h-4 w-4 text-slate-400" />)}
         </div>
 
       </div>
@@ -1496,6 +1500,303 @@ export default function AdvertiserDashboard({
               </button>
             </div>
 
+          </div>
+        )}
+
+        {/* ─── TAB: WALLET ───────────────────────────────────────────────── */}
+        {activeTab === "wallet" && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-5 w-5 text-blue-500" />
+                  <h3 className="font-display text-sm font-bold text-gray-900">Ad Wallet</h3>
+                </div>
+                <span className="font-mono text-xl font-black text-blue-600">₦{user.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setActiveTab("fund")} className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2.5 text-xs font-bold text-white transition-all shadow-sm cursor-pointer flex items-center gap-1.5">
+                  <Coins className="h-3.5 w-3.5" /> Fund Wallet
+                </button>
+                <button onClick={() => setActiveTab("create")} className="rounded-xl border border-blue-100 hover:bg-blue-50 px-5 py-2.5 text-xs font-bold text-blue-600 transition-all cursor-pointer">
+                  Create Campaign
+                </button>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Transaction History</h3>
+              {transactions.length === 0 ? (
+                <p className="text-center py-8 text-xs text-gray-400">No transactions yet.</p>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {transactions.map((tx, idx) => (
+                    <div key={idx} className="flex justify-between items-center py-3">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-800 line-clamp-1">{tx.description}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{new Date(tx.createdAt).toLocaleDateString()} · {tx.type}</p>
+                      </div>
+                      <span className={`font-mono text-sm font-bold ${tx.type === "Campaign Spend" ? "text-red-500" : "text-blue-600"}`}>
+                        {tx.type === "Campaign Spend" ? "-" : "+"}₦{tx.amount.toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─── TAB: FUND WALLET ──────────────────────────────────────────── */}
+        {activeTab === "fund" && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <Coins className="h-5 w-5 text-blue-500" />
+                <h3 className="font-display text-sm font-bold text-gray-900">Fund Your Ad Wallet</h3>
+              </div>
+              <p className="text-xs text-gray-400 mb-6">Add funds to your wallet to launch and manage campaigns. Payment is processed securely via Paystack.</p>
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-5 space-y-4 max-w-md">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl">🇳🇬</div>
+                  <div>
+                    <p className="text-sm font-bold text-blue-900">Paystack Secure Checkout</p>
+                    <p className="text-xs text-blue-600">Cards, Bank Transfer, USSD &amp; more</p>
+                  </div>
+                </div>
+                <div className="rounded-xl bg-white border border-blue-100 p-4 flex items-center justify-between">
+                  <span className="text-xs text-gray-600">Current wallet balance</span>
+                  <span className="font-mono font-bold text-blue-600">₦{user.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <button
+                  onClick={onOpenDeposit}
+                  className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-3 text-sm font-bold text-white shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  💳 Open Paystack Checkout
+                </button>
+                <p className="text-[10px] text-gray-400 text-center">You will be redirected to a secure Paystack payment window.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── TAB: PENDING SUBMISSIONS ──────────────────────────────────── */}
+        {activeTab === "pending-submissions" && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-amber-100 bg-white shadow-sm overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-amber-50 bg-amber-50/50">
+                <CheckSquare className="h-4 w-4 text-amber-500 shrink-0" />
+                <div className="flex-1">
+                  <h3 className="font-display text-sm font-bold text-amber-900">Pending Submissions</h3>
+                  <p className="text-[10px] text-amber-600 mt-0.5">Earner proofs awaiting your review. Please review within 48 hours.</p>
+                </div>
+                <span className="rounded-full bg-amber-100 border border-amber-200 px-2.5 py-0.5 text-[10px] font-black text-amber-700">
+                  {submissions.filter(s => s.status === "Pending").length} pending
+                </span>
+              </div>
+              {submissions.filter(s => s.status === "Pending").length === 0 ? (
+                <div className="text-center py-12 text-xs text-gray-400">No pending submissions to review.</div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {submissions.filter(s => s.status === "Pending").map((sub, idx) => (
+                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-800 truncate">{sub.taskTitle}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">By: {sub.earnerName} · {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                        {sub.proofText && <p className="text-[10px] text-gray-500 mt-1 line-clamp-1 font-mono">{sub.proofText}</p>}
+                      </div>
+                      <button onClick={() => { setAuditingSub(sub); setActiveTab("audit"); }}
+                        className="shrink-0 rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-xs font-bold text-white transition-all cursor-pointer">
+                        Review Proof
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─── TAB: APPROVED TASKS ───────────────────────────────────────── */}
+        {activeTab === "approved" && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-blue-100 bg-white shadow-sm overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-blue-50 bg-blue-50/50">
+                <Check className="h-4 w-4 text-blue-600 shrink-0" />
+                <div className="flex-1">
+                  <h3 className="font-display text-sm font-bold text-blue-900">Approved Tasks</h3>
+                  <p className="text-[10px] text-blue-600 mt-0.5">Submissions you have approved — earnings credited to earners.</p>
+                </div>
+                <span className="rounded-full bg-blue-100 border border-blue-200 px-2.5 py-0.5 text-[10px] font-black text-blue-700">
+                  {submissions.filter(s => s.status === "Approved").length} approved
+                </span>
+              </div>
+              {submissions.filter(s => s.status === "Approved").length === 0 ? (
+                <div className="text-center py-12 text-xs text-gray-400">No approved submissions yet.</div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {submissions.filter(s => s.status === "Approved").map((sub, idx) => (
+                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-800 truncate">{sub.taskTitle}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">By: {sub.earnerName} · {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-mono text-sm font-bold text-blue-600">₦{sub.reward}</span>
+                        <div className="mt-1">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-[9px] font-bold text-blue-700">
+                            <Check className="h-2.5 w-2.5" /> Approved
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─── TAB: REJECTED TASKS ───────────────────────────────────────── */}
+        {activeTab === "rejected" && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-red-100 bg-white shadow-sm overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-red-50 bg-red-50/40">
+                <X className="h-4 w-4 text-red-500 shrink-0" />
+                <div className="flex-1">
+                  <h3 className="font-display text-sm font-bold text-red-900">Rejected Tasks</h3>
+                  <p className="text-[10px] text-red-500 mt-0.5">Submissions you have rejected — earners have been notified.</p>
+                </div>
+                <span className="rounded-full bg-red-100 border border-red-200 px-2.5 py-0.5 text-[10px] font-black text-red-600">
+                  {submissions.filter(s => s.status === "Rejected").length} rejected
+                </span>
+              </div>
+              {submissions.filter(s => s.status === "Rejected").length === 0 ? (
+                <div className="text-center py-12 text-xs text-gray-400">No rejected submissions.</div>
+              ) : (
+                <div className="divide-y divide-red-50">
+                  {submissions.filter(s => s.status === "Rejected").map((sub, idx) => (
+                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-800 truncate">{sub.taskTitle}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">By: {sub.earnerName} · {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                        {sub.feedback && <p className="text-[10px] text-red-600 mt-1 font-medium">Reason: {sub.feedback}</p>}
+                      </div>
+                      <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-[9px] font-bold text-red-600">
+                        <X className="h-2.5 w-2.5" /> Rejected
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─── TAB: NOTIFICATIONS ────────────────────────────────────────── */}
+        {activeTab === "notifications" && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <Bell className="h-5 w-5 text-blue-500" />
+                <h3 className="font-display text-sm font-bold text-gray-900">Notifications</h3>
+              </div>
+              <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 space-y-2">
+                <p className="text-sm font-bold text-blue-800">📬 Stay Updated</p>
+                <p className="text-xs text-blue-700 leading-relaxed">
+                  Advertiser notifications are delivered via email based on your preferences. You will be notified when:
+                </p>
+                <ul className="text-xs text-blue-700 space-y-1 mt-2 pl-3">
+                  <li>• New earner submissions arrive on your campaigns</li>
+                  <li>• Submissions are auto-approved after 72 hours</li>
+                  <li>• Your wallet balance is low</li>
+                  <li>• A campaign runs out of slots</li>
+                </ul>
+              </div>
+              <div className="mt-4">
+                <p className="text-xs font-semibold text-gray-700 mb-3">Notification Preferences</p>
+                <div className="space-y-3">
+                  {([
+                    { key: "emailNotifications" as const, label: "Email Notifications", desc: "Receive important updates by email" },
+                    { key: "campaignUpdates" as const, label: "Campaign Updates", desc: "Alerts when your campaigns change status" },
+                    { key: "transactionAlerts" as const, label: "Transaction Alerts", desc: "Notifications for deposits and spending" }
+                  ] as const).map(pref => (
+                    <div key={pref.key} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-800">{pref.label}</p>
+                        <p className="text-[10px] text-gray-400">{pref.desc}</p>
+                      </div>
+                      <button
+                        onClick={() => setProfileForm(p => ({ ...p, notificationPrefs: { ...p.notificationPrefs, [pref.key]: !p.notificationPrefs[pref.key] } }))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${profileForm.notificationPrefs[pref.key] ? "bg-blue-600" : "bg-gray-200"}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${profileForm.notificationPrefs[pref.key] ? "translate-x-6" : "translate-x-1"}`} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <button onClick={handleSaveProfile} disabled={profileSaving}
+                    className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2.5 text-xs font-bold text-white transition-all disabled:opacity-60">
+                    <Save className="h-3.5 w-3.5" />
+                    {profileSaving ? "Saving…" : "Save Preferences"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── TAB: SETTINGS ─────────────────────────────────────────────── */}
+        {activeTab === "settings" && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-5">
+                <Shield className="h-5 w-5 text-blue-500" />
+                <h3 className="font-display text-sm font-bold text-gray-900">Security Settings</h3>
+              </div>
+              <div className="flex items-center justify-between p-4 rounded-xl border border-gray-100 bg-gray-50 mb-5">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Two-Factor Authentication</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Add an extra layer of security to your account</p>
+                </div>
+                <button
+                  onClick={() => setProfileForm(p => ({ ...p, twoFactorEnabled: !p.twoFactorEnabled }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${profileForm.twoFactorEnabled ? "bg-blue-600" : "bg-gray-200"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${profileForm.twoFactorEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+              <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Change Password</h4>
+              {pwSuccess && <div className="mb-3 rounded-xl bg-blue-50 border border-blue-100 px-4 py-2.5 text-xs font-bold text-blue-700 flex items-center gap-2"><Check className="h-3.5 w-3.5" /> {pwSuccess}</div>}
+              {pwError && <div className="mb-3 rounded-xl bg-red-50 border border-red-100 px-4 py-2.5 text-xs font-bold text-red-600">{pwError}</div>}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {([
+                  { key: "current" as const, label: "Current Password", placeholder: "Enter current password" },
+                  { key: "next" as const, label: "New Password", placeholder: "Min. 6 characters" },
+                  { key: "confirm" as const, label: "Confirm New Password", placeholder: "Repeat new password" }
+                ] as const).map(field => (
+                  <div key={field.key}>
+                    <label className={labelClass}>{field.label}</label>
+                    <div className="relative">
+                      <input type={showPw[field.key] ? "text" : "password"} value={pwForm[field.key]}
+                        onChange={e => setPwForm(p => ({ ...p, [field.key]: e.target.value }))}
+                        placeholder={field.placeholder} className={`${inputClass} pr-10`} />
+                      <button type="button" onClick={() => setShowPw(p => ({ ...p, [field.key]: !p[field.key] }))}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        {showPw[field.key] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button onClick={handleChangePassword} disabled={pwSaving}
+                  className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2.5 text-xs font-bold text-white transition-all disabled:opacity-60">
+                  <Shield className="h-3.5 w-3.5" />
+                  {pwSaving ? "Updating…" : "Update Password"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

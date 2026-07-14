@@ -70,8 +70,8 @@ const FALLBACK_BANKS: NigerianBank[] = [
 ];
 
 export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFetch, showToast, earnerNotifications = [], onMarkNotificationRead, onMarkAllNotificationsRead }: EarnerDashboardProps) {
-  type EarnerTab = "overview" | "tasks" | "history" | "referrals" | "withdraw" | "profile" | "notifications";
-  const VALID_EARNER_TABS: EarnerTab[] = ["overview", "tasks", "history", "referrals", "withdraw", "profile", "notifications"];
+  type EarnerTab = "overview" | "tasks" | "history" | "pending" | "completed" | "wallet" | "referrals" | "withdraw" | "profile" | "settings" | "notifications";
+  const VALID_EARNER_TABS: EarnerTab[] = ["overview", "tasks", "history", "pending", "completed", "wallet", "referrals", "withdraw", "profile", "settings", "notifications"];
   const earnerUnreadCount = earnerNotifications.filter(n => !n.read).length;
   const { section } = useParams<{ section?: string }>();
   const navigate = useNavigate();
@@ -113,6 +113,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
 
   // History list
   const [submissions, setSubmissions] = React.useState<TaskSubmission[]>([]);
+  const [transactions, setTransactions] = React.useState<any[]>([]);
 
   // Referrals state
   const [referralsData, setReferralsData] = React.useState({
@@ -181,6 +182,14 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
     } catch (e) {
       console.error(e);
     }
+  };
+
+  // Fetch earner transaction history
+  const fetchTransactions = async () => {
+    try {
+      const data = await apiFetch("/api/user/transactions");
+      if (Array.isArray(data)) setTransactions(data);
+    } catch (e) {}
   };
 
   // Fetch referrals information
@@ -263,8 +272,9 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
   React.useEffect(() => {
     if (activeTab === "overview") fetchDashboardStats();
     if (activeTab === "tasks") fetchAvailableTasks();
-    if (activeTab === "history") fetchSubmissions();
+    if (activeTab === "history" || activeTab === "pending" || activeTab === "completed") fetchSubmissions();
     if (activeTab === "referrals") fetchReferrals();
+    if (activeTab === "wallet") { fetchDashboardStats(); fetchTransactions(); }
   }, [activeTab]);
 
   // File selection / drag & drop handlers
@@ -494,81 +504,41 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
           </div>
         </div>
 
-        {/* Action Panel Menu */}
+        {/* Navigation Menu */}
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs space-y-1">
-          <button 
-            onClick={() => setActiveTab("overview")}
-            className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "overview" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-            }`}
-          >
-            <span>My Statistics Overview</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-          <button 
-            onClick={() => setActiveTab("tasks")}
-            className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "tasks" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-            }`}
-          >
-            <span>Browse Microtasks ({tasks.length})</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-          <button 
-            onClick={() => setActiveTab("history")}
-            className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "history" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-            }`}
-          >
-            <span>My Tasks & History</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-          <button 
-            onClick={() => setActiveTab("referrals")}
-            className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "referrals" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-            }`}
-          >
-            <span>My Referrals Network</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-          <button 
-            onClick={() => setActiveTab("withdraw")}
-            className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "withdraw" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-            }`}
-          >
-            <span>Withdraw Earnings (₦)</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-          <button 
-            onClick={() => setActiveTab("profile")}
-            className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "profile" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-            }`}
-          >
-            <span>Account Settings</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-          <button 
-            onClick={() => setActiveTab("notifications")}
-            className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-              activeTab === "notifications" ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <Bell className="h-3.5 w-3.5" />
-              <span>Notifications</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              {earnerUnreadCount > 0 && (
-                <span className="rounded-full text-[8px] font-black text-white px-1.5 py-0.5" style={{ background: "#EF4444" }}>
-                  {earnerUnreadCount > 99 ? "99+" : earnerUnreadCount}
-                </span>
-              )}
-              <ChevronRight className="h-3.5 w-3.5" />
-            </div>
-          </button>
+          {([
+            { tab: "overview" as EarnerTab, label: "Dashboard" },
+            { tab: "tasks" as EarnerTab, label: `Available Tasks (${tasks.length})` },
+            { tab: "pending" as EarnerTab, label: `Waiting for Approval (${submissions.filter(s => s.status === SubmissionStatus.PENDING).length})` },
+            { tab: "completed" as EarnerTab, label: `Completed Tasks (${submissions.filter(s => s.status === SubmissionStatus.APPROVED).length})` },
+            { tab: "wallet" as EarnerTab, label: "Wallet" },
+            { tab: "withdraw" as EarnerTab, label: "Withdraw" },
+            { tab: "referrals" as EarnerTab, label: "Referrals" },
+            { tab: "notifications" as EarnerTab, label: "Notifications", badge: earnerUnreadCount },
+            { tab: "profile" as EarnerTab, label: "Profile" },
+            { tab: "settings" as EarnerTab, label: "Settings" },
+          ] as { tab: EarnerTab; label: string; badge?: number }[]).map(({ tab, label, badge }) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
+                activeTab === tab ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                {tab === "notifications" && <Bell className="h-3.5 w-3.5" />}
+                {label}
+              </span>
+              <div className="flex items-center gap-1.5">
+                {badge != null && badge > 0 && (
+                  <span className="rounded-full text-[8px] font-black text-white px-1.5 py-0.5" style={{ background: "#EF4444" }}>
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+                <ChevronRight className="h-3.5 w-3.5" />
+              </div>
+            </button>
+          ))}
         </div>
 
       </div>
@@ -1563,6 +1533,164 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
               setActiveTab("tasks");
             }}
           />
+        )}
+
+        {/* TAB: WALLET */}
+        {activeTab === "wallet" && (
+          <div className="space-y-6">
+            <div className="rounded-3xl bg-gradient-to-tr from-blue-600 to-blue-800 p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+              <div className="absolute right-0 bottom-0 translate-y-6 translate-x-6 opacity-10">
+                <Banknote className="h-44 w-44" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-blue-50 uppercase tracking-widest">Available Wallet Balance</p>
+                <p className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight mt-1.5">
+                  ₦{metrics.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="mt-6 flex gap-3 flex-wrap">
+                <button onClick={() => setActiveTab("tasks")} className="rounded-xl bg-white text-blue-800 hover:bg-blue-50 px-4 py-2 text-xs font-bold shadow transition-all cursor-pointer">
+                  Browse Tasks
+                </button>
+                <button onClick={() => setActiveTab("withdraw")} className="rounded-xl bg-blue-700 hover:bg-blue-600 text-white border border-blue-500/50 px-4 py-2 text-xs font-bold shadow transition-all cursor-pointer">
+                  Withdraw Earnings
+                </button>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Transaction History</h3>
+              {transactions.length === 0 ? (
+                <div className="text-center py-8 text-xs text-gray-400">No transactions yet. Complete tasks to start earning!</div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {transactions.map((tx: any, idx: number) => (
+                    <div key={idx} className="flex justify-between items-center py-3">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-800">{tx.description}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{new Date(tx.createdAt).toLocaleDateString()} · {tx.type}</p>
+                      </div>
+                      <span className={`font-mono text-sm font-bold ${tx.amount > 0 ? "text-blue-600" : "text-red-500"}`}>
+                        {tx.amount > 0 ? "+" : ""}₦{Math.abs(tx.amount).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB: WAITING FOR APPROVAL */}
+        {activeTab === "pending" && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/40 shadow-sm overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-amber-100 bg-amber-50">
+                <Clock className="h-4 w-4 text-amber-600 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-display text-sm font-bold text-amber-900">Waiting for Approval</h3>
+                  <p className="text-[10px] text-amber-600 mt-0.5">These tasks have been submitted and are awaiting advertiser review.</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-amber-100 border border-amber-200 px-2.5 py-0.5 text-[10px] font-black text-amber-700">
+                  {submissions.filter(s => s.status === SubmissionStatus.PENDING).length} pending
+                </span>
+              </div>
+              {submissions.filter(s => s.status === SubmissionStatus.PENDING).length === 0 ? (
+                <div className="text-center py-10 text-xs text-amber-500">No tasks currently waiting for approval. Submit proof on the Browse Tasks page to get started!</div>
+              ) : (
+                <div className="divide-y divide-amber-100">
+                  {submissions.filter(s => s.status === SubmissionStatus.PENDING).map((sub, idx) => (
+                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 hover:bg-amber-50/60 transition-colors">
+                      <PlatformIcon category={sub.category} size={14} showBg className="shrink-0 hidden sm:block" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-800 truncate">{sub.taskTitle}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{sub.category} · Submitted {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                        {sub.proofText && <p className="text-[10px] text-gray-500 mt-1 line-clamp-1 font-mono">{sub.proofText}</p>}
+                      </div>
+                      <div className="flex sm:flex-col items-center sm:items-end gap-3 shrink-0">
+                        <span className="font-mono text-sm font-black text-gray-700">₦{sub.reward}</span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-200 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-amber-700">
+                          <Clock className="h-2.5 w-2.5" /> Pending
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB: COMPLETED TASKS */}
+        {activeTab === "completed" && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-blue-100 bg-white shadow-sm overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-blue-50 bg-blue-50/50">
+                <CheckCircle2 className="h-4 w-4 text-blue-600 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-display text-sm font-bold text-blue-900">Completed Tasks</h3>
+                  <p className="text-[10px] text-blue-600 mt-0.5">Approved submissions — earnings have been credited to your wallet.</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-blue-100 border border-blue-200 px-2.5 py-0.5 text-[10px] font-black text-blue-700">
+                  {submissions.filter(s => s.status === SubmissionStatus.APPROVED).length} completed
+                </span>
+              </div>
+              {submissions.filter(s => s.status === SubmissionStatus.APPROVED).length === 0 ? (
+                <div className="text-center py-10 text-xs text-gray-400">No completed tasks yet. Approved submissions appear here.</div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {submissions.filter(s => s.status === SubmissionStatus.APPROVED).map((sub, idx) => (
+                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 hover:bg-gray-50/50 transition-colors">
+                      <PlatformIcon category={sub.category} size={14} showBg className="shrink-0 hidden sm:block" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-800 truncate">{sub.taskTitle}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{sub.category} · {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex sm:flex-col items-center sm:items-end gap-3 shrink-0">
+                        <span className="font-mono text-sm font-black text-blue-600">+₦{sub.reward}</span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-blue-700">
+                          <CheckCircle2 className="h-2.5 w-2.5" /> Approved
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB: SETTINGS */}
+        {activeTab === "settings" && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <h3 className="font-display text-sm font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <Lock className="h-4 w-4 text-blue-500" /> Account Settings
+              </h3>
+              {profileSuccess && <p className="rounded-xl bg-blue-50 p-3 text-xs font-bold text-blue-800 border border-blue-100 mb-4">{profileSuccess}</p>}
+              {profileError && <p className="rounded-xl bg-red-50 p-3 text-xs font-bold text-red-600 border border-red-100 mb-4">{profileError}</p>}
+              <form onSubmit={handleUpdateProfile} className="space-y-5 max-w-md">
+                <p className="text-xs text-gray-500 border-b border-gray-100 pb-4">Update your password to keep your account secure.</p>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Current Password</label>
+                  <input type="password" value={passwordForm.old} onChange={(e) => setPasswordForm({ ...passwordForm, old: e.target.value })}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">New Password</label>
+                  <input type="password" value={passwordForm.new} onChange={(e) => setPasswordForm({ ...passwordForm, new: e.target.value })}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Confirm New Password</label>
+                  <input type="password" value={passwordForm.confirm} onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <button type="submit" className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-3 text-sm font-bold text-white shadow transition-all">
+                  Update Password
+                </button>
+              </form>
+            </div>
+          </div>
         )}
 
       </div>
