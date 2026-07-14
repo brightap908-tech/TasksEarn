@@ -120,6 +120,9 @@ export interface Task {
   advertiserId: string;
   advertiserName: string;
   createdAt: string;
+  // Per-earner submission state — populated by GET /api/earner/tasks
+  submissionStatus?: string | null;   // null | 'Rejected' (Pending/Approved tasks are filtered out)
+  submissionFeedback?: string | null; // Rejection reason shown to earner so they can correct & resubmit
 }
 
 export interface TaskSubmission {

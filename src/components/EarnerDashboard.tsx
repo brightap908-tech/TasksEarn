@@ -985,7 +985,29 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {filteredTasks.map((task, idx) => (
-                  <div key={idx} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                  <div
+                    key={idx}
+                    className={`rounded-2xl border bg-white p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between ${
+                      (task as any).submissionStatus === "Rejected"
+                        ? "border-red-200"
+                        : "border-gray-100"
+                    }`}
+                  >
+                    {/* Previously-rejected banner */}
+                    {(task as any).submissionStatus === "Rejected" && (
+                      <div className="mb-3 rounded-xl bg-red-50 border border-red-100 px-3 py-2 flex items-start gap-2">
+                        <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-[10px] font-bold text-red-700 uppercase tracking-wide">Previously Rejected — Resubmission Allowed</p>
+                          {(task as any).submissionFeedback && (
+                            <p className="text-[10px] text-red-600 mt-0.5 leading-relaxed">
+                              Reason: {(task as any).submissionFeedback}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     <div>
                       <div className="flex justify-between items-start gap-2">
                         <span className="rounded-lg bg-blue-50 px-2 py-1 text-[9px] font-bold text-blue-700 flex items-center gap-1.5">
@@ -1016,9 +1038,13 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                             window.scrollBy({ top: 120, behavior: "smooth" });
                           }, 100);
                         }}
-                        className="rounded-lg bg-gray-900 hover:bg-blue-600 hover:text-white px-3 py-1.5 text-[10px] font-bold text-white transition-all cursor-pointer"
+                        className={`rounded-lg px-3 py-1.5 text-[10px] font-bold text-white transition-all cursor-pointer ${
+                          (task as any).submissionStatus === "Rejected"
+                            ? "bg-red-500 hover:bg-red-600"
+                            : "bg-gray-900 hover:bg-blue-600"
+                        }`}
                       >
-                        Accept & Do Job
+                        {(task as any).submissionStatus === "Rejected" ? "Fix & Resubmit" : "Accept & Do Job"}
                       </button>
                     </div>
                   </div>
