@@ -171,7 +171,8 @@ function mapSettings(row: any) {
     contactEmail: row.contact_email,
     contactPhone: row.contact_phone,
     telegramChannel: row.telegram_channel || undefined,
-    whatsappGroup: row.whatsapp_group || undefined
+    whatsappGroup: row.whatsapp_group || undefined,
+    depositStatOffset: parseFloat(row.deposit_stat_offset) || 0
   };
 }
 
@@ -287,7 +288,8 @@ async function getSettings(): Promise<ReturnType<typeof mapSettings>> {
     contactEmail: "support@tasksearn.com",
     contactPhone: "09164444315",
     telegramChannel: "https://t.me/tasksearn_ng",
-    whatsappGroup: "https://wa.me/2349164444315"
+    whatsappGroup: "https://wa.me/2349164444315",
+    depositStatOffset: 0
   };
 }
 
@@ -439,8 +441,14 @@ async function bootstrapTables() {
         contact_email VARCHAR(150) NOT NULL DEFAULT 'support@tasksearn.com',
         contact_phone VARCHAR(50) NOT NULL DEFAULT '09164444315',
         telegram_channel VARCHAR(255) NULL,
-        whatsapp_group VARCHAR(255) NULL
+        whatsapp_group VARCHAR(255) NULL,
+        deposit_stat_offset DECIMAL(12, 2) NOT NULL DEFAULT 0.00
       )
+    `);
+
+    // Backfill column for pre-existing databases created before this field existed.
+    await client.query(`
+      ALTER TABLE settings ADD COLUMN IF NOT EXISTS deposit_stat_offset DECIMAL(12, 2) NOT NULL DEFAULT 0.00
     `);
 
     // 10. Task Pricing
@@ -2484,13 +2492,19 @@ app.get("/api/admin/dashboard", async (req, res) => {
       getSettings()
     ]);
 
+    const rawTotalDeposited = parseFloat(totalDep.rows[0].total);
+    const depositStatOffset = (settings as any)?.depositStatOffset || 0;
+    // Reset offset is a pure dashboard-display adjustment — it never touches
+    // the underlying transaction rows, advertiser accounts, or wallet balances.
+    const displayedTotalDeposited = Math.max(0, rawTotalDeposited - depositStatOffset);
+
     res.json({
       earnersCount: parseInt(earners.rows[0].count),
       advertisersCount: parseInt(advertisers.rows[0].count),
       tasksCount: parseInt(tasks.rows[0].count),
       totalEarned: parseFloat(totalEarned.rows[0].total),
       pendingWithdrawals: parseFloat(pendingWd.rows[0].total),
-      totalDeposited: parseFloat(totalDep.rows[0].total),
+      totalDeposited: displayedTotalDeposited,
       recentUsers: recentUsers.rows.map(r => {
         const u = mapUser(r);
         const { password: _, verificationCode: __, verificationCodeExpires: ___, verificationCodeLastSent: ____, ...safe } = u;
@@ -3121,6 +3135,33 @@ app.put("/api/admin/settings", async (req, res) => {
 
     res.json({ success: true, settings: await getSettings() });
   } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// Reset the "Total Advertiser Deposits" dashboard statistic back to ₦0.00.
+// This is a display-only adjustment: it stores an offset that is subtracted
+// from the live SUM(amount) of successful deposit transactions when rendering
+// the admin dashboard. It never deletes/modifies transaction rows, advertiser
+// accounts, or wallet balances — admin-only.
+app.post("/api/admin/reset-deposit-stat", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const totalDep = await pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE type='Deposit' AND status='Success'");
+    const currentLiveTotal = parseFloat(totalDep.rows[0].total) || 0;
+
+    await pool.query(`
+      UPDATE settings SET deposit_stat_offset = $1
+      WHERE id = (SELECT id FROM settings ORDER BY id ASC LIMIT 1)
+    `, [currentLiveTotal]);
+
+    console.log(`[Admin] Total Advertiser Deposits dashboard stat reset to ₦0.00 by admin ${user.id} (${user.email}). Offset set to ₦${currentLiveTotal.toFixed(2)}. No transactions were modified.`);
+
+    res.json({ success: true, totalDeposited: 0 });
+  } catch (err) {
+    console.error("Reset deposit stat error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // Task Pricing

@@ -307,6 +307,30 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
     fetchPlatformStats();
   };
 
+  const [resettingDepositStat, setResettingDepositStat] = React.useState(false);
+  const [depositStatResetMsg, setDepositStatResetMsg] = React.useState("");
+  const handleResetDepositStat = async () => {
+    if (!window.confirm("Reset the Total Advertiser Deposits dashboard figure to ₦0.00?\n\nThis only clears the displayed statistic — it does NOT delete deposit transaction history, modify advertiser accounts, or change any wallet balances.")) {
+      return;
+    }
+    setResettingDepositStat(true);
+    setDepositStatResetMsg("");
+    try {
+      const data = await apiFetch("/api/admin/reset-deposit-stat", { method: "POST" });
+      if (data && !data.error) {
+        setStats((prev) => ({ ...prev, totalDeposited: 0 }));
+        setDepositStatResetMsg("Total Advertiser Deposits reset to ₦0.00.");
+      } else {
+        setDepositStatResetMsg(data?.error || "Failed to reset.");
+      }
+    } catch (e) {
+      setDepositStatResetMsg("Failed to reset.");
+    } finally {
+      setResettingDepositStat(false);
+      setTimeout(() => setDepositStatResetMsg(""), 4000);
+    }
+  };
+
   const fetchUsers = async () => {
     try {
       const data = await apiFetch("/api/admin/users");
@@ -1259,14 +1283,28 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                 <span className="block font-mono text-2xl font-black text-amber-500 mt-1">₦{stats.pendingWithdrawals.toLocaleString()}</span>
               </div>
               <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-5 shadow-sm">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <ArrowDownCircle className="h-3.5 w-3.5 text-indigo-400" />
-                  <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Total Advertiser Deposits</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <ArrowDownCircle className="h-3.5 w-3.5 text-indigo-400" />
+                    <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Total Advertiser Deposits</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResetDepositStat}
+                    disabled={resettingDepositStat}
+                    title="Reset this dashboard statistic to ₦0.00 (does not affect transaction history, accounts, or wallet balances)"
+                    className="text-[9px] font-bold text-indigo-400 hover:text-indigo-600 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {resettingDepositStat ? "Resetting…" : "Reset"}
+                  </button>
                 </div>
                 <span className="block font-mono text-2xl font-black text-indigo-700">
                   ₦{stats.totalDeposited.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
                 <span className="block text-[10px] text-indigo-400 mt-1">All-time successful deposits</span>
+                {depositStatResetMsg && (
+                  <span className="block text-[10px] font-semibold text-emerald-600 mt-1">{depositStatResetMsg}</span>
+                )}
               </div>
               <div className="rounded-2xl border border-blue-100 bg-blue-50/5 p-5 shadow-sm hover:bg-blue-50/20 transition-all cursor-pointer flex flex-col justify-between" onClick={() => setActiveTab("platform-earnings")}>
                 <div>
