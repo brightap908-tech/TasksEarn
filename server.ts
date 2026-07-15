@@ -1671,15 +1671,15 @@ app.get("/api/earner/tasks", async (req, res) => {
     if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
 
     // Return only tasks the earner can still act on:
-    //   • No prior submission AND genuine open capacity (not all slots occupied by
+    //   • Earner has NO prior submission for this task
+    //   • AND genuine open capacity exists (not all slots occupied by
     //     pending/rejected submissions from other earners)
-    //   • Prior submission was Rejected — earner may correct and resubmit; the slot
-    //     is reserved for them regardless of current pending/rejected counts
-    // Tasks with Pending or Approved submissions are excluded — they appear
-    // in the earner's "My Tasks & History" tab instead.
-    // Rejected tasks are sorted first so the earner sees their retry items prominently.
+    // Tasks with Pending, Approved, or Rejected submissions are excluded:
+    //   - Pending / Approved → appear in "My Tasks & History" tab
+    //   - Rejected           → appear exclusively in the "Rejected Tasks" tab
+    //     where the earner clicks "Fix & Resubmit" to retry
     const tasks = await pool.query(`
-      SELECT t.*, s.status AS sub_status, s.feedback AS sub_feedback
+      SELECT t.*
       FROM tasks t
       LEFT JOIN submissions s
         ON s.task_id = t.id AND s.earner_id = $1
@@ -1687,71 +1687,37 @@ app.get("/api/earner/tasks", async (req, res) => {
         ON ht.task_id = t.id AND ht.earner_id = $1
       WHERE t.status = 'Active'
         AND ht.id IS NULL
-        AND (
-          -- Earner's own rejected submission → always show for retry (slot is reserved)
-          s.status = 'Rejected'
-          OR
-          -- New to this task → only show when genuine open capacity exists
-          -- (total_slots minus approved slots minus currently pending/rejected slots > 0)
-          (s.id IS NULL AND t.filled_slots + (
-            SELECT COUNT(*) FROM submissions s2
-            WHERE s2.task_id = t.id AND s2.status IN ('Pending', 'Rejected')
-          ) < t.total_slots)
-        )
-      ORDER BY
-        CASE WHEN s.status = 'Rejected' THEN 0 ELSE 1 END,
-        t.created_at DESC
+        AND s.id IS NULL
+        AND t.filled_slots + (
+          SELECT COUNT(*) FROM submissions s2
+          WHERE s2.task_id = t.id AND s2.status IN ('Pending', 'Rejected')
+        ) < t.total_slots
+      ORDER BY t.created_at DESC
     `, [user.id]);
 
-    res.json(tasks.rows.map(r => ({
-      ...mapTask(r),
-      submissionStatus: r.sub_status  || null,
-      submissionFeedback: r.sub_feedback || null,
-    })));
+    res.json(tasks.rows.map(r => mapTask(r)));
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
-// Earner fetches a single task by ID (for the dedicated submission page).
-// Access rules mirror the list endpoint:
-//   • Earner has a Rejected submission → always allowed (reserved slot for retry)
-//   • Earner has no prior submission   → allowed only if genuine open capacity exists
-//   • Earner has Pending/Approved      → blocked (they shouldn't be on the submit page)
+// Earner fetches a single task by ID (for the submit / resubmit pages).
+// Returns the task together with this earner's current submission status so the
+// client can decide how to render (new submission vs. rejection-retry UI).
 app.get("/api/earner/tasks/:id", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
     const taskId = req.params.id;
     const taskRes = await pool.query(`
-      SELECT t.*, s.status AS sub_status, s.feedback AS sub_feedback,
-        (
-          SELECT COUNT(*) FROM submissions s2
-          WHERE s2.task_id = t.id AND s2.status IN ('Pending', 'Rejected')
-        ) AS occupied_slots
+      SELECT t.*, s.status AS sub_status, s.feedback AS sub_feedback
       FROM tasks t
       LEFT JOIN submissions s ON s.task_id = t.id AND s.earner_id = $1
       WHERE t.id = $2 AND t.status = 'Active'
     `, [user.id, taskId]);
     if (taskRes.rows.length === 0) return res.status(404).json({ error: "Task not found or not active" });
     const r = taskRes.rows[0];
-    const subStatus = r.sub_status || null;
-    // Block earners with Pending or Approved submissions
-    if (subStatus === SubmissionStatus.PENDING) {
-      return res.status(400).json({ error: "Your submission is already pending review." });
-    }
-    if (subStatus === SubmissionStatus.APPROVED) {
-      return res.status(400).json({ error: "You have already completed this task." });
-    }
-    // New earner — check capacity
-    if (!subStatus) {
-      const task = mapTask(r);
-      const occupied = parseInt(r.occupied_slots, 10) || 0;
-      if (task.filledSlots + occupied >= task.totalSlots) {
-        return res.status(404).json({ error: "Task not found or not active" });
-      }
-    }
     res.json({
       ...mapTask(r),
-      submissionStatus: subStatus,
+      submissionStatus: r.sub_status || null,
       submissionFeedback: r.sub_feedback || null,
     });
   } catch (err) { res.status(500).json({ error: "Server error" }); }

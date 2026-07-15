@@ -151,7 +151,7 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
         setSubmitting(false);
       } else {
         setSubmitSuccess(true);
-        showToast(isRetry ? "Proof resubmitted! Redirecting to available tasks…" : "Task submitted successfully! Redirecting to available tasks…", "success");
+        showToast("Task submitted successfully! Redirecting to available tasks…", "success");
         setTimeout(() => {
           navigate("/earner/tasks");
         }, 1500);
@@ -197,8 +197,6 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
     );
   }
 
-  const isRetry = task?.submissionStatus === "Rejected";
-
   // ── Success state ─────────────────────────────────────────────────────────
   if (submitSuccess) {
     return (
@@ -207,15 +205,9 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
           <div className="mx-auto h-14 w-14 rounded-full bg-blue-100 flex items-center justify-center">
             <CheckCircle2 className="h-7 w-7 text-blue-600" />
           </div>
-          <h2 className="font-bold text-gray-900">
-            {isRetry ? "Proof Resubmitted Successfully!" : "Task Submitted Successfully!"}
-          </h2>
+          <h2 className="font-bold text-gray-900">Task Submitted Successfully!</h2>
           <p className="text-xs text-gray-500 leading-relaxed">
-            {isRetry
-              ? "Your corrected proof has been sent back to the admin for review."
-              : "Your proof has been sent for review."
-            }{" "}
-            Redirecting you to <strong>available tasks</strong>…
+            Your proof has been sent for review. Redirecting you to <strong>available tasks</strong>…
           </p>
           <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
         </div>
@@ -239,34 +231,6 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
         <span className="text-xs text-gray-400">›</span>
         <span className="text-xs font-semibold text-gray-600 truncate">{task.title}</span>
       </div>
-
-      {/* Rejection feedback banner — shown only on retry */}
-      {isRetry && (
-        <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 shadow-sm">
-          <div className="flex items-start gap-3">
-            <div className="shrink-0 h-9 w-9 rounded-full bg-amber-100 flex items-center justify-center">
-              <XCircle className="h-5 w-5 text-amber-600" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-black text-amber-900 uppercase tracking-wide mb-1">
-                Your Previous Submission Was Rejected
-              </p>
-              {task.submissionFeedback ? (
-                <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                  <span className="font-bold">Admin Feedback:</span> {task.submissionFeedback}
-                </p>
-              ) : (
-                <p className="text-xs text-amber-700 leading-relaxed">
-                  Please review the task requirements carefully and resubmit with correct proof.
-                </p>
-              )}
-              <p className="text-[10px] text-amber-600 mt-2 font-semibold">
-                ↓ Complete the task again below and upload fresh proof to resubmit for review.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Task detail card */}
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
@@ -352,13 +316,9 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
             2
           </div>
           <div>
-            <h2 className="text-sm font-bold text-gray-800">
-              {isRetry ? "Resubmit Your Corrected Proof" : "Submit Your Proof"}
-            </h2>
+            <h2 className="text-sm font-bold text-gray-800">Submit Your Proof</h2>
             <p className="text-[10px] text-gray-400 mt-0.5">
-              {isRetry
-                ? "Upload fresh proof addressing the admin's feedback above."
-                : "Come back here after completing the task — upload a screenshot or enter your details."}
+              Come back here after completing the task — upload a screenshot or enter your details.
             </p>
           </div>
         </div>
@@ -484,16 +444,10 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
           <button
             type="submit"
             disabled={submitting}
-            className={`flex-1 rounded-xl py-3 text-xs font-bold text-white shadow hover:shadow-md transition-all flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed ${
-              isRetry
-                ? "bg-gradient-to-r from-amber-500 to-amber-600"
-                : "bg-gradient-to-r from-blue-500 to-blue-600"
-            }`}
+            className="flex-1 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 py-3 text-xs font-bold text-white shadow hover:shadow-md transition-all flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Send className="h-3.5 w-3.5" />
-            {submitting
-              ? (isRetry ? "Resubmitting…" : "Uploading Proof…")
-              : (isRetry ? "Resubmit Corrected Proof" : "Upload & Submit Verification")}
+            {submitting ? "Uploading Proof…" : "Upload & Submit Verification"}
           </button>
         </div>
 
