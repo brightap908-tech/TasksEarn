@@ -150,16 +150,18 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
 
       if (res && res.error) {
         setSubmitError(res.error);
+        setSubmitting(false);
       } else {
         setSubmitSuccess(true);
-        showToast("Proof submitted! Redirecting to your submissions…", "success");
+        showToast("Task submitted successfully! Redirecting to available tasks…", "success");
         setTimeout(() => {
-          navigate("/earner/history");
-        }, 1800);
+          navigate("/earner/tasks");
+        }, 1500);
+        // intentionally do NOT call setSubmitting(false) here — button stays
+        // disabled for the 1.5 s redirect window, preventing double-submit
       }
     } catch {
       setSubmitError("Failed to submit proof. Please try again.");
-    } finally {
       setSubmitting(false);
     }
   };
@@ -207,9 +209,9 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
           <div className="mx-auto h-14 w-14 rounded-full bg-blue-100 flex items-center justify-center">
             <CheckCircle2 className="h-7 w-7 text-blue-600" />
           </div>
-          <h2 className="font-bold text-gray-900">Proof Submitted!</h2>
+          <h2 className="font-bold text-gray-900">Task Submitted Successfully!</h2>
           <p className="text-xs text-gray-500 leading-relaxed">
-            Your proof has been sent for review. Redirecting you to <strong>My Submissions</strong>…
+            Your proof has been sent for review. Redirecting you to <strong>available tasks</strong>…
           </p>
           <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
         </div>
