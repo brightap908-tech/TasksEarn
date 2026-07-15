@@ -2186,6 +2186,10 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
       await cleanupApprovedSubmissionProof(updatedSubmission.id);
       updatedSubmission.proofScreenshot = null;
     }
+    if (updatedSubmission?.status === "Rejected" /* REJECTED */) {
+      await cleanupRejectedSubmissionProof(updatedSubmission.id);
+      updatedSubmission.proofScreenshot = null;
+    }
     if (commissionData) {
       await creditAdminCommission({
         type: "task_commission",
