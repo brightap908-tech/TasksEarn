@@ -1546,9 +1546,21 @@ app.get("/api/earner/tasks", async (req, res) => {
       LEFT JOIN hidden_tasks ht
         ON ht.task_id = t.id AND ht.earner_id = $1
       WHERE t.status = 'Active'
-        AND (s.id IS NULL OR s.status = 'Rejected')
         AND ht.id IS NULL
-      ORDER BY t.created_at DESC
+        AND (
+          -- Earner's own rejected submission \u2192 always show for retry (slot is reserved)
+          s.status = 'Rejected'
+          OR
+          -- New to this task \u2192 only show when genuine open capacity exists
+          -- (total_slots minus approved slots minus currently pending/rejected slots > 0)
+          (s.id IS NULL AND t.filled_slots + (
+            SELECT COUNT(*) FROM submissions s2
+            WHERE s2.task_id = t.id AND s2.status IN ('Pending', 'Rejected')
+          ) < t.total_slots)
+        )
+      ORDER BY
+        CASE WHEN s.status = 'Rejected' THEN 0 ELSE 1 END,
+        t.created_at DESC
     `, [user.id]);
     res.json(tasks.rows.map((r) => ({
       ...mapTask(r),
@@ -1565,16 +1577,34 @@ app.get("/api/earner/tasks/:id", async (req, res) => {
     if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
     const taskId = req.params.id;
     const taskRes = await pool.query(`
-      SELECT t.*, s.status AS sub_status, s.feedback AS sub_feedback
+      SELECT t.*, s.status AS sub_status, s.feedback AS sub_feedback,
+        (
+          SELECT COUNT(*) FROM submissions s2
+          WHERE s2.task_id = t.id AND s2.status IN ('Pending', 'Rejected')
+        ) AS occupied_slots
       FROM tasks t
       LEFT JOIN submissions s ON s.task_id = t.id AND s.earner_id = $1
       WHERE t.id = $2 AND t.status = 'Active'
     `, [user.id, taskId]);
     if (taskRes.rows.length === 0) return res.status(404).json({ error: "Task not found or not active" });
     const r = taskRes.rows[0];
+    const subStatus = r.sub_status || null;
+    if (subStatus === "Pending" /* PENDING */) {
+      return res.status(400).json({ error: "Your submission is already pending review." });
+    }
+    if (subStatus === "Approved" /* APPROVED */) {
+      return res.status(400).json({ error: "You have already completed this task." });
+    }
+    if (!subStatus) {
+      const task = mapTask(r);
+      const occupied = parseInt(r.occupied_slots, 10) || 0;
+      if (task.filledSlots + occupied >= task.totalSlots) {
+        return res.status(404).json({ error: "Task not found or not active" });
+      }
+    }
     res.json({
       ...mapTask(r),
-      submissionStatus: r.sub_status || null,
+      submissionStatus: subStatus,
       submissionFeedback: r.sub_feedback || null
     });
   } catch (err) {
@@ -1664,7 +1694,12 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       const subRes2 = await pool.query("SELECT * FROM submissions WHERE id = $1", [existing.id]);
       return res.status(200).json({ success: true, message: "Task resubmitted successfully", submission: mapSubmission(subRes2.rows[0]) });
     }
-    if (task.filledSlots >= task.totalSlots) {
+    const occupiedRes = await client.query(
+      "SELECT COUNT(*) FROM submissions WHERE task_id=$1 AND status IN ('Pending','Rejected')",
+      [taskId]
+    );
+    const occupied = parseInt(occupiedRes.rows[0].count, 10) || 0;
+    if (task.filledSlots + occupied >= task.totalSlots) {
       await client.query("ROLLBACK");
       return res.status(400).json({ error: "This task has reached its submission limit" });
     }
