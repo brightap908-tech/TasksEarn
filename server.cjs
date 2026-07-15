@@ -196,7 +196,8 @@ function mapSubmission(row) {
     feedback: row.feedback || void 0,
     reward: parseFloat(row.reward) || 0,
     submittedAt: row.submitted_at instanceof Date ? row.submitted_at.toISOString() : row.submitted_at,
-    approvedAt: row.approved_at ? row.approved_at instanceof Date ? row.approved_at.toISOString() : row.approved_at : void 0
+    approvedAt: row.approved_at ? row.approved_at instanceof Date ? row.approved_at.toISOString() : row.approved_at : void 0,
+    rejectedAt: row.rejected_at ? row.rejected_at instanceof Date ? row.rejected_at.toISOString() : row.rejected_at : void 0
   };
 }
 function mapTransaction(row) {
@@ -633,6 +634,21 @@ async function bootstrapTables() {
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL`);
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS link_url TEXT NULL`);
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS button_text TEXT NULL`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS submission_history (
+        id           VARCHAR(50) PRIMARY KEY,
+        submission_id VARCHAR(50) NOT NULL,
+        task_id      VARCHAR(50) NOT NULL,
+        task_title   VARCHAR(255) NOT NULL,
+        earner_id    VARCHAR(50) NOT NULL,
+        earner_name  VARCHAR(150) NOT NULL,
+        event_type   VARCHAR(50) NOT NULL,
+        feedback     TEXT NULL,
+        reviewed_by  VARCHAR(150) NULL,
+        created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMP NULL`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS vapid_keys (
         key        VARCHAR(20) PRIMARY KEY,
@@ -1619,16 +1635,30 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         await client.query("ROLLBACK");
         return res.status(400).json({ error: "You have already successfully completed this task." });
       }
+      const resubmittedAt = /* @__PURE__ */ new Date();
       await client.query(
         `UPDATE submissions
-            SET proof_text      = $1,
+            SET proof_text       = $1,
                 proof_screenshot = $2,
                 status           = 'Pending',
                 feedback         = '',
+                rejected_at      = NULL,
                 submitted_at     = $3
           WHERE id = $4`,
-        [finalProofText, screenshot, /* @__PURE__ */ new Date(), existing.id]
+        [finalProofText, screenshot, resubmittedAt, existing.id]
       );
+      await client.query(`
+        INSERT INTO submission_history (id, submission_id, task_id, task_title, earner_id, earner_name, event_type, feedback, created_at)
+        VALUES ($1,$2,$3,$4,$5,$6,'resubmitted','',$7)
+      `, [
+        "sh-" + Math.random().toString(36).substr(2, 9),
+        existing.id,
+        taskId,
+        task.title,
+        user.id,
+        user.name,
+        resubmittedAt
+      ]);
       await client.query("COMMIT");
       notifyAdmin({ type: "submission", message: `Task resubmission from ${user.name} for "${task.title}"`, referenceId: existing.id });
       const subRes2 = await pool.query("SELECT * FROM submissions WHERE id = $1", [existing.id]);
@@ -1667,6 +1697,47 @@ app.get("/api/earner/submissions", async (req, res) => {
     const result = await pool.query("SELECT * FROM submissions WHERE earner_id = $1 ORDER BY submitted_at DESC", [user.id]);
     res.json(result.rows.map(mapSubmission));
   } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.get("/api/earner/rejected-submissions", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    const result = await pool.query(`
+      SELECT
+        s.id             AS submission_id,
+        s.task_id,
+        s.task_title,
+        s.category,
+        s.reward,
+        s.feedback       AS rejection_reason,
+        s.rejected_at,
+        s.submitted_at,
+        s.status,
+        t.description    AS task_description,
+        t.proof_requirements
+      FROM submissions s
+      JOIN tasks t ON t.id = s.task_id
+      WHERE s.earner_id = $1
+        AND s.status    = 'Rejected'
+      ORDER BY COALESCE(s.rejected_at, s.submitted_at) DESC
+    `, [user.id]);
+    res.json(result.rows.map((r) => ({
+      submissionId: r.submission_id,
+      taskId: r.task_id,
+      taskTitle: r.task_title,
+      category: r.category,
+      reward: parseFloat(r.reward) || 0,
+      rejectionReason: r.rejection_reason || "",
+      rejectedAt: r.rejected_at ? r.rejected_at instanceof Date ? r.rejected_at.toISOString() : r.rejected_at : null,
+      submittedAt: r.submitted_at instanceof Date ? r.submitted_at.toISOString() : r.submitted_at,
+      status: r.status,
+      taskDescription: r.task_description,
+      proofRequirements: r.proof_requirements || ""
+    })));
+  } catch (err) {
+    console.error("Rejected submissions error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -2237,7 +2308,22 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
           commissionData = { amount: commission, submissionId: submission.id, taskTitle: task.title, earnerName };
         }
       } else {
-        await client.query("UPDATE submissions SET status=$1, feedback=$2 WHERE id=$3", [status, feedback || "", submission.id]);
+        const rejectedNow = /* @__PURE__ */ new Date();
+        await client.query("UPDATE submissions SET status=$1, feedback=$2, rejected_at=$3 WHERE id=$4", [status, feedback || "", rejectedNow, submission.id]);
+        await client.query(`
+          INSERT INTO submission_history (id, submission_id, task_id, task_title, earner_id, earner_name, event_type, feedback, reviewed_by, created_at)
+          VALUES ($1,$2,$3,$4,$5,$6,'rejected',$7,$8,$9)
+        `, [
+          "sh-" + Math.random().toString(36).substr(2, 9),
+          submission.id,
+          submission.taskId,
+          submission.taskTitle,
+          submission.earnerId,
+          submission.earnerName,
+          feedback || "",
+          user.name,
+          rejectedNow
+        ]);
       }
       await client.query("COMMIT");
       const updated = await pool.query("SELECT * FROM submissions WHERE id=$1", [submission.id]);
@@ -2730,7 +2816,22 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
         const newStatus = newFilled >= task.totalSlots ? "Completed" /* COMPLETED */ : task.status;
         await client.query("UPDATE tasks SET filled_slots=$1, status=$2 WHERE id=$3", [newFilled, newStatus, task.id]);
       } else {
-        await client.query("UPDATE submissions SET status=$1, feedback=$2 WHERE id=$3", [status, feedback || "", submission.id]);
+        const rejectedNow = /* @__PURE__ */ new Date();
+        await client.query("UPDATE submissions SET status=$1, feedback=$2, rejected_at=$3 WHERE id=$4", [status, feedback || "", rejectedNow, submission.id]);
+        await client.query(`
+          INSERT INTO submission_history (id, submission_id, task_id, task_title, earner_id, earner_name, event_type, feedback, reviewed_by, created_at)
+          VALUES ($1,$2,$3,$4,$5,$6,'rejected',$7,$8,$9)
+        `, [
+          "sh-" + Math.random().toString(36).substr(2, 9),
+          submission.id,
+          submission.taskId,
+          submission.taskTitle,
+          submission.earnerId,
+          submission.earnerName,
+          feedback || "",
+          user.name,
+          rejectedNow
+        ]);
       }
       await client.query("COMMIT");
       const updated = await pool.query("SELECT * FROM submissions WHERE id=$1", [submission.id]);
