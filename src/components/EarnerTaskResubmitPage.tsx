@@ -11,6 +11,8 @@ import {
   CheckCircle2,
   XCircle,
   RefreshCw,
+  SquareArrowOutUpRight,
+  ArrowRight,
 } from "lucide-react";
 
 interface EarnerTaskResubmitPageProps {
@@ -155,8 +157,8 @@ export default function EarnerTaskResubmitPage({ apiFetch, showToast }: EarnerTa
         setSubmitting(false);
       } else {
         setSubmitSuccess(true);
-        showToast("Resubmission sent! Redirecting to available tasks…", "success");
-        setTimeout(() => navigate("/earner/tasks"), 1500);
+        showToast("Resubmission sent! Redirecting to Pending Review…", "success");
+        setTimeout(() => navigate("/earner/pending"), 1500);
         // Keep submitting=true through the redirect window to prevent double-submit
       }
     } catch {
@@ -210,7 +212,7 @@ export default function EarnerTaskResubmitPage({ apiFetch, showToast }: EarnerTa
           </div>
           <h2 className="font-bold text-gray-900">Resubmission Sent!</h2>
           <p className="text-xs text-gray-500 leading-relaxed">
-            Your corrected proof has been sent for review. Redirecting you to <strong>available tasks</strong>…
+            Your corrected proof has been sent for review. Redirecting you to <strong>Pending Review</strong>…
           </p>
           <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-green-200 border-t-green-500" />
         </div>
@@ -287,12 +289,53 @@ export default function EarnerTaskResubmitPage({ apiFetch, showToast }: EarnerTa
         </div>
       </div>
 
+      {/* ── Step 1: Redo the task ────────────────────────────────────────── */}
+      {task.link && (
+        <div className="rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="shrink-0 h-9 w-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow">
+              1
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-black text-blue-900 uppercase tracking-wide mb-0.5">Redo the Task First</p>
+              <p className="text-xs text-blue-700 leading-relaxed mb-4">
+                Open the advertiser's page in a <strong>new tab</strong> and complete the action again (follow, like, join, subscribe, etc.) to ensure your proof is fresh and correct, then come back to <strong>Step 2</strong> below.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <a
+                  href={task.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-3 text-xs font-bold text-white shadow transition-all"
+                >
+                  <SquareArrowOutUpRight className="h-4 w-4" />
+                  Open Task in New Tab
+                </a>
+                <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-100/60 text-[10px] font-bold text-blue-700">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                  This page stays open — come back here to upload new proof
+                </div>
+              </div>
+              <p className="text-[10px] text-blue-500 mt-3 break-all">🔗 {task.link}</p>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-blue-400">
+            <div className="flex-1 border-t border-dashed border-blue-200" />
+            <span className="flex items-center gap-1 shrink-0">
+              After redoing the task above, scroll down to Step 2
+              <ArrowRight className="h-3 w-3" />
+            </span>
+            <div className="flex-1 border-t border-dashed border-blue-200" />
+          </div>
+        </div>
+      )}
+
       {/* ── Corrected proof form ──────────────────────────────────────────── */}
       <form onSubmit={handleSubmit} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm space-y-5">
 
         <div className="flex items-center gap-3 border-b border-gray-50 pb-4">
           <div className="shrink-0 h-9 w-9 rounded-full bg-red-500 text-white flex items-center justify-center font-black text-sm shadow">
-            <RefreshCw className="h-4 w-4" />
+            {task.link ? "2" : <RefreshCw className="h-4 w-4" />}
           </div>
           <div>
             <h2 className="text-sm font-bold text-gray-800">Submit Corrected Proof</h2>

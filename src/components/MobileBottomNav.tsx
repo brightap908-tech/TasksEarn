@@ -14,6 +14,7 @@ interface MobileBottomNavProps {
   user: User | null;
   isDarkMode: boolean;
   earnerUnreadCount?: number;
+  rejectedTasksCount?: number;
 }
 
 /**
@@ -21,7 +22,7 @@ interface MobileBottomNavProps {
  * users. Gives each role quick access to their most important pages without
  * scrolling to sections — every tap navigates to a real routed page.
  */
-export default function MobileBottomNav({ user, isDarkMode, earnerUnreadCount = 0 }: MobileBottomNavProps) {
+export default function MobileBottomNav({ user, isDarkMode, earnerUnreadCount = 0, rejectedTasksCount = 0 }: MobileBottomNavProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -34,7 +35,7 @@ export default function MobileBottomNav({ user, isDarkMode, earnerUnreadCount = 
   if (user.role === UserRole.EARNER) {
     items = [
       { path: "/earner/overview", label: "Dashboard", icon: <LayoutGrid className={iconCls} /> },
-      { path: "/earner/tasks", label: "Tasks", icon: <Briefcase className={iconCls} /> },
+      { path: "/earner/tasks", label: "Tasks", icon: <Briefcase className={iconCls} />, badge: rejectedTasksCount },
       { path: "/earner/wallet", label: "Wallet", icon: <Wallet className={iconCls} /> },
       { path: "/earner/notifications", label: "Alerts", icon: <Bell className={iconCls} />, badge: earnerUnreadCount },
       { path: "/earner/profile", label: "Profile", icon: <UserCircle className={iconCls} /> },

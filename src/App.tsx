@@ -109,6 +109,9 @@ export default function App() {
   // Earner notification state
   const [earnerNotifications, setEarnerNotifications] = React.useState<EarnerNotification[]>([]);
   const earnerUnreadCount = earnerNotifications.filter(n => !n.read).length;
+
+  // Earner rejected tasks count (for mobile nav badge)
+  const [rejectedTasksCount, setRejectedTasksCount] = React.useState(0);
   const earnerWsRef = React.useRef<WebSocket | null>(null);
 
   // Email Verification State
@@ -331,12 +334,23 @@ export default function App() {
     } catch (e) {}
   };
 
+  // Fetch rejected tasks count (for mobile nav badge)
+  const fetchRejectedTasksCount = async () => {
+    try {
+      const data = await apiFetch("/api/earner/rejected-submissions");
+      if (Array.isArray(data)) {
+        setRejectedTasksCount(data.length);
+      }
+    } catch (e) {}
+  };
+
   // Set up WebSocket for earner real-time notifications
   React.useEffect(() => {
     if (!user || user.role !== UserRole.EARNER) return;
 
-    // Fetch current notifications on mount / login
+    // Fetch current notifications and rejected tasks count on mount / login
     fetchEarnerUnreadCount();
+    fetchRejectedTasksCount();
 
     // Register service worker for push notifications
     if ("serviceWorker" in navigator) {
@@ -1718,7 +1732,7 @@ export default function App() {
       />
 
       {/* Mobile-only fixed bottom navigation for logged-in dashboards */}
-      <MobileBottomNav user={user} isDarkMode={isDarkMode} earnerUnreadCount={earnerUnreadCount} />
+      <MobileBottomNav user={user} isDarkMode={isDarkMode} earnerUnreadCount={earnerUnreadCount} rejectedTasksCount={rejectedTasksCount} />
 
     </div>
   );
