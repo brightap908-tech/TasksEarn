@@ -317,6 +317,41 @@ async function cleanupRejectedSubmissionProof(submissionId: string) {
   }
 }
 
+// Nulls out proof_screenshot for every submission belonging to a task.
+// Called whenever a task is permanently deleted so no orphaned image data
+// lingers in the DB. Runs outside the delete transaction so a failure here
+// never blocks the deletion; it is logged and swallowed.
+async function cleanupTaskSubmissionProofs(taskId: string) {
+  try {
+    const result = await pool.query(
+      "UPDATE submissions SET proof_screenshot = NULL WHERE task_id = $1 AND proof_screenshot IS NOT NULL",
+      [taskId]
+    );
+    if ((result.rowCount ?? 0) > 0) {
+      console.log(`[ProofCleanup] Cleared ${result.rowCount} screenshot(s) for task ${taskId}`);
+    }
+  } catch (err) {
+    console.error(`[ProofCleanup] Failed to clear screenshots for task ${taskId}:`, err);
+  }
+}
+
+// Startup sweep — nulls any proof_screenshot still set on Approved or Rejected
+// submissions. Catches rows that slipped through a prior cleanup gap and ensures
+// the DB is fully consistent on every boot. Safe to run multiple times.
+async function sweepOrphanedProofScreenshots() {
+  try {
+    const result = await pool.query(
+      "UPDATE submissions SET proof_screenshot = NULL WHERE proof_screenshot IS NOT NULL AND status IN ($1, $2)",
+      [SubmissionStatus.APPROVED, SubmissionStatus.REJECTED]
+    );
+    if ((result.rowCount ?? 0) > 0) {
+      console.log(`[ProofCleanup] Startup sweep: cleared ${result.rowCount} orphaned screenshot(s).`);
+    }
+  } catch (err) {
+    console.error("[ProofCleanup] Startup sweep failed:", err);
+  }
+}
+
 async function getSettings(): Promise<ReturnType<typeof mapSettings>> {
   const res = await pool.query("SELECT * FROM settings ORDER BY id ASC LIMIT 1");
   return res.rows.length > 0 ? mapSettings(res.rows[0]) : {
@@ -2323,6 +2358,11 @@ app.delete("/api/advertiser/tasks/:id", async (req, res) => {
       client.release();
     }
 
+    // Clear proof screenshots for all submissions belonging to the deleted task.
+    // Runs outside the transaction so a storage-cleanup failure never rolls back
+    // the already-committed deletion or refund.
+    await cleanupTaskSubmissionProofs(req.params.id);
+
     res.json({ success: true, refundedAmount: refundAmount, remainingBalance: newBalance });
   } catch (err) {
     console.error("Delete task error:", err);
@@ -2891,6 +2931,10 @@ app.delete("/api/admin/tasks/:id", async (req, res) => {
     } finally {
       client.release();
     }
+
+    // Clear proof screenshots for all remaining submissions of the deleted task
+    // (approved/rejected ones are kept for history but their screenshots are not needed).
+    await cleanupTaskSubmissionProofs(req.params.id);
 
     res.json({ success: true, refundedAmount: refundAmount });
   } catch (err) {
@@ -4003,6 +4047,7 @@ async function ensureVapidKeys() {
     await seedDatabase();
     await ensurePlatformsSeeded();
     await ensureVapidKeys();
+    await sweepOrphanedProofScreenshots();
     await startServer();
   } catch (err) {
     console.error("FATAL: Failed to start server:", err);

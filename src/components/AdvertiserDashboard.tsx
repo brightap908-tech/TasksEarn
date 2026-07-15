@@ -998,13 +998,17 @@ export default function AdvertiserDashboard({
                   {/* Screenshot */}
                   <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 flex flex-col gap-2">
                     <p className="text-gray-400 uppercase font-bold text-[9px] mb-1">Screenshot Proof:</p>
-                    <div className="rounded-lg overflow-hidden border border-gray-100 h-44 bg-gray-100">
-                      <img
-                        src={auditingSub.proofScreenshot}
-                        alt="Proof"
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-contain"
-                      />
+                    <div className="rounded-lg overflow-hidden border border-gray-100 h-44 bg-gray-100 flex items-center justify-center">
+                      {auditingSub.proofScreenshot ? (
+                        <img
+                          src={auditingSub.proofScreenshot}
+                          alt="Proof"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-xs text-gray-400 italic">No proof available</span>
+                      )}
                     </div>
                     <p className="text-[10px] text-gray-400 italic flex items-center gap-1">
                       <ZoomIn className="h-3 w-3 text-blue-400" />

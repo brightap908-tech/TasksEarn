@@ -1968,7 +1968,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                                 </div>
                               ) : (
                                 <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50/50 py-10 text-center text-gray-400">
-                                  No screenshot proof uploaded
+                                  No proof available
                                 </div>
                               )}
                             </div>
