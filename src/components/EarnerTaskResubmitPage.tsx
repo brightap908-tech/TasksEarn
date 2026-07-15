@@ -233,7 +233,7 @@ export default function EarnerTaskResubmitPage({ apiFetch, showToast }: EarnerTa
         </button>
         <span className="text-xs text-gray-400">›</span>
         <span className="text-xs font-semibold text-red-600 truncate flex items-center gap-1">
-          <RefreshCw className="h-3 w-3" /> Fix &amp; Resubmit
+          <RefreshCw className="h-3 w-3" /> Redo Task
         </span>
       </div>
 

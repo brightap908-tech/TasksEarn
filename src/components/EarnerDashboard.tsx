@@ -38,7 +38,8 @@ import {
   Trash2,
   FileText,
   Image as ImageIcon,
-  Bell
+  Bell,
+  RefreshCw
 } from "lucide-react";
 
 interface EarnerDashboardProps {
@@ -111,6 +112,9 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
   const [submissions, setSubmissions] = React.useState<TaskSubmission[]>([]);
   const [transactions, setTransactions] = React.useState<any[]>([]);
 
+  // Rejected submissions (dedicated page — fetched from /api/earner/rejected-submissions)
+  const [rejectedSubmissions, setRejectedSubmissions] = React.useState<any[]>([]);
+
   // Task delete (hide) state
   const [deleteConfirmTask, setDeleteConfirmTask] = React.useState<Task | null>(null);
   const [deleting, setDeleting] = React.useState(false);
@@ -178,6 +182,18 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
       const data = await apiFetch("/api/earner/submissions");
       if (Array.isArray(data)) {
         setSubmissions(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Fetch rejected submissions for the dedicated Rejected Tasks page
+  const fetchRejectedSubmissions = async () => {
+    try {
+      const data = await apiFetch("/api/earner/rejected-submissions");
+      if (Array.isArray(data)) {
+        setRejectedSubmissions(data);
       }
     } catch (e) {
       console.error(e);
@@ -288,7 +304,8 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
 
   React.useEffect(() => {
     if (activeTab === "overview") fetchDashboardStats();
-    if (activeTab === "tasks" || activeTab === "rejected") fetchAvailableTasks();
+    if (activeTab === "tasks") fetchAvailableTasks();
+    if (activeTab === "rejected") fetchRejectedSubmissions();
     if (activeTab === "history" || activeTab === "pending" || activeTab === "completed") fetchSubmissions();
     if (activeTab === "referrals") fetchReferrals();
     if (activeTab === "wallet") { fetchDashboardStats(); fetchTransactions(); }
@@ -430,7 +447,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
             { tab: "tasks" as EarnerTab, label: `Available Tasks (${availableTasks.length})` },
             { tab: "pending" as EarnerTab, label: `Waiting for Approval (${submissions.filter(s => s.status === SubmissionStatus.PENDING).length})` },
             { tab: "completed" as EarnerTab, label: `Completed Tasks (${submissions.filter(s => s.status === SubmissionStatus.APPROVED).length})` },
-            { tab: "rejected" as EarnerTab, label: `Rejected Tasks`, badge: rejectedTasks.length > 0 ? rejectedTasks.length : undefined },
+            { tab: "rejected" as EarnerTab, label: `Rejected Tasks`, badge: rejectedSubmissions.length > 0 ? rejectedSubmissions.length : undefined },
             { tab: "wallet" as EarnerTab, label: "Wallet" },
             { tab: "withdraw" as EarnerTab, label: "Withdraw" },
             { tab: "referrals" as EarnerTab, label: "Referrals" },
@@ -1414,83 +1431,141 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
           </div>
         )}
 
-        {/* TAB: REJECTED TASKS */}
+        {/* TAB: REJECTED TASKS — dedicated page with full submission details */}
         {activeTab === "rejected" && (
-          <div className="space-y-6">
+          <div className="space-y-5">
 
-            {/* Header */}
-            <div className="rounded-2xl border border-red-200 bg-red-50/40 shadow-sm overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-4 border-b border-red-100 bg-red-50">
-                <XCircle className="h-4 w-4 text-red-500 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display text-sm font-bold text-red-900">Rejected Tasks</h3>
-                  <p className="text-[10px] text-red-500 mt-0.5">Review the rejection reason and fix your submission to earn the reward.</p>
+            {/* Page header */}
+            <div className="rounded-2xl border border-red-200 bg-gradient-to-br from-red-50 to-white p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-red-500 text-white flex items-center justify-center shadow-sm">
+                  <XCircle className="h-5 w-5" />
                 </div>
-                <span className="shrink-0 rounded-full bg-red-100 border border-red-200 px-2.5 py-0.5 text-[10px] font-black text-red-600">
-                  {rejectedTasks.length} rejected
-                </span>
+                <div>
+                  <h2 className="font-display text-sm font-bold text-gray-900">Rejected Tasks</h2>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    {rejectedSubmissions.length === 0
+                      ? "No rejected submissions — great work!"
+                      : `${rejectedSubmissions.length} task${rejectedSubmissions.length !== 1 ? "s" : ""} rejected — click Redo Task to fix and resubmit`}
+                  </p>
+                </div>
               </div>
+              {rejectedSubmissions.length > 0 && (
+                <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-red-100 border border-red-200 px-3 py-1 text-[10px] font-black text-red-700">
+                  <XCircle className="h-3 w-3" /> {rejectedSubmissions.length} Rejected
+                </span>
+              )}
+            </div>
 
-              {rejectedTasks.length === 0 ? (
-                <div className="text-center py-10 text-xs text-gray-400">
-                  No rejected submissions — great work! Keep completing tasks correctly.
+            {rejectedSubmissions.length === 0 ? (
+              <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm">
+                <div className="mx-auto h-14 w-14 rounded-full bg-green-50 flex items-center justify-center mb-4">
+                  <CheckCircle2 className="h-7 w-7 text-green-500" />
                 </div>
-              ) : (
-                <div className="divide-y divide-red-50">
-                  {rejectedTasks.map((task, idx) => (
-                    <div key={idx} className="px-5 py-5 space-y-4">
+                <p className="font-bold text-gray-700 text-sm">All clear!</p>
+                <p className="text-xs text-gray-400 mt-1">You have no rejected task submissions at the moment.</p>
+                <button
+                  onClick={() => setActiveTab("tasks")}
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 text-white px-5 py-2.5 text-xs font-bold hover:bg-blue-700 transition-all cursor-pointer"
+                >
+                  <Briefcase className="h-3.5 w-3.5" /> Browse Available Tasks
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {rejectedSubmissions.map((sub: any) => (
+                  <div key={sub.submissionId} className="rounded-2xl border border-red-100 bg-white shadow-sm overflow-hidden">
 
-                      {/* Task header */}
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <PlatformIcon category={task.category} size={14} showBg className="shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-gray-800 truncate">{task.title}</p>
-                            <p className="text-[10px] text-gray-400 mt-0.5">{task.category} · ₦{task.earningPerSlot} reward</p>
-                          </div>
-                        </div>
-                        <span className="shrink-0 font-mono text-sm font-black text-gray-400">₦{task.earningPerSlot}</span>
-                      </div>
-
-                      {/* Rejection reason */}
-                      <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 flex items-start gap-2">
-                        <AlertCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-[10px] font-black text-red-700 uppercase tracking-wide mb-1">Rejection Reason</p>
-                          <p className="text-[11px] text-red-700 leading-relaxed">
-                            {(task as any).submissionFeedback || "No specific reason provided. Please review the task instructions carefully."}
+                    {/* Card header — task identity + status badge */}
+                    <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <PlatformIcon category={sub.category} size={16} showBg className="shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-gray-900 leading-snug line-clamp-1">{sub.taskTitle}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                            <span className="font-medium text-gray-500">{sub.category}</span>
+                            <span>·</span>
+                            <span className="font-mono font-bold text-blue-600">₦{sub.reward.toLocaleString()}</span>
+                            {sub.rejectedAt && (
+                              <>
+                                <span>·</span>
+                                <span>Rejected {new Date(sub.rejectedAt).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}</span>
+                              </>
+                            )}
                           </p>
                         </div>
                       </div>
-
-                      {/* Original task instructions */}
-                      <div className="rounded-xl bg-white border border-gray-100 px-4 py-3 space-y-2">
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide">Original Task Instructions</p>
-                        <p className="text-[11px] text-gray-700 leading-relaxed whitespace-pre-line line-clamp-3">{task.description}</p>
-                        {(task as any).proofRequirements && (
-                          <div className="pt-2 border-t border-gray-50">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Proof Requirements</p>
-                            <p className="text-[11px] text-gray-600 leading-relaxed">{(task as any).proofRequirements}</p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Fix & Resubmit button */}
-                      <div className="flex justify-end">
-                        <button
-                          onClick={() => navigate(`/earner/tasks/${task.id}/resubmit`)}
-                          className="inline-flex items-center gap-2 rounded-xl bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 text-xs font-bold shadow-sm transition-all cursor-pointer"
-                        >
-                          <Send className="h-3.5 w-3.5" />
-                          Fix &amp; Resubmit
-                        </button>
-                      </div>
-
+                      <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-red-600">
+                        <XCircle className="h-2.5 w-2.5" /> Rejected
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+
+                    {/* Details grid — reward, platform, date */}
+                    <div className="mx-5 mb-3 grid grid-cols-3 gap-2">
+                      <div className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2 text-center">
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Reward</p>
+                        <p className="font-mono text-sm font-black text-blue-600 mt-0.5">₦{sub.reward.toLocaleString()}</p>
+                      </div>
+                      <div className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2 text-center">
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Platform</p>
+                        <p className="text-xs font-bold text-gray-700 mt-0.5 truncate">{sub.category.split(" ")[0]}</p>
+                      </div>
+                      <div className="rounded-xl bg-red-50 border border-red-100 px-3 py-2 text-center">
+                        <p className="text-[9px] font-bold text-red-400 uppercase tracking-wide">Status</p>
+                        <p className="text-xs font-black text-red-600 mt-0.5">Rejected</p>
+                      </div>
+                    </div>
+
+                    {/* Rejection reason */}
+                    <div className="mx-5 mb-3">
+                      <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 flex items-start gap-2">
+                        <AlertCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black text-red-700 uppercase tracking-wide mb-1">Rejection Reason</p>
+                          <p className="text-[11px] text-red-700 leading-relaxed">
+                            {sub.rejectionReason || "No specific reason was provided. Please review the task instructions carefully and resubmit with clear proof."}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Task instructions (collapsible) */}
+                    {sub.taskDescription && (
+                      <div className="mx-5 mb-3">
+                        <details className="group">
+                          <summary className="cursor-pointer select-none text-[10px] font-black text-gray-400 uppercase tracking-wide flex items-center gap-1.5 hover:text-gray-600 transition-colors">
+                            <ChevronRight className="h-3 w-3 transition-transform group-open:rotate-90" />
+                            Original Task Instructions
+                          </summary>
+                          <div className="mt-2 rounded-xl bg-white border border-gray-100 px-4 py-3 space-y-2">
+                            <p className="text-[11px] text-gray-700 leading-relaxed whitespace-pre-line">{sub.taskDescription}</p>
+                            {sub.proofRequirements && (
+                              <div className="pt-2 border-t border-gray-50">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Proof Requirements</p>
+                                <p className="text-[11px] text-gray-600 leading-relaxed">{sub.proofRequirements}</p>
+                              </div>
+                            )}
+                          </div>
+                        </details>
+                      </div>
+                    )}
+
+                    {/* Action footer */}
+                    <div className="border-t border-red-50 px-5 py-4 flex items-center justify-between gap-3 bg-red-50/30">
+                      <p className="text-[10px] text-gray-400 hidden sm:block">Fix the issue above and upload new proof to earn your reward.</p>
+                      <button
+                        onClick={() => navigate(`/earner/tasks/${sub.taskId}/resubmit`)}
+                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-5 py-2.5 text-xs font-bold shadow-sm transition-all cursor-pointer shrink-0 w-full sm:w-auto justify-center sm:justify-start"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Redo Task
+                      </button>
+                    </div>
+
+                  </div>
+                ))}
+              </div>
+            )}
 
           </div>
         )}
