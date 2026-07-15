@@ -2416,10 +2416,13 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
       client.release();
     }
 
-    // Delete the proof screenshot now that approval has been committed successfully.
-    // Only runs for approved submissions; pending/rejected ones keep their proof intact.
+    // Delete the proof screenshot once the decision is final.
     if (updatedSubmission?.status === SubmissionStatus.APPROVED) {
       await cleanupApprovedSubmissionProof(updatedSubmission.id);
+      updatedSubmission.proofScreenshot = null;
+    }
+    if (updatedSubmission?.status === SubmissionStatus.REJECTED) {
+      await cleanupRejectedSubmissionProof(updatedSubmission.id);
       updatedSubmission.proofScreenshot = null;
     }
 
