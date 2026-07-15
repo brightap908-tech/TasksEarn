@@ -113,16 +113,6 @@ export default function App() {
   const [verificationCode, setVerificationCode] = React.useState("");
   const [verificationResent, setVerificationResent] = React.useState(false);
 
-  // Admin and Demo password verification states
-  const [showAdminPasswordPrompt, setShowAdminPasswordPrompt] = React.useState(false);
-  const [adminPasswordPromptValue, setAdminPasswordPromptValue] = React.useState("");
-
-  const [showEarnerPasswordPrompt, setShowEarnerPasswordPrompt] = React.useState(false);
-  const [earnerPasswordPromptValue, setEarnerPasswordPromptValue] = React.useState("");
-
-  const [showAdvertiserPasswordPrompt, setShowAdvertiserPasswordPrompt] = React.useState(false);
-  const [advertiserPasswordPromptValue, setAdvertiserPasswordPromptValue] = React.useState("");
-
   // Admin-controlled login popup shown once per login to Earners/Advertisers
   const [loginPopup, setLoginPopup] = React.useState<Announcement | null>(null);
 
@@ -581,75 +571,6 @@ export default function App() {
       }
     } catch (err) {
       setAuthError("Failed to resend verification code.");
-    }
-  };
-
-  // One-click Demo Login handler
-  const handleDemoLogin = async (email: string, customPassword?: string) => {
-    setAuthLoading(true);
-    setAuthError("");
-    setLoginEmail(email);
-    const pwd = customPassword || "password123";
-    setLoginPassword(pwd);
-
-    try {
-      const data = await apiFetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password: pwd })
-      });
-
-      if (data && data.error) {
-        if (data.error === "EMAIL_NOT_VERIFIED") {
-          setVerificationEmail(data.email || email);
-          setAuthError("");
-          setCurrentView("verify-email");
-        } else {
-          setAuthError(data.error);
-        }
-      } else if (data && data.user) {
-        const isAdvertiserView = currentView === "advertiser-login";
-        const userRole = data.user.role;
-
-        if (isAdvertiserView && userRole !== UserRole.ADVERTISER) {
-          setAuthError("This account is not registered as an Advertiser. Please use the Earner login page.");
-          setAuthLoading(false);
-          return;
-        }
-
-        if (!isAdvertiserView && userRole === UserRole.ADVERTISER) {
-          setAuthError("This account is registered as an Advertiser. Please use the Advertiser login page.");
-          setAuthLoading(false);
-          return;
-        }
-
-        localStorage.setItem("tasksearn_uid", data.user.id);
-        setUser(data.user);
-        maybeShowLoginPopup(data.user);
-        
-        // Navigation depending on role
-        if (data.user.role === UserRole.EARNER) {
-          setCurrentView("earner-dashboard");
-        } else if (data.user.role === UserRole.ADVERTISER) {
-          setCurrentView("advertiser-dashboard");
-        } else if (data.user.role === UserRole.ADMIN) {
-          setCurrentView("admin-dashboard");
-        }
-        
-        // Reset forms
-        setLoginEmail("");
-        setLoginPassword("");
-        setShowAdminPasswordPrompt(false);
-        setAdminPasswordPromptValue("");
-        setShowEarnerPasswordPrompt(false);
-        setEarnerPasswordPromptValue("");
-        setShowAdvertiserPasswordPrompt(false);
-        setAdvertiserPasswordPromptValue("");
-      }
-    } catch (err) {
-      setAuthError("Failed to verify secure credentials.");
-    } finally {
-      setAuthLoading(false);
     }
   };
 
@@ -1231,73 +1152,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Demo accounts */}
-              <div className="rounded-2xl p-4 text-[11px] space-y-2" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-                <p className="font-bold" style={{ color: "#334155" }}>🔑 Secure Demo Account Access:</p>
-                <div className="flex flex-col gap-1.5 mt-1">
-
-                  {!showEarnerPasswordPrompt ? (
-                    <button type="button" onClick={() => setShowEarnerPasswordPrompt(true)}
-                      className="flex justify-between items-center rounded-xl px-3 py-2 transition-all text-left cursor-pointer w-full"
-                      style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.15)", color: "#94a3b8" }}
-                    >
-                      <span>👥 Demo Earner</span>
-                      <span className="font-semibold font-mono text-[9px] rounded-full px-2 py-0.5" style={{ background: "rgba(59,130,246,0.15)", color: "#2563EB" }}>Enter Password</span>
-                    </button>
-                  ) : (
-                    <div className="rounded-xl p-3 space-y-2.5" style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.20)" }}>
-                      <div className="flex justify-between items-center">
-                        <span className="font-semibold text-[10px]" style={{ color: "#2563EB" }}>👥 Demo Earner Password</span>
-                        <button type="button" onClick={() => { setShowEarnerPasswordPrompt(false); setEarnerPasswordPromptValue(""); }}
-                          className="text-[9px] font-semibold cursor-pointer" style={{ color: "#64748b" }}>Cancel</button>
-                      </div>
-                      <div className="flex gap-1.5">
-                        <input type="password" required value={earnerPasswordPromptValue}
-                          onChange={(e) => setEarnerPasswordPromptValue(e.target.value)}
-                          placeholder="Enter earner password..." className="flex-1 rounded-lg px-3 py-1.5 text-xs"
-                          style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
-                        />
-                        <button type="button" onClick={() => { if (!earnerPasswordPromptValue) return; handleDemoLogin("earner@tasksearn.com", earnerPasswordPromptValue); }}
-                          className="rounded-lg text-white font-bold px-3 py-1.5 text-[10px] cursor-pointer shrink-0"
-                          style={{ background: "linear-gradient(135deg,#2563EB,#2563eb)" }}>
-                          Verify
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {!showAdminPasswordPrompt ? (
-                    <button type="button" id="admin-demo-login-btn" onClick={() => setShowAdminPasswordPrompt(true)}
-                      className="flex justify-between items-center rounded-xl px-3 py-2 transition-all text-left cursor-pointer w-full"
-                      style={{ background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.15)", color: "#94a3b8" }}
-                    >
-                      <span>🛡️ Super Admin Portal</span>
-                      <span className="font-semibold font-mono text-[9px] rounded-full px-2 py-0.5" style={{ background: "rgba(99,102,241,0.15)", color: "#818cf8" }}>Enter Password</span>
-                    </button>
-                  ) : (
-                    <div className="rounded-xl p-3 space-y-2.5" style={{ background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.20)" }}>
-                      <div className="flex justify-between items-center">
-                        <span className="font-semibold text-[10px]" style={{ color: "#818cf8" }}>🛡️ Super Admin Password</span>
-                        <button type="button" onClick={() => { setShowAdminPasswordPrompt(false); setAdminPasswordPromptValue(""); }}
-                          className="text-[9px] font-semibold cursor-pointer" style={{ color: "#64748b" }}>Cancel</button>
-                      </div>
-                      <div className="flex gap-1.5">
-                        <input type="password" required value={adminPasswordPromptValue}
-                          onChange={(e) => setAdminPasswordPromptValue(e.target.value)}
-                          placeholder="Enter admin password..." className="flex-1 rounded-lg px-3 py-1.5 text-xs"
-                          style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
-                        />
-                        <button type="button" onClick={() => { if (!adminPasswordPromptValue) return; handleDemoLogin("admin@tasksearn.com", adminPasswordPromptValue); }}
-                          className="rounded-lg text-white font-bold px-3 py-1.5 text-[10px] cursor-pointer shrink-0"
-                          style={{ background: "linear-gradient(135deg,#6366f1,#4f46e5)" }}>
-                          Verify
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
             </div>
           </div>
         } />
@@ -1376,42 +1230,6 @@ export default function App() {
                   <button onClick={() => { setAuthError(""); setCurrentView("login"); }} className="font-bold cursor-pointer" style={{ color: "#2563EB" }}>
                     Go to Earner Sign In
                   </button>
-                </div>
-              </div>
-
-              {/* Demo Advertiser */}
-              <div className="rounded-2xl p-4 text-[11px] space-y-2" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-                <p className="font-bold" style={{ color: "#334155" }}>🔑 Secure Demo Advertiser Access:</p>
-                <div className="flex flex-col gap-1.5 mt-1">
-                  {!showAdvertiserPasswordPrompt ? (
-                    <button type="button" onClick={() => setShowAdvertiserPasswordPrompt(true)}
-                      className="flex justify-between items-center rounded-xl px-3 py-2 transition-all text-left cursor-pointer w-full"
-                      style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.15)", color: "#94a3b8" }}
-                    >
-                      <span>📢 Demo Advertiser</span>
-                      <span className="font-semibold font-mono text-[9px] rounded-full px-2 py-0.5" style={{ background: "rgba(59,130,246,0.15)", color: "#2563EB" }}>Enter Password</span>
-                    </button>
-                  ) : (
-                    <div className="rounded-xl p-3 space-y-2.5" style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.20)" }}>
-                      <div className="flex justify-between items-center">
-                        <span className="font-semibold text-[10px]" style={{ color: "#2563EB" }}>📢 Demo Advertiser Password</span>
-                        <button type="button" onClick={() => { setShowAdvertiserPasswordPrompt(false); setAdvertiserPasswordPromptValue(""); }}
-                          className="text-[9px] font-semibold cursor-pointer" style={{ color: "#64748b" }}>Cancel</button>
-                      </div>
-                      <div className="flex gap-1.5">
-                        <input type="password" required value={advertiserPasswordPromptValue}
-                          onChange={(e) => setAdvertiserPasswordPromptValue(e.target.value)}
-                          placeholder="Enter advertiser password..." className="flex-1 rounded-lg px-3 py-1.5 text-xs"
-                          style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
-                        />
-                        <button type="button" onClick={() => { if (!advertiserPasswordPromptValue) return; handleDemoLogin("advertiser@tasksearn.com", advertiserPasswordPromptValue); }}
-                          className="rounded-lg text-white font-bold px-3 py-1.5 text-[10px] cursor-pointer shrink-0"
-                          style={{ background: "linear-gradient(135deg,#2563EB,#2563eb)" }}>
-                          Verify
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
 

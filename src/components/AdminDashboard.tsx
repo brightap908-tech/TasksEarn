@@ -58,12 +58,49 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminDashboardProps) {
-  type AdminTab = "stats" | "users" | "advertisers" | "campaigns" | "admin-tasks" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings" | "commissions" | "notifications" | "reports" | "profile";
-  const VALID_ADMIN_TABS: AdminTab[] = ["stats", "users", "advertisers", "campaigns", "admin-tasks", "withdrawals", "audits", "announcements", "cms", "settings", "pricing", "platforms", "platform-earnings", "commissions", "notifications", "reports", "profile"];
+  type AdminTab = "stats" | "users" | "advertisers" | "campaigns" | "admin-tasks" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings" | "commissions" | "notifications" | "reports" | "profile" | "demo-accounts";
+  const VALID_ADMIN_TABS: AdminTab[] = ["stats", "users", "advertisers", "campaigns", "admin-tasks", "withdrawals", "audits", "announcements", "cms", "settings", "pricing", "platforms", "platform-earnings", "commissions", "notifications", "reports", "profile", "demo-accounts"];
   const { section } = useParams<{ section?: string }>();
   const navigate = useNavigate();
   const activeTab: AdminTab = (VALID_ADMIN_TABS.includes(section as AdminTab) ? section : "stats") as AdminTab;
   const setActiveTab = (tab: AdminTab) => navigate(`/admin/${tab}`);
+
+  // Demo account state (admin-only)
+  const [demoError, setDemoError] = React.useState("");
+  const [demoLoading, setDemoLoading] = React.useState(false);
+  const [showEarnerPwd, setShowEarnerPwd] = React.useState(false);
+  const [earnerPwd, setEarnerPwd] = React.useState("");
+  const [showAdvertiserPwd, setShowAdvertiserPwd] = React.useState(false);
+  const [advertiserPwd, setAdvertiserPwd] = React.useState("");
+  const [showAdminPwd, setShowAdminPwd] = React.useState(false);
+  const [adminPwd, setAdminPwd] = React.useState("");
+
+  const handleAdminDemoLogin = async (email: string, password: string) => {
+    if (!password.trim()) return;
+    setDemoLoading(true);
+    setDemoError("");
+    try {
+      const data = await apiFetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      if (data && data.error) {
+        setDemoError(data.error === "INVALID_CREDENTIALS" ? "Incorrect password." : data.error);
+      } else if (data && data.user) {
+        localStorage.setItem("tasksearn_uid", data.user.id);
+        // Navigate to the appropriate dashboard and reload so App.tsx re-reads the session
+        const dest = data.user.role === "Advertiser" ? "/advertiser/overview"
+                   : data.user.role === "Admin" ? "/admin/stats"
+                   : "/earner/dashboard";
+        window.location.href = dest;
+      }
+    } catch {
+      setDemoError("Login failed. Please try again.");
+    } finally {
+      setDemoLoading(false);
+    }
+  };
 
   // Admin states
   const [stats, setStats] = React.useState({
@@ -1239,6 +1276,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
           { tab: "reports" as AdminTab, icon: <TrendingUp className="h-4 w-4 text-slate-400" />, label: "Reports" },
           { tab: "settings" as AdminTab, icon: <Settings className="h-4 w-4 text-slate-400" />, label: "Site Settings" },
           { tab: "profile" as AdminTab, icon: <FolderSync className="h-4 w-4 text-slate-400" />, label: "Profile" },
+          { tab: "demo-accounts" as AdminTab, icon: <ShieldAlert className="h-4 w-4 text-slate-400" />, label: "Demo Accounts" },
         ] as { tab: AdminTab; icon: React.ReactNode; label: string }[]).map(({ tab, icon, label }) => (
           <button
             key={tab}
@@ -3075,6 +3113,138 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         )}
 
         {/* TAB: PROFILE */}
+        {activeTab === "demo-accounts" && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-1">
+                <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase" style={{ background: "rgba(99,102,241,0.10)", border: "1px solid rgba(99,102,241,0.20)", color: "#818cf8" }}>
+                  Super Admin Only
+                </span>
+              </div>
+              <h3 className="font-display text-sm font-bold text-gray-900 mt-2 mb-1">🔑 Demo Account Access</h3>
+              <p className="text-xs text-slate-400 mb-6">Log in as a demo user to test the platform experience. These controls are hidden from all public pages — visible only to you.</p>
+
+              {demoError && (
+                <div className="rounded-xl p-3 text-xs font-bold mb-4" style={{ background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.20)", color: "#fb7185" }}>
+                  {demoError}
+                </div>
+              )}
+
+              <div className="space-y-4">
+
+                {/* Demo Earner */}
+                <div className="rounded-xl p-4 space-y-3" style={{ background: "rgba(59,130,246,0.04)", border: "1px solid rgba(59,130,246,0.15)" }}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-slate-700">👥 Demo Earner</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">earner@tasksearn.com</p>
+                    </div>
+                    {!showEarnerPwd && (
+                      <button type="button" onClick={() => { setShowEarnerPwd(true); setDemoError(""); }}
+                        className="rounded-full px-4 py-1.5 text-xs font-bold cursor-pointer transition-all"
+                        style={{ background: "rgba(37,99,235,0.10)", color: "#2563EB", border: "1px solid rgba(37,99,235,0.20)" }}>
+                        Sign In As Earner
+                      </button>
+                    )}
+                  </div>
+                  {showEarnerPwd && (
+                    <div className="flex gap-2 items-center">
+                      <input type="password" value={earnerPwd} onChange={(e) => setEarnerPwd(e.target.value)}
+                        placeholder="Enter earner password..." autoFocus
+                        className="flex-1 rounded-lg px-3 py-2 text-xs border border-slate-200 focus:border-blue-400 focus:outline-none"
+                        onKeyDown={(e) => { if (e.key === "Enter") handleAdminDemoLogin("earner@tasksearn.com", earnerPwd); }}
+                      />
+                      <button type="button" onClick={() => handleAdminDemoLogin("earner@tasksearn.com", earnerPwd)}
+                        disabled={demoLoading || !earnerPwd.trim()}
+                        className="rounded-lg px-4 py-2 text-xs font-bold text-white cursor-pointer shrink-0 disabled:opacity-50"
+                        style={{ background: "linear-gradient(135deg,#2563EB,#1d4ed8)" }}>
+                        {demoLoading ? "..." : "Verify"}
+                      </button>
+                      <button type="button" onClick={() => { setShowEarnerPwd(false); setEarnerPwd(""); setDemoError(""); }}
+                        className="rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer text-slate-400 hover:text-slate-600">
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Demo Advertiser */}
+                <div className="rounded-xl p-4 space-y-3" style={{ background: "rgba(99,102,241,0.04)", border: "1px solid rgba(99,102,241,0.15)" }}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-slate-700">📢 Demo Advertiser</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">advertiser@tasksearn.com</p>
+                    </div>
+                    {!showAdvertiserPwd && (
+                      <button type="button" onClick={() => { setShowAdvertiserPwd(true); setDemoError(""); }}
+                        className="rounded-full px-4 py-1.5 text-xs font-bold cursor-pointer transition-all"
+                        style={{ background: "rgba(99,102,241,0.10)", color: "#818cf8", border: "1px solid rgba(99,102,241,0.20)" }}>
+                        Sign In As Advertiser
+                      </button>
+                    )}
+                  </div>
+                  {showAdvertiserPwd && (
+                    <div className="flex gap-2 items-center">
+                      <input type="password" value={advertiserPwd} onChange={(e) => setAdvertiserPwd(e.target.value)}
+                        placeholder="Enter advertiser password..." autoFocus
+                        className="flex-1 rounded-lg px-3 py-2 text-xs border border-slate-200 focus:border-indigo-400 focus:outline-none"
+                        onKeyDown={(e) => { if (e.key === "Enter") handleAdminDemoLogin("advertiser@tasksearn.com", advertiserPwd); }}
+                      />
+                      <button type="button" onClick={() => handleAdminDemoLogin("advertiser@tasksearn.com", advertiserPwd)}
+                        disabled={demoLoading || !advertiserPwd.trim()}
+                        className="rounded-lg px-4 py-2 text-xs font-bold text-white cursor-pointer shrink-0 disabled:opacity-50"
+                        style={{ background: "linear-gradient(135deg,#6366f1,#4f46e5)" }}>
+                        {demoLoading ? "..." : "Verify"}
+                      </button>
+                      <button type="button" onClick={() => { setShowAdvertiserPwd(false); setAdvertiserPwd(""); setDemoError(""); }}
+                        className="rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer text-slate-400 hover:text-slate-600">
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Demo Admin */}
+                <div className="rounded-xl p-4 space-y-3" style={{ background: "rgba(16,185,129,0.04)", border: "1px solid rgba(16,185,129,0.15)" }}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-slate-700">🛡️ Super Admin</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">admin@tasksearn.com</p>
+                    </div>
+                    {!showAdminPwd && (
+                      <button type="button" onClick={() => { setShowAdminPwd(true); setDemoError(""); }}
+                        className="rounded-full px-4 py-1.5 text-xs font-bold cursor-pointer transition-all"
+                        style={{ background: "rgba(16,185,129,0.10)", color: "#059669", border: "1px solid rgba(16,185,129,0.20)" }}>
+                        Sign In As Admin
+                      </button>
+                    )}
+                  </div>
+                  {showAdminPwd && (
+                    <div className="flex gap-2 items-center">
+                      <input type="password" value={adminPwd} onChange={(e) => setAdminPwd(e.target.value)}
+                        placeholder="Enter admin password..." autoFocus
+                        className="flex-1 rounded-lg px-3 py-2 text-xs border border-slate-200 focus:border-emerald-400 focus:outline-none"
+                        onKeyDown={(e) => { if (e.key === "Enter") handleAdminDemoLogin("admin@tasksearn.com", adminPwd); }}
+                      />
+                      <button type="button" onClick={() => handleAdminDemoLogin("admin@tasksearn.com", adminPwd)}
+                        disabled={demoLoading || !adminPwd.trim()}
+                        className="rounded-lg px-4 py-2 text-xs font-bold text-white cursor-pointer shrink-0 disabled:opacity-50"
+                        style={{ background: "linear-gradient(135deg,#10b981,#059669)" }}>
+                        {demoLoading ? "..." : "Verify"}
+                      </button>
+                      <button type="button" onClick={() => { setShowAdminPwd(false); setAdminPwd(""); setDemoError(""); }}
+                        className="rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer text-slate-400 hover:text-slate-600">
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === "profile" && (
           <div className="space-y-6 animate-fadeIn">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
