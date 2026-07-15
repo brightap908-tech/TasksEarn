@@ -721,13 +721,9 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                         </button>
                         <button
                           onClick={() => {
-                            // For new tasks: open the advertiser's link in a new tab so the
-                            // earner can complete the action (follow, like, join, etc.) while
-                            // this page navigates to the proof-submission form in the same tab.
-                            // For resubmissions the earner already did the task — just go to submit.
-                            if ((task as any).submissionStatus !== "Rejected" && task.link) {
-                              window.open(task.link, "_blank", "noopener,noreferrer");
-                            }
+                            // Navigate to the submission page for both new tasks and resubmissions.
+                            // The submission page shows a Step 1 card with an "Open Task in New Tab"
+                            // link for new tasks, mirroring the Fix & Resubmit flow exactly.
                             navigate(`/earner/tasks/${task.id}/submit`);
                           }}
                           className={`rounded-lg px-3 py-1.5 text-[10px] font-bold text-white transition-all cursor-pointer ${
