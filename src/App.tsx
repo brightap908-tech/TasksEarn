@@ -22,6 +22,8 @@ import PublicPages from "./components/PublicPages";
 import EarnerDashboard from "./components/EarnerDashboard";
 import EarnerTaskSubmitPage from "./components/EarnerTaskSubmitPage";
 import EarnerTaskResubmitPage from "./components/EarnerTaskResubmitPage";
+import EarnerRejectedTasksPage from "./components/EarnerRejectedTasksPage";
+import EarnerRejectedTaskResubmitPage from "./components/EarnerRejectedTaskResubmitPage";
 import AdvertiserDashboard from "./components/AdvertiserDashboard";
 import AdvertiserSubmissionReviewPage from "./components/AdvertiserSubmissionReviewPage";
 import AdminDashboard from "./components/AdminDashboard";
@@ -1459,6 +1461,22 @@ export default function App() {
         <Route path="/contact" element={<><BackButton fallback="/" /><PublicPages view="contact" pagesContent={pagesContent} settings={settings} /></>} />
         <Route path="/terms" element={<><BackButton fallback="/" /><PublicPages view="terms" pagesContent={pagesContent} settings={settings} /></>} />
         <Route path="/privacy" element={<><BackButton fallback="/" /><PublicPages view="privacy" pagesContent={pagesContent} settings={settings} /></>} />
+
+        {/* ROLE PROTECTED: EARNER REJECTED TASKS PAGES (must be before /earner/:section) */}
+        <Route path="/earner/rejected-tasks/:taskId/resubmit" element={
+          user && user.role === UserRole.EARNER ? (
+            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+              <EarnerRejectedTaskResubmitPage apiFetch={apiFetch} showToast={showToast} />
+            </div>
+          ) : (<Navigate to="/login" replace />)
+        } />
+        <Route path="/earner/rejected-tasks" element={
+          user && user.role === UserRole.EARNER ? (
+            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+              <EarnerRejectedTasksPage apiFetch={apiFetch} showToast={showToast} />
+            </div>
+          ) : (<Navigate to="/login" replace />)
+        } />
 
         {/* ROLE PROTECTED: EARNER TASK SUBMISSION PAGE (must be before /earner/:section) */}
         <Route path="/earner/tasks/:taskId/resubmit" element={

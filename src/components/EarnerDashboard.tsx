@@ -1,5 +1,5 @@
 import React from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { 
   User, 
   Task, 
@@ -77,6 +77,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
   const earnerUnreadCount = earnerNotifications.filter(n => !n.read).length;
   const { section } = useParams<{ section?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const activeTab: EarnerTab = (VALID_EARNER_TABS.includes(section as EarnerTab) ? section : "overview") as EarnerTab;
   const setActiveTab = (tab: EarnerTab) => navigate(`/earner/${tab}`);
 
@@ -447,19 +448,21 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
             { tab: "tasks" as EarnerTab, label: `Available Tasks (${availableTasks.length})` },
             { tab: "pending" as EarnerTab, label: `Waiting for Approval (${submissions.filter(s => s.status === SubmissionStatus.PENDING).length})` },
             { tab: "completed" as EarnerTab, label: `Completed Tasks (${submissions.filter(s => s.status === SubmissionStatus.APPROVED).length})` },
-            { tab: "rejected" as EarnerTab, label: `Rejected Tasks`, badge: rejectedSubmissions.length > 0 ? rejectedSubmissions.length : undefined },
+            { tab: "rejected" as EarnerTab, label: `Rejected Tasks`, badge: rejectedSubmissions.length > 0 ? rejectedSubmissions.length : undefined, externalPath: "/earner/rejected-tasks" },
             { tab: "wallet" as EarnerTab, label: "Wallet" },
             { tab: "withdraw" as EarnerTab, label: "Withdraw" },
             { tab: "referrals" as EarnerTab, label: "Referrals" },
             { tab: "notifications" as EarnerTab, label: "Notifications", badge: earnerUnreadCount },
             { tab: "profile" as EarnerTab, label: "Profile" },
             { tab: "settings" as EarnerTab, label: "Settings" },
-          ] as { tab: EarnerTab; label: string; badge?: number }[]).map(({ tab, label, badge }) => (
+          ] as { tab: EarnerTab; label: string; badge?: number; externalPath?: string }[]).map(({ tab, label, badge, externalPath }) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => externalPath ? navigate(externalPath) : setActiveTab(tab)}
               className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
-                activeTab === tab ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
+                (externalPath ? location.pathname === externalPath || location.pathname.startsWith(externalPath + "/") : activeTab === tab)
+                  ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500"
+                  : "text-slate-500 hover:bg-slate-50/50"
               }`}
             >
               <span className="flex items-center gap-2">
