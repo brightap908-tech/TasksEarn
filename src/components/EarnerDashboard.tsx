@@ -1446,7 +1446,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                   <p className="text-[10px] text-gray-400 mt-0.5">
                     {rejectedSubmissions.length === 0
                       ? "No rejected submissions — great work!"
-                      : `${rejectedSubmissions.length} task${rejectedSubmissions.length !== 1 ? "s" : ""} rejected — click Redo Task to fix and resubmit`}
+                      : `${rejectedSubmissions.length} task${rejectedSubmissions.length !== 1 ? "s" : ""} rejected — click Fix & Resubmit to correct and resubmit`}
                   </p>
                 </div>
               </div>
@@ -1558,7 +1558,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                         className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-5 py-2.5 text-xs font-bold shadow-sm transition-all cursor-pointer shrink-0 w-full sm:w-auto justify-center sm:justify-start"
                       >
                         <RefreshCw className="h-3.5 w-3.5" />
-                        Redo Task
+                        Fix &amp; Resubmit
                       </button>
                     </div>
 
