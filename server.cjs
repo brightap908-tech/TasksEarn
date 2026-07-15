@@ -344,6 +344,16 @@ async function cleanupApprovedSubmissionProof(submissionId) {
     console.error(`[ProofCleanup] Failed to delete proof screenshot for submission ${submissionId}:`, err);
   }
 }
+async function cleanupRejectedSubmissionProof(submissionId) {
+  try {
+    await pool.query(
+      "UPDATE submissions SET proof_screenshot = NULL WHERE id = $1 AND status = $2 AND proof_screenshot IS NOT NULL",
+      [submissionId, "Rejected" /* REJECTED */]
+    );
+  } catch (err) {
+    console.error(`[ProofCleanup] Failed to delete proof screenshot for rejected submission ${submissionId}:`, err);
+  }
+}
 async function getSettings() {
   const res = await pool.query("SELECT * FROM settings ORDER BY id ASC LIMIT 1");
   return res.rows.length > 0 ? mapSettings(res.rows[0]) : {
@@ -2662,6 +2672,10 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
     }
     if (updatedSubmission?.status === "Approved" /* APPROVED */) {
       await cleanupApprovedSubmissionProof(updatedSubmission.id);
+      updatedSubmission.proofScreenshot = null;
+    }
+    if (updatedSubmission?.status === "Rejected" /* REJECTED */) {
+      await cleanupRejectedSubmissionProof(updatedSubmission.id);
       updatedSubmission.proofScreenshot = null;
     }
     if (adminCommData) {
