@@ -709,24 +709,45 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                       <p className="text-[11px] text-gray-500 mt-1 line-clamp-2 leading-relaxed">{task.description}</p>
                     </div>
 
+                    {/* Rejection feedback banner */}
+                    {task.submissionStatus === 'Rejected' && task.submissionFeedback && (
+                      <div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 flex items-start gap-2">
+                        <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">Rejection Reason</p>
+                          <p className="text-[11px] text-amber-800 leading-relaxed line-clamp-2 mt-0.5">{task.submissionFeedback}</p>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="border-t border-gray-50 mt-4 pt-3 flex items-center justify-between gap-2">
                       <span className="text-[10px] text-gray-400 font-mono shrink-0">
                         {task.filledSlots}/{task.totalSlots} slots
                       </span>
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setDeleteConfirmTask(task)}
-                          title="Remove this task from your list"
-                          className="rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-red-500 border border-red-200 bg-red-50 hover:bg-red-100 transition-all cursor-pointer flex items-center gap-1"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                          Delete
-                        </button>
+                        {task.submissionStatus !== 'Rejected' && (
+                          <button
+                            onClick={() => setDeleteConfirmTask(task)}
+                            title="Remove this task from your list"
+                            className="rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-red-500 border border-red-200 bg-red-50 hover:bg-red-100 transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            Delete
+                          </button>
+                        )}
                         <button
                           onClick={() => navigate(`/earner/tasks/${task.id}/submit`)}
-                          className="rounded-lg px-3 py-1.5 text-[10px] font-bold text-white bg-gray-900 hover:bg-blue-600 transition-all cursor-pointer"
+                          className={`rounded-lg px-3 py-1.5 text-[10px] font-bold text-white transition-all cursor-pointer flex items-center gap-1.5 ${
+                            task.submissionStatus === 'Rejected'
+                              ? 'bg-amber-500 hover:bg-amber-600'
+                              : 'bg-gray-900 hover:bg-blue-600'
+                          }`}
                         >
-                          Accept &amp; Do Job
+                          {task.submissionStatus === 'Rejected' ? (
+                            <><RefreshCw className="h-3 w-3" /> Retry Task</>
+                          ) : (
+                            'Accept & Do Job'
+                          )}
                         </button>
                       </div>
                     </div>
