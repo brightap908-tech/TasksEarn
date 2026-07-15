@@ -1,4 +1,5 @@
 import React from "react";
+import { resolvePath } from "../lib/routes";
 import { Landmark, Mail, Phone, ShieldCheck, HelpCircle, FileText, Zap } from "lucide-react";
 
 interface FooterProps {
@@ -94,8 +95,9 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                 { label: "Contact Support", view: "contact" },
               ].map(item => (
                 <li key={item.view}>
-                  <span
-                    onClick={() => onNavigate(item.view)}
+                  <a
+                    href={resolvePath(item.view) ?? "/"}
+                    onClick={(e) => { e.preventDefault(); onNavigate(item.view); }}
                     className="cursor-pointer transition-colors flex items-center gap-1.5 font-semibold"
                     style={{ color: "rgba(224,242,254,0.96)" }}
                     onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
@@ -103,7 +105,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                   >
                     {item.icon}
                     {item.label}
-                  </span>
+                  </a>
                 </li>
               ))}
             </ul>
@@ -119,8 +121,9 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
             </h4>
             <ul className="space-y-2.5 text-xs">
               <li>
-                <span
-                  onClick={() => onNavigate("terms")}
+                <a
+                  href={resolvePath("terms") ?? "/terms"}
+                  onClick={(e) => { e.preventDefault(); onNavigate("terms"); }}
                   className="cursor-pointer transition-colors flex items-center gap-1.5 font-semibold"
                   style={{ color: "rgba(224,242,254,0.96)" }}
                   onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
@@ -128,11 +131,12 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                 >
                   <FileText className="h-3.5 w-3.5 text-yellow-300" />
                   Terms of Service
-                </span>
+                </a>
               </li>
               <li>
-                <span
-                  onClick={() => onNavigate("privacy")}
+                <a
+                  href={resolvePath("privacy") ?? "/privacy"}
+                  onClick={(e) => { e.preventDefault(); onNavigate("privacy"); }}
                   className="cursor-pointer transition-colors flex items-center gap-1.5 font-semibold"
                   style={{ color: "rgba(224,242,254,0.96)" }}
                   onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
@@ -140,7 +144,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                 >
                   <ShieldCheck className="h-3.5 w-3.5 text-blue-300" />
                   Privacy Policy
-                </span>
+                </a>
               </li>
             </ul>
           </div>

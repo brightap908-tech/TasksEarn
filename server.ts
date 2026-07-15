@@ -304,6 +304,19 @@ async function cleanupApprovedSubmissionProof(submissionId: string) {
   }
 }
 
+// Delete the proof screenshot after a rejection has been committed so we don't
+// retain unnecessary storage on submissions that will never be approved.
+async function cleanupRejectedSubmissionProof(submissionId: string) {
+  try {
+    await pool.query(
+      "UPDATE submissions SET proof_screenshot = NULL WHERE id = $1 AND status = $2 AND proof_screenshot IS NOT NULL",
+      [submissionId, SubmissionStatus.REJECTED]
+    );
+  } catch (err) {
+    console.error(`[ProofCleanup] Failed to delete proof screenshot for rejected submission ${submissionId}:`, err);
+  }
+}
+
 async function getSettings(): Promise<ReturnType<typeof mapSettings>> {
   const res = await pool.query("SELECT * FROM settings ORDER BY id ASC LIMIT 1");
   return res.rows.length > 0 ? mapSettings(res.rows[0]) : {
@@ -2954,10 +2967,14 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
       client.release();
     }
 
-    // Delete the proof screenshot now that approval has been committed successfully.
-    // Only runs for approved submissions; pending/rejected ones keep their proof intact.
+    // Delete the proof screenshot once the decision is final (approved or rejected).
+    // Runs after the transaction commits so the decision is durable before we clean up.
     if (updatedSubmission?.status === SubmissionStatus.APPROVED) {
       await cleanupApprovedSubmissionProof(updatedSubmission.id);
+      updatedSubmission.proofScreenshot = null;
+    }
+    if (updatedSubmission?.status === SubmissionStatus.REJECTED) {
+      await cleanupRejectedSubmissionProof(updatedSubmission.id);
       updatedSubmission.proofScreenshot = null;
     }
 

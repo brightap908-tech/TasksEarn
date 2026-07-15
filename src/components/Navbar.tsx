@@ -1,5 +1,6 @@
 import React from "react";
 import { User, UserRole } from "../types";
+import { resolvePath } from "../lib/routes";
 import { Coins, LogOut, Shield, User as UserIcon, Wallet, Menu, X, Sun, Moon, Zap, Bell } from "lucide-react";
 
 interface NavbarProps {
@@ -105,26 +106,27 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
 
         {/* ── Desktop Nav Links ── */}
         <nav className="hidden md:flex items-center gap-5">
-          <span onClick={() => onNavigate("home")} className={navLinkClass("home")}>Home</span>
-          <span onClick={() => onNavigate("about")} className={navLinkClass("about")}>About</span>
-          <span onClick={() => onNavigate("faq")} className={navLinkClass("faq")}>FAQ</span>
-          <span onClick={() => onNavigate("contact")} className={navLinkClass("contact")}>Contact</span>
+          {(["home","about","faq","contact"] as const).map(v => (
+            <a key={v} href={resolvePath(v) ?? "/"} onClick={(e) => { e.preventDefault(); onNavigate(v); }} className={navLinkClass(v)}>
+              {v.charAt(0).toUpperCase() + v.slice(1)}
+            </a>
+          ))}
 
           {user && user.role === UserRole.EARNER && (
             <>
-              <span onClick={() => onNavigate("earner-tasks")} className={navLinkClass("earner-tasks")}>Browse Tasks</span>
-              <span onClick={() => onNavigate("earner-submissions")} className={navLinkClass("earner-submissions")}>My Proofs</span>
-              <span onClick={() => onNavigate("earner-referrals")} className={navLinkClass("earner-referrals")}>Referrals</span>
+              <a href={resolvePath("earner-tasks") ?? "/"} onClick={(e) => { e.preventDefault(); onNavigate("earner-tasks"); }} className={navLinkClass("earner-tasks")}>Browse Tasks</a>
+              <a href={resolvePath("earner-submissions") ?? "/"} onClick={(e) => { e.preventDefault(); onNavigate("earner-submissions"); }} className={navLinkClass("earner-submissions")}>My Proofs</a>
+              <a href={resolvePath("earner-referrals") ?? "/"} onClick={(e) => { e.preventDefault(); onNavigate("earner-referrals"); }} className={navLinkClass("earner-referrals")}>Referrals</a>
             </>
           )}
           {user && user.role === UserRole.ADVERTISER && (
             <>
-              <span onClick={() => onNavigate("advertiser-tasks")} className={navLinkClass("advertiser-tasks")}>Campaigns</span>
-              <span onClick={() => onNavigate("advertiser-submissions")} className={navLinkClass("advertiser-submissions")}>Submissions</span>
+              <a href={resolvePath("advertiser-tasks") ?? "/"} onClick={(e) => { e.preventDefault(); onNavigate("advertiser-tasks"); }} className={navLinkClass("advertiser-tasks")}>Campaigns</a>
+              <a href={resolvePath("advertiser-submissions") ?? "/"} onClick={(e) => { e.preventDefault(); onNavigate("advertiser-submissions"); }} className={navLinkClass("advertiser-submissions")}>Submissions</a>
             </>
           )}
           {user && user.role === UserRole.ADMIN && (
-            <span onClick={() => onNavigate("admin-dashboard")} className={navLinkClass("admin-dashboard")}>Admin Panel</span>
+            <a href={resolvePath("admin-dashboard") ?? "/"} onClick={(e) => { e.preventDefault(); onNavigate("admin-dashboard"); }} className={navLinkClass("admin-dashboard")}>Admin Panel</a>
           )}
         </nav>
 
@@ -332,9 +334,10 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
           }}
         >
           {["home","about","faq","contact"].map(v => (
-            <span
+            <a
               key={v}
-              onClick={() => { onNavigate(v); setMobileMenuOpen(false); }}
+              href={resolvePath(v) ?? "/"}
+              onClick={(e) => { e.preventDefault(); onNavigate(v); setMobileMenuOpen(false); }}
               className="block py-2.5 text-sm font-semibold rounded-xl px-3 cursor-pointer transition-colors"
               style={isActive(v)
                 ? { background: "#DBEAFE", color: "#2563EB" }
@@ -342,7 +345,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
               }
             >
               {v.charAt(0).toUpperCase() + v.slice(1)}
-            </span>
+            </a>
           ))}
 
           {user && (
@@ -363,10 +366,10 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                     ["earner-referrals","Referrals Network"],
                     ["earner-settings","Settings"]
                   ].map(([v, label]) => (
-                    <span key={v} onClick={() => { onNavigate(v); setMobileMenuOpen(false); }}
+                    <a key={v} href={resolvePath(v) ?? "/"} onClick={(e) => { e.preventDefault(); onNavigate(v); setMobileMenuOpen(false); }}
                       className="block py-2.5 text-sm font-semibold rounded-xl px-3 cursor-pointer transition-colors"
                       style={{ color: isDarkMode ? "#e2e8f0" : "#475569" }}
-                    >{label}</span>
+                    >{label}</a>
                   ))}
                 </>
               )}
@@ -383,10 +386,10 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                     ["advertiser-rejected","Rejected Tasks"],
                     ["advertiser-settings","Settings"]
                   ].map(([v, label]) => (
-                    <span key={v} onClick={() => { onNavigate(v); setMobileMenuOpen(false); }}
+                    <a key={v} href={resolvePath(v) ?? "/"} onClick={(e) => { e.preventDefault(); onNavigate(v); setMobileMenuOpen(false); }}
                       className="block py-2.5 text-sm font-semibold rounded-xl px-3 cursor-pointer transition-colors"
                       style={{ color: isDarkMode ? "#e2e8f0" : "#475569" }}
-                    >{label}</span>
+                    >{label}</a>
                   ))}
                   <button
                     onClick={() => { onOpenDeposit(); setMobileMenuOpen(false); }}
@@ -413,10 +416,10 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                     ["admin-reports","Reports"],
                     ["admin-settings","Site Settings"]
                   ].map(([v, label]) => (
-                    <span key={v} onClick={() => { onNavigate(v); setMobileMenuOpen(false); }}
+                    <a key={v} href={resolvePath(v) ?? "/"} onClick={(e) => { e.preventDefault(); onNavigate(v); setMobileMenuOpen(false); }}
                       className="block py-2.5 text-sm font-semibold rounded-xl px-3 cursor-pointer transition-colors"
                       style={{ color: isDarkMode ? "#e2e8f0" : "#475569" }}
-                    >{label}</span>
+                    >{label}</a>
                   ))}
                 </>
               )}

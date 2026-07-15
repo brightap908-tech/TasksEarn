@@ -108,6 +108,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
   const [fileName, setFileName] = React.useState("");
   const [fileSize, setFileSize] = React.useState("");
   const [isDragActive, setIsDragActive] = React.useState(false);
+  const [compressing, setCompressing] = React.useState(false);
   const [submitSuccess, setSubmitSuccess] = React.useState(false);
   const [submitError, setSubmitError] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
@@ -304,34 +305,65 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
     if (activeTab === "wallet") { fetchDashboardStats(); fetchTransactions(); }
   }, [activeTab]);
 
+  // Compress image using canvas: max 1280px wide, ~65% JPEG quality
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new window.Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const MAX_WIDTH = 1280;
+        let { width, height } = img;
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("Canvas unavailable")); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.65));
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Image load failed")); };
+      img.src = objectUrl;
+    });
+  };
+
   // File selection / drag & drop handlers
-  const handleFileChange = (file: File) => {
+  const handleFileChange = async (file: File) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       setSubmitError("Please upload a valid image file (PNG, JPG, or JPEG).");
       return;
     }
-    // Limit file size to 10MB
+    // Limit raw file size to 10MB (pre-compression)
     if (file.size > 10 * 1024 * 1024) {
       setSubmitError("File is too large. Maximum allowed size is 10MB.");
       return;
     }
 
     setFileName(file.name);
-    const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
-    setFileSize(`${sizeInMB} MB`);
     setSubmitError("");
+    setCompressing(true);
+    setProofScreenshot("");
+    setFileSize("");
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setProofScreenshot(event.target.result as string);
-      }
-    };
-    reader.onerror = () => {
-      setSubmitError("Failed to read image file.");
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImage(file);
+      // Calculate compressed size from base64 string length
+      const bytes = Math.round((compressed.length * 3) / 4);
+      const sizeLabel = bytes < 1024 * 1024
+        ? `${(bytes / 1024).toFixed(0)} KB (compressed)`
+        : `${(bytes / (1024 * 1024)).toFixed(2)} MB (compressed)`;
+      setFileSize(sizeLabel);
+      setProofScreenshot(compressed);
+    } catch {
+      setSubmitError("Failed to process image. Please try a different file.");
+    } finally {
+      setCompressing(false);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -863,7 +895,13 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                         <span className="ml-1 text-gray-400 normal-case font-normal">(required if no notes)</span>
                       </label>
 
-                      {!proofScreenshot ? (
+                      {compressing ? (
+                        <div className="rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/40 p-6 text-center">
+                          <div className="mx-auto h-7 w-7 rounded-full border-2 border-blue-400 border-t-transparent animate-spin mb-2" />
+                          <p className="text-[11px] font-bold text-blue-600">Compressing image…</p>
+                          <p className="text-[9px] text-blue-400 mt-0.5">Resizing to max 1280 px · 65% JPEG quality</p>
+                        </div>
+                      ) : !proofScreenshot ? (
                         <div
                           onDragOver={handleDragOver}
                           onDragLeave={handleDragLeave}
@@ -892,7 +930,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                           <p className="mt-2 text-[11px] font-bold text-gray-700">
                             Drag & drop your screenshot here, or <span className="text-blue-600 hover:underline font-bold">browse files</span>
                           </p>
-                          <p className="text-[9px] text-gray-400 mt-0.5">Supports PNG, JPG, or JPEG up to 10MB</p>
+                          <p className="text-[9px] text-gray-400 mt-0.5">PNG, JPG or JPEG · auto-compressed for fast upload</p>
                         </div>
                       ) : (
                         <div className="rounded-xl border border-gray-200 bg-slate-50/50 p-3 space-y-3">
