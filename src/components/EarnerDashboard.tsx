@@ -721,10 +721,12 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                         </button>
                         <button
                           onClick={() => {
-                            // Navigate to the submission page for both new tasks and resubmissions.
-                            // The submission page shows a Step 1 card with an "Open Task in New Tab"
-                            // link for new tasks, mirroring the Fix & Resubmit flow exactly.
-                            navigate(`/earner/tasks/${task.id}/submit`);
+                            // Rejected tasks go to the dedicated resubmit page; new tasks go to submit.
+                            if ((task as any).submissionStatus === "Rejected") {
+                              navigate(`/earner/tasks/${task.id}/resubmit`);
+                            } else {
+                              navigate(`/earner/tasks/${task.id}/submit`);
+                            }
                           }}
                           className={`rounded-lg px-3 py-1.5 text-[10px] font-bold text-white transition-all cursor-pointer ${
                             (task as any).submissionStatus === "Rejected"
