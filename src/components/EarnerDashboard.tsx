@@ -71,8 +71,8 @@ const FALLBACK_BANKS: NigerianBank[] = [
 ];
 
 export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFetch, showToast, earnerNotifications = [], onMarkNotificationRead, onMarkAllNotificationsRead }: EarnerDashboardProps) {
-  type EarnerTab = "overview" | "tasks" | "history" | "pending" | "completed" | "wallet" | "referrals" | "withdraw" | "profile" | "settings" | "notifications";
-  const VALID_EARNER_TABS: EarnerTab[] = ["overview", "tasks", "history", "pending", "completed", "wallet", "referrals", "withdraw", "profile", "settings", "notifications"];
+  type EarnerTab = "overview" | "tasks" | "history" | "pending" | "completed" | "rejected" | "wallet" | "referrals" | "withdraw" | "profile" | "settings" | "notifications";
+  const VALID_EARNER_TABS: EarnerTab[] = ["overview", "tasks", "history", "pending", "completed", "rejected", "wallet", "referrals", "withdraw", "profile", "settings", "notifications"];
   const earnerUnreadCount = earnerNotifications.filter(n => !n.read).length;
   const { section } = useParams<{ section?: string }>();
   const navigate = useNavigate();
@@ -288,7 +288,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
 
   React.useEffect(() => {
     if (activeTab === "overview") fetchDashboardStats();
-    if (activeTab === "tasks") fetchAvailableTasks();
+    if (activeTab === "tasks" || activeTab === "rejected") fetchAvailableTasks();
     if (activeTab === "history" || activeTab === "pending" || activeTab === "completed") fetchSubmissions();
     if (activeTab === "referrals") fetchReferrals();
     if (activeTab === "wallet") { fetchDashboardStats(); fetchTransactions(); }
@@ -369,10 +369,14 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
     setPasswordForm({ old: "", new: "", confirm: "" });
   };
 
+  // Split tasks into available (no prior submission or non-rejected) vs. rejected.
+  const rejectedTasks = tasks.filter(t => (t as any).submissionStatus === "Rejected");
+  const availableTasks = tasks.filter(t => (t as any).submissionStatus !== "Rejected");
+
   // Filtered tasks computation. Category values are composed as
   // "{Platform} {Action}" (e.g. "Instagram Follow"), so a platform-name
   // filter chip matches via substring rather than exact equality.
-  const filteredTasks = tasks.filter(t => {
+  const filteredTasks = availableTasks.filter(t => {
     const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           t.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = categoryFilter === "All" || t.category.toLowerCase().includes(categoryFilter.toLowerCase());
@@ -423,9 +427,10 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
         <div className="hidden lg:block rounded-2xl border border-slate-200 bg-white p-3 shadow-xs space-y-1">
           {([
             { tab: "overview" as EarnerTab, label: "Dashboard" },
-            { tab: "tasks" as EarnerTab, label: `Available Tasks (${tasks.length})` },
+            { tab: "tasks" as EarnerTab, label: `Available Tasks (${availableTasks.length})` },
             { tab: "pending" as EarnerTab, label: `Waiting for Approval (${submissions.filter(s => s.status === SubmissionStatus.PENDING).length})` },
             { tab: "completed" as EarnerTab, label: `Completed Tasks (${submissions.filter(s => s.status === SubmissionStatus.APPROVED).length})` },
+            { tab: "rejected" as EarnerTab, label: `Rejected Tasks`, badge: rejectedTasks.length > 0 ? rejectedTasks.length : undefined },
             { tab: "wallet" as EarnerTab, label: "Wallet" },
             { tab: "withdraw" as EarnerTab, label: "Withdraw" },
             { tab: "referrals" as EarnerTab, label: "Referrals" },
@@ -672,27 +677,8 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                 {filteredTasks.map((task, idx) => (
                   <div
                     key={idx}
-                    className={`rounded-2xl border bg-white p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between ${
-                      (task as any).submissionStatus === "Rejected"
-                        ? "border-red-200"
-                        : "border-gray-100"
-                    }`}
+                    className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
                   >
-                    {/* Previously-rejected banner */}
-                    {(task as any).submissionStatus === "Rejected" && (
-                      <div className="mb-3 rounded-xl bg-red-50 border border-red-100 px-3 py-2 flex items-start gap-2">
-                        <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-[10px] font-bold text-red-700 uppercase tracking-wide">Previously Rejected — Resubmission Allowed</p>
-                          {(task as any).submissionFeedback && (
-                            <p className="text-[10px] text-red-600 mt-0.5 leading-relaxed">
-                              Reason: {(task as any).submissionFeedback}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
                     <div>
                       <div className="flex justify-between items-start gap-2">
                         <span className="rounded-lg bg-blue-50 px-2 py-1 text-[9px] font-bold text-blue-700 flex items-center gap-1.5">
@@ -720,21 +706,10 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                           Delete
                         </button>
                         <button
-                          onClick={() => {
-                            // Rejected tasks go to the dedicated resubmit page; new tasks go to submit.
-                            if ((task as any).submissionStatus === "Rejected") {
-                              navigate(`/earner/tasks/${task.id}/resubmit`);
-                            } else {
-                              navigate(`/earner/tasks/${task.id}/submit`);
-                            }
-                          }}
-                          className={`rounded-lg px-3 py-1.5 text-[10px] font-bold text-white transition-all cursor-pointer ${
-                            (task as any).submissionStatus === "Rejected"
-                              ? "bg-red-500 hover:bg-red-600"
-                              : "bg-gray-900 hover:bg-blue-600"
-                          }`}
+                          onClick={() => navigate(`/earner/tasks/${task.id}/submit`)}
+                          className="rounded-lg px-3 py-1.5 text-[10px] font-bold text-white bg-gray-900 hover:bg-blue-600 transition-all cursor-pointer"
                         >
-                          {(task as any).submissionStatus === "Rejected" ? "Fix & Resubmit" : "Accept & Do Job"}
+                          Accept &amp; Do Job
                         </button>
                       </div>
                     </div>
@@ -1436,6 +1411,87 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* TAB: REJECTED TASKS */}
+        {activeTab === "rejected" && (
+          <div className="space-y-6">
+
+            {/* Header */}
+            <div className="rounded-2xl border border-red-200 bg-red-50/40 shadow-sm overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-red-100 bg-red-50">
+                <XCircle className="h-4 w-4 text-red-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-display text-sm font-bold text-red-900">Rejected Tasks</h3>
+                  <p className="text-[10px] text-red-500 mt-0.5">Review the rejection reason and fix your submission to earn the reward.</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-red-100 border border-red-200 px-2.5 py-0.5 text-[10px] font-black text-red-600">
+                  {rejectedTasks.length} rejected
+                </span>
+              </div>
+
+              {rejectedTasks.length === 0 ? (
+                <div className="text-center py-10 text-xs text-gray-400">
+                  No rejected submissions — great work! Keep completing tasks correctly.
+                </div>
+              ) : (
+                <div className="divide-y divide-red-50">
+                  {rejectedTasks.map((task, idx) => (
+                    <div key={idx} className="px-5 py-5 space-y-4">
+
+                      {/* Task header */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <PlatformIcon category={task.category} size={14} showBg className="shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-gray-800 truncate">{task.title}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{task.category} · ₦{task.earningPerSlot} reward</p>
+                          </div>
+                        </div>
+                        <span className="shrink-0 font-mono text-sm font-black text-gray-400">₦{task.earningPerSlot}</span>
+                      </div>
+
+                      {/* Rejection reason */}
+                      <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 flex items-start gap-2">
+                        <AlertCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-[10px] font-black text-red-700 uppercase tracking-wide mb-1">Rejection Reason</p>
+                          <p className="text-[11px] text-red-700 leading-relaxed">
+                            {(task as any).submissionFeedback || "No specific reason provided. Please review the task instructions carefully."}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Original task instructions */}
+                      <div className="rounded-xl bg-white border border-gray-100 px-4 py-3 space-y-2">
+                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide">Original Task Instructions</p>
+                        <p className="text-[11px] text-gray-700 leading-relaxed whitespace-pre-line line-clamp-3">{task.description}</p>
+                        {(task as any).proofRequirements && (
+                          <div className="pt-2 border-t border-gray-50">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Proof Requirements</p>
+                            <p className="text-[11px] text-gray-600 leading-relaxed">{(task as any).proofRequirements}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Fix & Resubmit button */}
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => navigate(`/earner/tasks/${task.id}/resubmit`)}
+                          className="inline-flex items-center gap-2 rounded-xl bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 text-xs font-bold shadow-sm transition-all cursor-pointer"
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                          Fix &amp; Resubmit
+                        </button>
+                      </div>
+
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 

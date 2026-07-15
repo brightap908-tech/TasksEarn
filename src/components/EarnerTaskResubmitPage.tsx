@@ -190,10 +190,10 @@ export default function EarnerTaskResubmitPage({ apiFetch, showToast }: EarnerTa
             This task may no longer be available or may not require resubmission.
           </p>
           <button
-            onClick={() => navigate("/earner/tasks")}
+            onClick={() => navigate("/earner/rejected")}
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 text-white px-5 py-2.5 text-xs font-bold hover:bg-blue-700 transition-all"
           >
-            <ArrowLeft className="h-4 w-4" /> Back to Browse Tasks
+            <ArrowLeft className="h-4 w-4" /> Back to Rejected Tasks
           </button>
         </div>
       </div>
@@ -225,11 +225,11 @@ export default function EarnerTaskResubmitPage({ apiFetch, showToast }: EarnerTa
       {/* Back button + breadcrumb */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => navigate("/earner/tasks")}
+          onClick={() => navigate("/earner/rejected")}
           className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Browse Tasks
+          Rejected Tasks
         </button>
         <span className="text-xs text-gray-400">›</span>
         <span className="text-xs font-semibold text-red-600 truncate flex items-center gap-1">
@@ -415,7 +415,7 @@ export default function EarnerTaskResubmitPage({ apiFetch, showToast }: EarnerTa
         <div className="flex gap-3 pt-1">
           <button
             type="button"
-            onClick={() => navigate("/earner/tasks")}
+            onClick={() => navigate("/earner/rejected")}
             className="flex-none rounded-xl border border-gray-200 px-5 py-3 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all"
           >
             Cancel

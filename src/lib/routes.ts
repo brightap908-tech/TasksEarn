@@ -22,6 +22,7 @@ export const VIEW_TO_PATH: Record<string, string> = {
   "earner-withdraw": "/earner/withdraw",
   "earner-profile": "/earner/profile",
   "earner-settings": "/earner/settings",
+  "earner-rejected": "/earner/rejected",
   // Advertiser pages
   "advertiser-dashboard": "/advertiser/overview",
   "advertiser-create": "/advertiser/create",
@@ -71,6 +72,7 @@ export function pathToView(pathname: string): string {
   if (pathname === "/earner/withdraw") return "earner-withdraw";
   if (pathname === "/earner/profile") return "earner-profile";
   if (pathname === "/earner/settings") return "earner-settings";
+  if (pathname === "/earner/rejected") return "earner-rejected";
   if (pathname.startsWith("/earner/")) return "earner-dashboard";
   // Advertiser
   if (pathname === "/advertiser/manage") return "advertiser-tasks";
