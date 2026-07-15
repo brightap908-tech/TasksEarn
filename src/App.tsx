@@ -20,7 +20,9 @@ import RouteProgressBar from "./components/RouteProgressBar";
 import LoginPopupModal from "./components/LoginPopupModal";
 import PublicPages from "./components/PublicPages";
 import EarnerDashboard from "./components/EarnerDashboard";
+import EarnerTaskSubmitPage from "./components/EarnerTaskSubmitPage";
 import AdvertiserDashboard from "./components/AdvertiserDashboard";
+import AdvertiserSubmissionReviewPage from "./components/AdvertiserSubmissionReviewPage";
 import AdminDashboard from "./components/AdminDashboard";
 import { simulateApiFetch } from "./mockDb";
 import { 
@@ -1443,6 +1445,15 @@ export default function App() {
         <Route path="/terms" element={<><BackButton fallback="/" /><PublicPages view="terms" pagesContent={pagesContent} settings={settings} /></>} />
         <Route path="/privacy" element={<><BackButton fallback="/" /><PublicPages view="privacy" pagesContent={pagesContent} settings={settings} /></>} />
 
+        {/* ROLE PROTECTED: EARNER TASK SUBMISSION PAGE (must be before /earner/:section) */}
+        <Route path="/earner/tasks/:taskId/submit" element={
+          user && user.role === UserRole.EARNER ? (
+            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+              <EarnerTaskSubmitPage apiFetch={apiFetch} showToast={showToast} />
+            </div>
+          ) : (<Navigate to="/login" replace />)
+        } />
+
         {/* ROLE PROTECTED: EARNER DASHBOARD PANELS */}
         <Route path="/earner/:section" element={
           user && user.role === UserRole.EARNER ? (
@@ -1467,6 +1478,15 @@ export default function App() {
           ) : (<Navigate to="/login" replace />)
         } />
         <Route path="/earner" element={<Navigate to="/earner/overview" replace />} />
+
+        {/* ROLE PROTECTED: ADVERTISER SUBMISSION REVIEW PAGE (must be before /advertiser/:section) */}
+        <Route path="/advertiser/audit/:submissionId" element={
+          user && user.role === UserRole.ADVERTISER ? (
+            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+              <AdvertiserSubmissionReviewPage apiFetch={apiFetch} showToast={showToast} />
+            </div>
+          ) : (<Navigate to="/advertiser-login" replace />)
+        } />
 
         {/* ROLE PROTECTED: ADVERTISER DASHBOARD PANELS */}
         <Route path="/advertiser/:section" element={

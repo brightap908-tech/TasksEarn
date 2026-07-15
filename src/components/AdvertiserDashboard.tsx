@@ -99,9 +99,6 @@ export default function AdvertiserDashboard({
   const [priceListLoading, setPriceListLoading] = React.useState(false);
 
   // ── Audit ─────────────────────────────────────────────────────────────────
-  const [auditingSub, setAuditingSub] = React.useState<TaskSubmission | null>(null);
-  const [auditFeedback, setAuditFeedback] = React.useState("");
-  const [auditSubmitting, setAuditSubmitting] = React.useState(false);
 
   // ── Platforms ─────────────────────────────────────────────────────────────
   const { platforms } = usePlatforms();
@@ -327,30 +324,6 @@ export default function AdvertiserDashboard({
     } catch (e) {}
   };
 
-  // ── Audit Review ──────────────────────────────────────────────────────────
-  const handleReviewSubmission = async (status: "Approved" | "Rejected") => {
-    if (!auditingSub) return;
-    setAuditSubmitting(true);
-    try {
-      const res = await apiFetch(`/api/advertiser/submissions/${auditingSub.id}/review`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status, feedback: auditFeedback })
-      });
-      if (res?.success) {
-        setAuditingSub(null);
-        setAuditFeedback("");
-        fetchSubmissions();
-        fetchStats();
-      } else {
-        alert(res?.error || "Review failed");
-      }
-    } catch (e) {
-      alert("Error submitting review.");
-    } finally {
-      setAuditSubmitting(false);
-    }
-  };
 
   // ── Profile Save ──────────────────────────────────────────────────────────
   const handleSaveProfile = async () => {
@@ -937,88 +910,6 @@ export default function AdvertiserDashboard({
         {activeTab === "audit" && (
           <div className="space-y-6">
 
-            {/* Audit Modal */}
-            {auditingSub && (
-              <div className="rounded-2xl border-2 border-blue-200 bg-white p-5 shadow-sm space-y-4 animate-fadeIn">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="rounded-full px-2.5 py-0.5 text-[9px] font-bold text-blue-700"
-                      style={{ background: "#DBEAFE" }}>
-                      Verification Portal
-                    </span>
-                    <h4 className="font-display text-sm font-bold text-gray-900 mt-1.5">{auditingSub.taskTitle}</h4>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Submitted by: <strong className="text-gray-600">{auditingSub.earnerName}</strong>
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => { setAuditingSub(null); setAuditFeedback(""); }}
-                    className="rounded-full p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Text proof */}
-                  <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 text-xs space-y-3">
-                    <div>
-                      <p className="text-gray-400 uppercase font-bold text-[9px] mb-1">Submitted Proof:</p>
-                      <p className="font-mono bg-white rounded-lg p-3 text-gray-700 border border-gray-100 leading-relaxed">{auditingSub.proofText}</p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] font-bold text-gray-500 uppercase">
-                        Feedback (optional for rejections)
-                      </label>
-                      <input
-                        type="text" value={auditFeedback}
-                        onChange={e => setAuditFeedback(e.target.value)}
-                        placeholder="e.g. Verified! / Proof doesn't match."
-                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        onClick={() => handleReviewSubmission("Approved")}
-                        disabled={auditSubmitting}
-                        className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all disabled:opacity-60"
-                      >
-                        <Check className="h-3.5 w-3.5" /> Approve
-                      </button>
-                      <button
-                        onClick={() => handleReviewSubmission("Rejected")}
-                        disabled={auditSubmitting}
-                        className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 py-2.5 text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all disabled:opacity-60"
-                      >
-                        <X className="h-3.5 w-3.5" /> Reject
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Screenshot */}
-                  <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 flex flex-col gap-2">
-                    <p className="text-gray-400 uppercase font-bold text-[9px] mb-1">Screenshot Proof:</p>
-                    <div className="rounded-lg overflow-hidden border border-gray-100 h-44 bg-gray-100 flex items-center justify-center">
-                      {auditingSub.proofScreenshot ? (
-                        <img
-                          src={auditingSub.proofScreenshot}
-                          alt="Proof"
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <span className="text-xs text-gray-400 italic">No proof available</span>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-gray-400 italic flex items-center gap-1">
-                      <ZoomIn className="h-3 w-3 text-blue-400" />
-                      Verify social profile names match the submission handle.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Pending Queue */}
             <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
               <h3 className="font-display text-sm font-bold text-gray-900 mb-4">
@@ -1054,7 +945,7 @@ export default function AdvertiserDashboard({
                           <td className="py-3 px-1 font-mono text-gray-500 max-w-xs truncate">{sub.proofText}</td>
                           <td className="py-3 px-1 text-right">
                             <button
-                              onClick={() => { setAuditingSub(sub); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                              onClick={() => navigate(`/advertiser/audit/${sub.id}`)}
                               className="rounded-lg px-2.5 py-1 text-[10px] font-bold text-white transition-all"
                               style={{ background: "#2563EB" }}
                             >
@@ -1714,7 +1605,7 @@ export default function AdvertiserDashboard({
                         <p className="text-[10px] text-gray-400 mt-0.5">By: {sub.earnerName} · {new Date(sub.submittedAt).toLocaleDateString()}</p>
                         {sub.proofText && <p className="text-[10px] text-gray-500 mt-1 line-clamp-1 font-mono">{sub.proofText}</p>}
                       </div>
-                      <button onClick={() => { setAuditingSub(sub); setActiveTab("audit"); }}
+                      <button onClick={() => navigate(`/advertiser/audit/${sub.id}`)}
                         className="shrink-0 rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-xs font-bold text-white transition-all cursor-pointer">
                         Review Proof
                       </button>

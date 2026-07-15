@@ -1674,6 +1674,28 @@ app.get("/api/earner/tasks", async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
+// Earner fetches a single task by ID (for the dedicated submission page).
+app.get("/api/earner/tasks/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+    const taskId = req.params.id;
+    const taskRes = await pool.query(`
+      SELECT t.*, s.status AS sub_status, s.feedback AS sub_feedback
+      FROM tasks t
+      LEFT JOIN submissions s ON s.task_id = t.id AND s.earner_id = $1
+      WHERE t.id = $2 AND t.status = 'Active'
+    `, [user.id, taskId]);
+    if (taskRes.rows.length === 0) return res.status(404).json({ error: "Task not found or not active" });
+    const r = taskRes.rows[0];
+    res.json({
+      ...mapTask(r),
+      submissionStatus: r.sub_status || null,
+      submissionFeedback: r.sub_feedback || null,
+    });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
 // Earner hides (dismisses) a task — only affects their own view, not the task itself.
 app.post("/api/earner/tasks/:id/hide", async (req, res) => {
   try {
@@ -2368,6 +2390,23 @@ app.delete("/api/advertiser/tasks/:id", async (req, res) => {
     console.error("Delete task error:", err);
     res.status(500).json({ error: "Server error" });
   }
+});
+
+// Advertiser fetches a single submission by ID (for the dedicated review page).
+app.get("/api/advertiser/submissions/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
+    const taskRes = await pool.query("SELECT id FROM tasks WHERE advertiser_id = $1", [user.id]);
+    const taskIds = taskRes.rows.map((r: any) => r.id);
+    if (taskIds.length === 0) return res.status(404).json({ error: "Submission not found" });
+    const subRes = await pool.query(
+      "SELECT * FROM submissions WHERE id = $1 AND task_id = ANY($2::varchar[])",
+      [req.params.id, taskIds]
+    );
+    if (subRes.rows.length === 0) return res.status(404).json({ error: "Submission not found" });
+    res.json(mapSubmission(subRes.rows[0]));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
 app.get("/api/advertiser/submissions", async (req, res) => {
