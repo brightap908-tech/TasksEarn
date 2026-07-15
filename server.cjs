@@ -354,6 +354,32 @@ async function cleanupRejectedSubmissionProof(submissionId) {
     console.error(`[ProofCleanup] Failed to delete proof screenshot for rejected submission ${submissionId}:`, err);
   }
 }
+async function cleanupTaskSubmissionProofs(taskId) {
+  try {
+    const result = await pool.query(
+      "UPDATE submissions SET proof_screenshot = NULL WHERE task_id = $1 AND proof_screenshot IS NOT NULL",
+      [taskId]
+    );
+    if ((result.rowCount ?? 0) > 0) {
+      console.log(`[ProofCleanup] Cleared ${result.rowCount} screenshot(s) for task ${taskId}`);
+    }
+  } catch (err) {
+    console.error(`[ProofCleanup] Failed to clear screenshots for task ${taskId}:`, err);
+  }
+}
+async function sweepOrphanedProofScreenshots() {
+  try {
+    const result = await pool.query(
+      "UPDATE submissions SET proof_screenshot = NULL WHERE proof_screenshot IS NOT NULL AND status IN ($1, $2)",
+      ["Approved" /* APPROVED */, "Rejected" /* REJECTED */]
+    );
+    if ((result.rowCount ?? 0) > 0) {
+      console.log(`[ProofCleanup] Startup sweep: cleared ${result.rowCount} orphaned screenshot(s).`);
+    }
+  } catch (err) {
+    console.error("[ProofCleanup] Startup sweep failed:", err);
+  }
+}
 async function getSettings() {
   const res = await pool.query("SELECT * FROM settings ORDER BY id ASC LIMIT 1");
   return res.rows.length > 0 ? mapSettings(res.rows[0]) : {
@@ -2091,6 +2117,7 @@ app.delete("/api/advertiser/tasks/:id", async (req, res) => {
     } finally {
       client.release();
     }
+    await cleanupTaskSubmissionProofs(req.params.id);
     res.json({ success: true, refundedAmount: refundAmount, remainingBalance: newBalance });
   } catch (err) {
     console.error("Delete task error:", err);
@@ -2593,6 +2620,7 @@ app.delete("/api/admin/tasks/:id", async (req, res) => {
     } finally {
       client.release();
     }
+    await cleanupTaskSubmissionProofs(req.params.id);
     res.json({ success: true, refundedAmount: refundAmount });
   } catch (err) {
     console.error("Admin delete task error:", err);
@@ -3611,6 +3639,7 @@ async function ensureVapidKeys() {
     await seedDatabase();
     await ensurePlatformsSeeded();
     await ensureVapidKeys();
+    await sweepOrphanedProofScreenshots();
     await startServer();
   } catch (err) {
     console.error("FATAL: Failed to start server:", err);
