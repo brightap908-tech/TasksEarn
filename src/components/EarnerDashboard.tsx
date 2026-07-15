@@ -720,7 +720,16 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                           Delete
                         </button>
                         <button
-                          onClick={() => navigate(`/earner/tasks/${task.id}/submit`)}
+                          onClick={() => {
+                            // For new tasks: open the advertiser's link in a new tab so the
+                            // earner can complete the action (follow, like, join, etc.) while
+                            // this page navigates to the proof-submission form in the same tab.
+                            // For resubmissions the earner already did the task — just go to submit.
+                            if ((task as any).submissionStatus !== "Rejected" && task.link) {
+                              window.open(task.link, "_blank", "noopener,noreferrer");
+                            }
+                            navigate(`/earner/tasks/${task.id}/submit`);
+                          }}
                           className={`rounded-lg px-3 py-1.5 text-[10px] font-bold text-white transition-all cursor-pointer ${
                             (task as any).submissionStatus === "Rejected"
                               ? "bg-red-500 hover:bg-red-600"

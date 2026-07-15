@@ -11,8 +11,9 @@ import {
   Send,
   CheckCircle2,
   XCircle,
-  ArrowUpRight,
-  ExternalLink
+  ExternalLink,
+  ArrowRight,
+  SquareArrowOutUpRight
 } from "lucide-react";
 
 interface EarnerTaskSubmitPageProps {
@@ -274,38 +275,76 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
           </div>
 
           <div>
-            <p className="font-bold text-gray-500 uppercase text-[10px] mb-1">Target Link</p>
-            <a
-              href={task.link}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-blue-600 font-bold hover:underline break-all"
-            >
-              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-              {task.link}
-            </a>
-          </div>
-
-          <div>
             <p className="font-bold text-gray-500 uppercase text-[10px] mb-1">Proof Requirements</p>
             <p className="text-gray-700 leading-relaxed">{task.proofRequirements}</p>
           </div>
         </div>
       </div>
 
-      {/* Proof submission form */}
+      {/* ── STEP 1: Open the task (new tasks only, not resubmissions) ────── */}
+      {!isResubmission && (
+        <div className="rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 shadow-sm">
+          <div className="flex items-start gap-4">
+            {/* Step badge */}
+            <div className="shrink-0 h-9 w-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow">
+              1
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-black text-blue-900 uppercase tracking-wide mb-0.5">Open &amp; Complete the Task</p>
+              <p className="text-xs text-blue-700 leading-relaxed mb-4">
+                The advertiser's page opens in a <strong>new tab</strong> — complete the action there (follow, like, join, subscribe, etc.), then come back to <strong>Step 2</strong> on this page to upload your proof.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <a
+                  href={task.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-3 text-xs font-bold text-white shadow transition-all"
+                >
+                  <SquareArrowOutUpRight className="h-4 w-4" />
+                  Open Task in New Tab
+                </a>
+                <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-100/60 text-[10px] font-bold text-blue-700">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                  This page stays open — scroll down to submit proof after
+                </div>
+              </div>
+
+              <p className="text-[10px] text-blue-500 mt-3 break-all">
+                🔗 {task.link}
+              </p>
+            </div>
+          </div>
+
+          {/* Arrow pointing to step 2 */}
+          <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-blue-400">
+            <div className="flex-1 border-t border-dashed border-blue-200" />
+            <span className="flex items-center gap-1 shrink-0">
+              After completing the task above, scroll down to Step 2
+              <ArrowRight className="h-3 w-3" />
+            </span>
+            <div className="flex-1 border-t border-dashed border-blue-200" />
+          </div>
+        </div>
+      )}
+
+      {/* ── STEP 2: Proof submission form ─────────────────────────────────── */}
       <form onSubmit={handleSubmit} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm space-y-5">
 
-        <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
-          <div className="rounded-lg bg-blue-50 p-2 text-blue-600">
-            <FileText className="h-4 w-4" />
+        <div className="flex items-center gap-3 border-b border-gray-50 pb-4">
+          {/* Step badge */}
+          <div className="shrink-0 h-9 w-9 rounded-full bg-gray-900 text-white flex items-center justify-center font-black text-sm shadow">
+            {isResubmission ? "↩" : "2"}
           </div>
           <div>
             <h2 className="text-sm font-bold text-gray-800">
-              {isResubmission ? "Submit Corrected Proof" : "Submit Verification Proof"}
+              {isResubmission ? "Submit Corrected Proof" : "Submit Your Proof"}
             </h2>
             <p className="text-[10px] text-gray-400 mt-0.5">
-              Provide accurate proof so your submission is approved without delay.
+              {isResubmission
+                ? "Fix the issue and resubmit your verification below."
+                : "Come back here after completing the task — upload a screenshot or enter your details."}
             </p>
           </div>
         </div>
