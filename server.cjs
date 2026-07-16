@@ -1610,15 +1610,6 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       return res.status(400).json({ error: "Please provide proof details: notes, a link, or a screenshot." });
     }
     await client.query("BEGIN");
-    const taskRes = await client.query(
-      "SELECT * FROM tasks WHERE id = $1 FOR UPDATE",
-      [taskId]
-    );
-    if (taskRes.rows.length === 0 || taskRes.rows[0].status !== "Active" /* ACTIVE */) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Task is not active or not found" });
-    }
-    const task = mapTask(taskRes.rows[0]);
     const screenshot = proofScreenshot || null;
     const finalProofText = proofText || "See uploaded screenshot proof.";
     const alreadySub = await client.query(
@@ -1635,6 +1626,15 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         await client.query("ROLLBACK");
         return res.status(400).json({ error: "You have already successfully completed this task." });
       }
+      const taskRes2 = await client.query(
+        "SELECT * FROM tasks WHERE id = $1 FOR UPDATE",
+        [taskId]
+      );
+      if (taskRes2.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Task not found" });
+      }
+      const task2 = mapTask(taskRes2.rows[0]);
       const resubmittedAt = /* @__PURE__ */ new Date();
       await client.query(
         `UPDATE submissions
@@ -1654,16 +1654,25 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         "sh-" + Math.random().toString(36).substr(2, 9),
         existing.id,
         taskId,
-        task.title,
+        task2.title,
         user.id,
         user.name,
         resubmittedAt
       ]);
       await client.query("COMMIT");
-      notifyAdmin({ type: "submission", message: `Task resubmission from ${user.name} for "${task.title}"`, referenceId: existing.id });
+      notifyAdmin({ type: "submission", message: `Task resubmission from ${user.name} for "${task2.title}"`, referenceId: existing.id });
       const subRes2 = await pool.query("SELECT * FROM submissions WHERE id = $1", [existing.id]);
       return res.status(200).json({ success: true, message: "Task resubmitted successfully", submission: mapSubmission(subRes2.rows[0]) });
     }
+    const taskRes = await client.query(
+      "SELECT * FROM tasks WHERE id = $1 FOR UPDATE",
+      [taskId]
+    );
+    if (taskRes.rows.length === 0 || taskRes.rows[0].status !== "Active" /* ACTIVE */) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Task is not active or not found" });
+    }
+    const task = mapTask(taskRes.rows[0]);
     const occupiedRes = await client.query(
       "SELECT COUNT(*) FROM submissions WHERE task_id=$1 AND status IN ('Pending','Rejected')",
       [taskId]
@@ -1743,6 +1752,55 @@ app.get("/api/earner/rejected-submissions", async (req, res) => {
     })));
   } catch (err) {
     console.error("Rejected submissions error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.get("/api/earner/submissions/:submissionId/resubmit-info", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    const result = await pool.query(`
+      SELECT
+        s.id             AS submission_id,
+        s.task_id,
+        s.task_title,
+        s.category,
+        s.reward,
+        s.feedback       AS rejection_reason,
+        s.rejected_at,
+        s.status,
+        t.description    AS task_description,
+        t.proof_requirements,
+        t.link           AS task_link,
+        t.earning_per_slot,
+        t.advertiser_name
+      FROM submissions s
+      JOIN tasks t ON t.id = s.task_id
+      WHERE s.id = $1
+        AND s.earner_id = $2
+        AND s.status    = 'Rejected'
+    `, [req.params.submissionId, user.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Rejected submission not found" });
+    }
+    const r = result.rows[0];
+    res.json({
+      submissionId: r.submission_id,
+      taskId: r.task_id,
+      taskTitle: r.task_title,
+      category: r.category,
+      reward: parseFloat(r.reward) || 0,
+      rejectionReason: r.rejection_reason || "",
+      rejectedAt: r.rejected_at ? r.rejected_at instanceof Date ? r.rejected_at.toISOString() : r.rejected_at : null,
+      status: r.status,
+      description: r.task_description,
+      proofRequirements: r.proof_requirements || "",
+      link: r.task_link || "",
+      earningPerSlot: parseFloat(r.earning_per_slot) || 0,
+      advertiserName: r.advertiser_name
+    });
+  } catch (err) {
+    console.error("[Resubmit info] Error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
