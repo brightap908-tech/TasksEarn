@@ -1,6 +1,6 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LayoutGrid, Briefcase, Wallet, Bell, UserCircle, CreditCard, Users } from "lucide-react";
+import { LayoutGrid, Briefcase, Wallet, Bell, UserCircle, CreditCard, Users, XCircle } from "lucide-react";
 import { User, UserRole } from "../types";
 
 interface NavItem {
@@ -34,11 +34,11 @@ export default function MobileBottomNav({ user, isDarkMode, earnerUnreadCount = 
 
   if (user.role === UserRole.EARNER) {
     items = [
-      { path: "/earner/overview", label: "Dashboard", icon: <LayoutGrid className={iconCls} /> },
-      { path: "/earner/tasks", label: "Tasks", icon: <Briefcase className={iconCls} />, badge: rejectedTasksCount },
+      { path: "/earner/overview", label: "Dashboard", icon: <LayoutGrid className={iconCls} />, badge: rejectedTasksCount },
+      { path: "/earner/tasks", label: "Tasks", icon: <Briefcase className={iconCls} /> },
       { path: "/earner/wallet", label: "Wallet", icon: <Wallet className={iconCls} /> },
       { path: "/earner/notifications", label: "Alerts", icon: <Bell className={iconCls} />, badge: earnerUnreadCount },
-      { path: "/earner/profile", label: "Profile", icon: <UserCircle className={iconCls} /> },
+      { path: "/earner/rejected", label: "Rejected", icon: <XCircle className={iconCls} />, badge: rejectedTasksCount },
     ];
   } else if (user.role === UserRole.ADVERTISER) {
     items = [

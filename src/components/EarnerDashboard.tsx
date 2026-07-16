@@ -304,7 +304,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
   const [highlightTaskId, setHighlightTaskId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (activeTab === "overview") fetchDashboardStats();
+    if (activeTab === "overview") { fetchDashboardStats(); fetchRejectedSubmissions(); }
     if (activeTab === "tasks") fetchAvailableTasks();
     if (activeTab === "rejected") fetchRejectedSubmissions();
     if (activeTab === "history" || activeTab === "pending" || activeTab === "completed") fetchSubmissions();
@@ -448,7 +448,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
             { tab: "tasks" as EarnerTab, label: `Available Tasks (${availableTasks.length})` },
             { tab: "pending" as EarnerTab, label: `Waiting for Approval (${submissions.filter(s => s.status === SubmissionStatus.PENDING).length})` },
             { tab: "completed" as EarnerTab, label: `Completed Tasks (${submissions.filter(s => s.status === SubmissionStatus.APPROVED).length})` },
-            { tab: "rejected" as EarnerTab, label: `Rejected Tasks`, badge: rejectedSubmissions.length > 0 ? rejectedSubmissions.length : undefined, externalPath: "/earner/rejected" },
+            { tab: "rejected" as EarnerTab, label: `Rejected Tasks`, badge: rejectedSubmissions.length > 0 ? rejectedSubmissions.length : undefined },
             { tab: "wallet" as EarnerTab, label: "Wallet" },
             { tab: "withdraw" as EarnerTab, label: "Withdraw" },
             { tab: "referrals" as EarnerTab, label: "Referrals" },
@@ -562,7 +562,10 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm flex items-center gap-3">
+              <button
+                onClick={() => setActiveTab("rejected")}
+                className="rounded-2xl border border-red-100 bg-white p-4 shadow-sm flex items-center gap-3 hover:bg-red-50/40 transition-all text-left cursor-pointer w-full"
+              >
                 <div className="rounded-xl bg-red-50 p-2.5 text-red-600">
                   <XCircle className="h-5 w-5" />
                 </div>
@@ -570,7 +573,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                   <span className="block text-[10px] font-medium text-gray-400 uppercase">Rejected</span>
                   <span className="font-mono text-sm font-bold text-gray-800">{metrics.rejectedCount}</span>
                 </div>
-              </div>
+              </button>
 
               <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm flex items-center gap-3">
                 <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600">
@@ -582,6 +585,36 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                 </div>
               </div>
             </div>
+
+            {/* ── Rejection Alert Banner (shown when earner has rejected tasks) ── */}
+            {rejectedSubmissions.length > 0 && (
+              <div className="rounded-2xl border-2 border-red-200 bg-gradient-to-r from-red-50 to-rose-50 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="shrink-0 h-10 w-10 rounded-full bg-red-500 text-white flex items-center justify-center shadow">
+                    <AlertCircle className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-red-900">
+                      {rejectedSubmissions.length === 1
+                        ? "1 task needs your attention"
+                        : `${rejectedSubmissions.length} tasks need your attention`}
+                    </p>
+                    <p className="text-xs text-red-700 mt-0.5 leading-relaxed">
+                      {rejectedSubmissions.length === 1
+                        ? "1 submission was rejected. Review the feedback and resubmit corrected proof to earn your reward."
+                        : `${rejectedSubmissions.length} submissions were rejected. Review feedback and resubmit corrected proof to earn your rewards.`}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveTab("rejected")}
+                  className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 text-xs font-black shadow transition-all cursor-pointer w-full sm:w-auto"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Fix &amp; Resubmit
+                </button>
+              </div>
+            )}
 
             {/* General Information Banner / Notice Board */}
             <div className="rounded-2xl bg-gray-900 text-white p-6 relative overflow-hidden">
@@ -613,25 +646,37 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
               ) : (
                 <div className="space-y-3">
                    {metrics.recentSubmissions.map((sub, idx) => (
-                     <div key={idx} className="flex items-center justify-between border-b border-gray-50 pb-3 last:border-b-0 last:pb-0">
-                       <div className="flex items-center gap-2.5 min-w-0">
-                         <PlatformIcon category={sub.category} size={14} showBg className="shrink-0" />
-                         <div className="min-w-0">
-                           <p className="text-xs font-bold text-gray-800 line-clamp-1">{sub.taskTitle}</p>
-                           <p className="text-[10px] text-gray-400 mt-0.5">{new Date(sub.submittedAt).toLocaleDateString()} • {sub.category}</p>
+                     <div key={idx} className="flex flex-col gap-2 border-b border-gray-50 pb-3 last:border-b-0 last:pb-0">
+                       <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-2.5 min-w-0">
+                           <PlatformIcon category={sub.category} size={14} showBg className="shrink-0" />
+                           <div className="min-w-0">
+                             <p className="text-xs font-bold text-gray-800 line-clamp-1">{sub.taskTitle}</p>
+                             <p className="text-[10px] text-gray-400 mt-0.5">{new Date(sub.submittedAt).toLocaleDateString()} • {sub.category}</p>
+                           </div>
+                         </div>
+                         <div className="text-right shrink-0">
+                           <span className="font-mono text-xs font-bold text-gray-700">₦{sub.reward}</span>
+                           <div className="mt-1">
+                             <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                               sub.status === SubmissionStatus.APPROVED ? "bg-blue-50 text-blue-700" :
+                               sub.status === SubmissionStatus.PENDING ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"
+                             }`}>
+                               {sub.status}
+                             </span>
+                           </div>
                          </div>
                        </div>
-                      <div className="text-right">
-                        <span className="font-mono text-xs font-bold text-gray-700">₦{sub.reward}</span>
-                        <div className="mt-1">
-                          <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold ${
-                            sub.status === SubmissionStatus.APPROVED ? "bg-blue-50 text-blue-700" :
-                            sub.status === SubmissionStatus.PENDING ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"
-                          }`}>
-                            {sub.status}
-                          </span>
-                        </div>
-                      </div>
+                       {/* Fix & Resubmit button shown only for rejected recent submissions */}
+                       {sub.status === SubmissionStatus.REJECTED && (
+                         <button
+                           onClick={() => navigate(`/earner/rejected/${sub.id}`)}
+                           className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-[11px] font-black shadow-sm transition-all cursor-pointer"
+                         >
+                           <RefreshCw className="h-3 w-3" />
+                           Fix &amp; Resubmit
+                         </button>
+                       )}
                     </div>
                   ))}
                 </div>
@@ -905,24 +950,34 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                   ) : (
                     <div className="divide-y divide-red-50">
                       {rejected.map((sub, idx) => (
-                        <div key={idx} className="flex flex-col sm:flex-row sm:items-start gap-3 px-5 py-4 hover:bg-red-50/30 transition-colors">
-                          <PlatformIcon category={sub.category} size={14} showBg className="shrink-0 hidden sm:block mt-0.5" />
-                          <div className="flex-1 min-w-0 space-y-1.5">
-                            <p className="text-xs font-bold text-gray-800 truncate">{sub.taskTitle}</p>
-                            <p className="text-[10px] text-gray-400">{sub.category} · Submitted {new Date(sub.submittedAt).toLocaleDateString()}</p>
-                            {sub.feedback && (
-                              <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 flex items-start gap-2">
-                                <AlertCircle className="h-3 w-3 text-red-400 shrink-0 mt-0.5" />
-                                <p className="text-[10px] text-red-700 font-medium leading-relaxed">{sub.feedback}</p>
-                              </div>
-                            )}
+                        <div key={idx} className="flex flex-col gap-3 px-5 py-4 hover:bg-red-50/30 transition-colors">
+                          <div className="flex flex-row sm:items-start gap-3">
+                            <PlatformIcon category={sub.category} size={14} showBg className="shrink-0 hidden sm:block mt-0.5" />
+                            <div className="flex-1 min-w-0 space-y-1.5">
+                              <p className="text-xs font-bold text-gray-800 truncate">{sub.taskTitle}</p>
+                              <p className="text-[10px] text-gray-400">{sub.category} · Submitted {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                              {sub.feedback && (
+                                <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 flex items-start gap-2">
+                                  <AlertCircle className="h-3 w-3 text-red-400 shrink-0 mt-0.5" />
+                                  <p className="text-[10px] text-red-700 font-medium leading-relaxed">{sub.feedback}</p>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex sm:flex-col items-center sm:items-end gap-3 shrink-0">
+                              <span className="font-mono text-sm font-black text-gray-400">₦{sub.reward}</span>
+                              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-red-600">
+                                <XCircle className="h-2.5 w-2.5" /> Rejected
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex sm:flex-col items-center sm:items-end gap-3 shrink-0">
-                            <span className="font-mono text-sm font-black text-gray-400">₦{sub.reward}</span>
-                            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-red-600">
-                              <XCircle className="h-2.5 w-2.5" /> Rejected
-                            </span>
-                          </div>
+                          {/* Fix & Resubmit button — always visible for every rejected submission */}
+                          <button
+                            onClick={() => navigate(`/earner/rejected/${sub.id}`)}
+                            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white px-5 py-2.5 text-xs font-black shadow-sm transition-all cursor-pointer"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            Fix &amp; Resubmit
+                          </button>
                         </div>
                       ))}
                     </div>

@@ -3166,7 +3166,18 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-    const { status, feedback } = req.body;
+    const { feedback } = req.body;
+    // Normalize status: accept both "Approved"/"APPROVED" and "Rejected"/"REJECTED"
+    const rawStatus = req.body.status;
+    const normalizedStatus = rawStatus
+      ? Object.values(SubmissionStatus).find(
+          v => v.toLowerCase() === String(rawStatus).toLowerCase()
+        ) || rawStatus
+      : rawStatus;
+    const status = normalizedStatus;
+    if (!status || (status !== SubmissionStatus.APPROVED && status !== SubmissionStatus.REJECTED)) {
+      return res.status(400).json({ error: "Invalid status. Must be 'Approved' or 'Rejected'." });
+    }
     const client = await pool.connect();
     let updatedSubmission: any;
     let adminCommData: { amount: number; submissionId: string; taskTitle: string; earnerName: string } | null = null;

@@ -1461,7 +1461,7 @@ export default function App() {
         <Route path="/terms" element={<><BackButton fallback="/" /><PublicPages view="terms" pagesContent={pagesContent} settings={settings} /></>} />
         <Route path="/privacy" element={<><BackButton fallback="/" /><PublicPages view="privacy" pagesContent={pagesContent} settings={settings} /></>} />
 
-        {/* ROLE PROTECTED: EARNER REJECTED TASKS PAGES (must be before /earner/:section) */}
+        {/* ROLE PROTECTED: EARNER FIX & RESUBMIT PAGE (must be before /earner/:section) */}
         <Route path="/earner/rejected/:submissionId" element={
           user && user.role === UserRole.EARNER ? (
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -1469,13 +1469,11 @@ export default function App() {
             </div>
           ) : (<Navigate to="/login" replace />)
         } />
-        <Route path="/earner/rejected" element={
-          user && user.role === UserRole.EARNER ? (
-            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-              <EarnerRejectedTasksPage apiFetch={apiFetch} showToast={showToast} />
-            </div>
-          ) : (<Navigate to="/login" replace />)
-        } />
+        {/* NOTE: /earner/rejected (list) is intentionally NOT a separate route.
+            It falls through to /earner/:section below so EarnerDashboard renders
+            the "rejected" tab within the dashboard layout (sidebar + nav intact).
+            The standalone EarnerRejectedTasksPage is kept as a component but is
+            no longer routed — all rejected-list UI lives inside the dashboard. */}
 
         {/* ROLE PROTECTED: EARNER TASK SUBMISSION PAGE (must be before /earner/:section) */}
         <Route path="/earner/tasks/:taskId/submit" element={
