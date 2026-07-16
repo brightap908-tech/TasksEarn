@@ -448,7 +448,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
             { tab: "tasks" as EarnerTab, label: `Available Tasks (${availableTasks.length})` },
             { tab: "pending" as EarnerTab, label: `Waiting for Approval (${submissions.filter(s => s.status === SubmissionStatus.PENDING).length})` },
             { tab: "completed" as EarnerTab, label: `Completed Tasks (${submissions.filter(s => s.status === SubmissionStatus.APPROVED).length})` },
-            { tab: "rejected" as EarnerTab, label: `Rejected Tasks`, badge: rejectedSubmissions.length > 0 ? rejectedSubmissions.length : undefined, externalPath: "/earner/rejected-tasks" },
+            { tab: "rejected" as EarnerTab, label: `Rejected Tasks`, badge: rejectedSubmissions.length > 0 ? rejectedSubmissions.length : undefined, externalPath: "/earner/rejected" },
             { tab: "wallet" as EarnerTab, label: "Wallet" },
             { tab: "withdraw" as EarnerTab, label: "Withdraw" },
             { tab: "referrals" as EarnerTab, label: "Referrals" },
@@ -1557,7 +1557,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                     <div className="border-t border-red-50 px-5 py-4 flex items-center justify-between gap-3 bg-red-50/30">
                       <p className="text-[10px] text-gray-400 hidden sm:block">Fix the issue above and upload new proof to earn your reward.</p>
                       <button
-                        onClick={() => navigate(`/earner/rejected-tasks/${sub.id}/resubmit`)}
+                        onClick={() => navigate(`/earner/rejected/${sub.id}`)}
                         className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-5 py-2.5 text-xs font-bold shadow-sm transition-all cursor-pointer shrink-0 w-full sm:w-auto justify-center sm:justify-start"
                       >
                         <RefreshCw className="h-3.5 w-3.5" />

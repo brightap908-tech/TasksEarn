@@ -1462,14 +1462,14 @@ export default function App() {
         <Route path="/privacy" element={<><BackButton fallback="/" /><PublicPages view="privacy" pagesContent={pagesContent} settings={settings} /></>} />
 
         {/* ROLE PROTECTED: EARNER REJECTED TASKS PAGES (must be before /earner/:section) */}
-        <Route path="/earner/rejected-tasks/:submissionId/resubmit" element={
+        <Route path="/earner/rejected/:submissionId" element={
           user && user.role === UserRole.EARNER ? (
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
               <EarnerRejectedTaskResubmitPage apiFetch={apiFetch} showToast={showToast} />
             </div>
           ) : (<Navigate to="/login" replace />)
         } />
-        <Route path="/earner/rejected-tasks" element={
+        <Route path="/earner/rejected" element={
           user && user.role === UserRole.EARNER ? (
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
               <EarnerRejectedTasksPage apiFetch={apiFetch} showToast={showToast} />
