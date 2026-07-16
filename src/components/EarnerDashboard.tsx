@@ -120,6 +120,10 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
   const [deleteConfirmTask, setDeleteConfirmTask] = React.useState<Task | null>(null);
   const [deleting, setDeleting] = React.useState(false);
 
+  // Rejected submission delete state (for the rejected tab)
+  const [confirmDeleteRejectedId, setConfirmDeleteRejectedId] = React.useState<string | null>(null);
+  const [deletingRejected, setDeletingRejected] = React.useState(false);
+
   // Referrals state
   const [referralsData, setReferralsData] = React.useState({
     referralCode: "",
@@ -198,6 +202,28 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  // Delete a rejected submission from the rejected tab
+  const handleDeleteRejected = async () => {
+    if (!confirmDeleteRejectedId) return;
+    setDeletingRejected(true);
+    try {
+      const res = await apiFetch(`/api/earner/submissions/${confirmDeleteRejectedId}`, {
+        method: "DELETE",
+      });
+      if (res && res.error) {
+        showToast(res.error, "error");
+      } else {
+        setRejectedSubmissions(prev => prev.filter(s => s.submissionId !== confirmDeleteRejectedId));
+        showToast("Rejected task deleted successfully.", "success");
+      }
+    } catch {
+      showToast("Failed to delete. Please try again.", "error");
+    } finally {
+      setDeletingRejected(false);
+      setConfirmDeleteRejectedId(null);
     }
   };
 
@@ -927,63 +953,32 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
               );
             })()}
 
-            {/* ── SECTION 3: Rejected Tasks ── */}
+            {/* ── SECTION 3: Rejected Tasks — redirect to dedicated page ── */}
             {(() => {
-              const rejected = submissions.filter(s => s.status === SubmissionStatus.REJECTED);
-              return (
-                <div className="rounded-2xl border border-red-100 bg-white shadow-sm overflow-hidden">
-                  <div className="flex items-center gap-3 px-5 py-4 border-b border-red-50 bg-red-50/40">
-                    <XCircle className="h-4 w-4 text-red-500 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-display text-sm font-bold text-red-900">Rejected Tasks</h3>
-                      <p className="text-[10px] text-red-500 mt-0.5">Review the rejection reason below and re-submit if eligible.</p>
+              const rejectedCount = submissions.filter(s => s.status === SubmissionStatus.REJECTED).length;
+              return rejectedCount > 0 ? (
+                <div className="rounded-2xl border border-red-100 bg-red-50/40 shadow-sm p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="shrink-0 h-9 w-9 rounded-full bg-red-500 text-white flex items-center justify-center">
+                      <XCircle className="h-4 w-4" />
                     </div>
-                    <span className="shrink-0 rounded-full bg-red-100 border border-red-200 px-2.5 py-0.5 text-[10px] font-black text-red-600">
-                      {rejected.length} rejected
-                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-red-900">
+                        {rejectedCount} Rejected Task{rejectedCount !== 1 ? "s" : ""}
+                      </p>
+                      <p className="text-[10px] text-red-600 mt-0.5">
+                        View rejection reasons, fix and resubmit, or delete from your Rejected Tasks page.
+                      </p>
+                    </div>
                   </div>
-
-                  {rejected.length === 0 ? (
-                    <div className="text-center py-10 text-xs text-gray-400">
-                      No rejected submissions. Keep it up!
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-red-50">
-                      {rejected.map((sub, idx) => (
-                        <div key={idx} className="flex flex-col gap-3 px-5 py-4 hover:bg-red-50/30 transition-colors">
-                          <div className="flex flex-row sm:items-start gap-3">
-                            <PlatformIcon category={sub.category} size={14} showBg className="shrink-0 hidden sm:block mt-0.5" />
-                            <div className="flex-1 min-w-0 space-y-1.5">
-                              <p className="text-xs font-bold text-gray-800 truncate">{sub.taskTitle}</p>
-                              <p className="text-[10px] text-gray-400">{sub.category} · Submitted {new Date(sub.submittedAt).toLocaleDateString()}</p>
-                              {sub.feedback && (
-                                <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 flex items-start gap-2">
-                                  <AlertCircle className="h-3 w-3 text-red-400 shrink-0 mt-0.5" />
-                                  <p className="text-[10px] text-red-700 font-medium leading-relaxed">{sub.feedback}</p>
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex sm:flex-col items-center sm:items-end gap-3 shrink-0">
-                              <span className="font-mono text-sm font-black text-gray-400">₦{sub.reward}</span>
-                              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-red-600">
-                                <XCircle className="h-2.5 w-2.5" /> Rejected
-                              </span>
-                            </div>
-                          </div>
-                          {/* Fix & Resubmit button — always visible for every rejected submission */}
-                          <button
-                            onClick={() => navigate(`/earner/rejected/${sub.id}`)}
-                            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white px-5 py-2.5 text-xs font-black shadow-sm transition-all cursor-pointer"
-                          >
-                            <RefreshCw className="h-3.5 w-3.5" />
-                            Fix &amp; Resubmit
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <button
+                    onClick={() => navigate("/earner/rejected")}
+                    className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    <XCircle className="h-3.5 w-3.5" /> Go to Rejected Tasks
+                  </button>
                 </div>
-              );
+              ) : null;
             })()}
 
           </div>
@@ -1609,14 +1604,20 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                     )}
 
                     {/* Action footer */}
-                    <div className="border-t border-red-50 px-5 py-4 flex items-center justify-between gap-3 bg-red-50/30">
-                      <p className="text-[10px] text-gray-400 hidden sm:block">Fix the issue above and upload new proof to earn your reward.</p>
+                    <div className="border-t border-red-50 px-5 py-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-red-50/30">
                       <button
                         onClick={() => navigate(`/earner/rejected/${sub.submissionId}`)}
-                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-5 py-2.5 text-xs font-bold shadow-sm transition-all cursor-pointer shrink-0 w-full sm:w-auto justify-center sm:justify-start"
+                        className="flex-1 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-5 py-2.5 text-xs font-bold shadow-sm transition-all cursor-pointer justify-center"
                       >
                         <RefreshCw className="h-3.5 w-3.5" />
                         Fix &amp; Resubmit
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteRejectedId(sub.submissionId)}
+                        className="shrink-0 inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white hover:bg-red-50 text-red-600 px-4 py-2.5 text-xs font-bold transition-all cursor-pointer justify-center"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
                       </button>
                     </div>
 
@@ -1625,6 +1626,53 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
               </div>
             )}
 
+          </div>
+        )}
+
+        {/* Delete Rejected Submission Confirmation Modal */}
+        {confirmDeleteRejectedId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-red-100 overflow-hidden">
+              <div className="bg-red-50 px-6 py-5 border-b border-red-100 flex items-start gap-3">
+                <div className="shrink-0 h-9 w-9 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="h-4 w-4 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-red-900">Delete Rejected Task?</h3>
+                  <p className="text-xs text-red-700 mt-0.5">This action cannot be undone.</p>
+                </div>
+              </div>
+              <div className="px-6 py-4">
+                <p className="text-xs text-gray-600 leading-relaxed">
+                  Are you sure you want to delete this rejected task? It will be permanently removed from your Rejected Tasks list. No other tasks or records will be affected.
+                </p>
+              </div>
+              <div className="px-6 pb-5 flex gap-3">
+                <button
+                  onClick={() => setConfirmDeleteRejectedId(null)}
+                  disabled={deletingRejected}
+                  className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteRejected}
+                  disabled={deletingRejected}
+                  className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 px-4 py-2.5 text-xs font-bold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {deletingRejected ? (
+                    <>
+                      <div className="h-3 w-3 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                      Deleting…
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-3.5 w-3.5" /> Yes, Delete
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

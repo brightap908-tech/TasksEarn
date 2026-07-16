@@ -2003,18 +2003,18 @@ app.delete("/api/earner/submissions/:id", async (req, res) => {
       if (subRes.rows.length === 0) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Submission not found" }); }
 
       const submission = mapSubmission(subRes.rows[0]);
-      if (submission.status !== SubmissionStatus.PENDING) {
+      if (submission.status !== SubmissionStatus.PENDING && submission.status !== SubmissionStatus.REJECTED) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ error: "Only pending submissions can be deleted" });
+        return res.status(400).json({ error: "Only pending or rejected submissions can be deleted" });
       }
 
       const delRes = await client.query(
-        "DELETE FROM submissions WHERE id=$1 AND earner_id=$2 AND status='Pending' RETURNING id",
+        "DELETE FROM submissions WHERE id=$1 AND earner_id=$2 AND status IN ('Pending', 'Rejected') RETURNING id",
         [submission.id, user.id]
       );
       if (delRes.rows.length === 0) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ error: "Only pending submissions can be deleted" });
+        return res.status(400).json({ error: "Only pending or rejected submissions can be deleted" });
       }
 
       await client.query("COMMIT");

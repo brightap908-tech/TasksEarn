@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardList,
+  Trash2,
+  Clock,
 } from "lucide-react";
 
 interface RejectedSubmission {
@@ -44,11 +46,16 @@ function formatDate(iso: string): string {
 
 export default function EarnerRejectedTasksPage({
   apiFetch,
+  showToast,
 }: EarnerRejectedTasksPageProps) {
   const navigate = useNavigate();
   const [submissions, setSubmissions] = React.useState<RejectedSubmission[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
+
+  // Delete confirmation state: null = no dialog open; string = submissionId being confirmed
+  const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
+  const [deleting, setDeleting] = React.useState(false);
 
   React.useEffect(() => {
     window.scrollTo(0, 0);
@@ -70,6 +77,27 @@ export default function EarnerRejectedTasksPage({
     };
     load();
   }, []);
+
+  const handleDeleteConfirm = async () => {
+    if (!confirmDeleteId) return;
+    setDeleting(true);
+    try {
+      const res = await apiFetch(`/api/earner/submissions/${confirmDeleteId}`, {
+        method: "DELETE",
+      });
+      if (res && res.error) {
+        showToast(res.error, "error");
+      } else {
+        setSubmissions(prev => prev.filter(s => s.submissionId !== confirmDeleteId));
+        showToast("Rejected task deleted successfully.", "success");
+      }
+    } catch {
+      showToast("Failed to delete. Please try again.", "error");
+    } finally {
+      setDeleting(false);
+      setConfirmDeleteId(null);
+    }
+  };
 
   // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
@@ -107,6 +135,53 @@ export default function EarnerRejectedTasksPage({
   // ── Main page ─────────────────────────────────────────────────────────────
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-16">
+
+      {/* Delete Confirmation Dialog */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-red-100 overflow-hidden">
+            <div className="bg-red-50 px-6 py-5 border-b border-red-100 flex items-start gap-3">
+              <div className="shrink-0 h-9 w-9 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="h-4 w-4 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-red-900">Delete Rejected Task?</h3>
+                <p className="text-xs text-red-700 mt-0.5">This action cannot be undone.</p>
+              </div>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Are you sure you want to delete this rejected task? It will be permanently removed from your Rejected Tasks list. No other tasks or records will be affected.
+              </p>
+            </div>
+            <div className="px-6 pb-5 flex gap-3">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                disabled={deleting}
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 px-4 py-2.5 text-xs font-bold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {deleting ? (
+                  <>
+                    <div className="h-3 w-3 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                    Deleting…
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-3.5 w-3.5" /> Yes, Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header row */}
       <div className="flex items-center gap-3">
@@ -168,16 +243,24 @@ export default function EarnerRejectedTasksPage({
                 {sub.category}
               </span>
               <h2 className="text-sm font-bold text-gray-900 leading-snug">{sub.taskTitle}</h2>
-              <div className="flex items-center gap-3 mt-1.5 text-[10px] text-gray-400 font-medium">
+              <div className="flex flex-wrap items-center gap-3 mt-1.5 text-[10px] text-gray-400 font-medium">
                 <span className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
-                  Rejected: {formatDate(sub.rejectedAt)}
+                  Rejected: {sub.rejectedAt ? formatDate(sub.rejectedAt) : "—"}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Submitted: {sub.submittedAt ? formatDate(sub.submittedAt) : "—"}
                 </span>
               </div>
             </div>
             <div className="shrink-0 text-right">
               <p className="font-mono text-xl font-black text-blue-600">₦{sub.reward?.toLocaleString?.() ?? sub.reward}</p>
               <p className="text-[10px] text-gray-400 mt-0.5">reward</p>
+              {/* Current status badge */}
+              <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-red-600">
+                <XCircle className="h-2.5 w-2.5" /> {sub.status}
+              </span>
             </div>
           </div>
 
@@ -219,19 +302,24 @@ export default function EarnerRejectedTasksPage({
             )}
           </div>
 
-          {/* Fix & Resubmit button */}
-          <div className="p-5">
+          {/* Action buttons */}
+          <div className="p-5 space-y-3">
             <button
-              onClick={() =>
-                navigate(`/earner/rejected/${sub.submissionId}`)
-              }
+              onClick={() => navigate(`/earner/rejected/${sub.submissionId}`)}
               className="w-full rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 px-6 py-3.5 text-sm font-black text-white shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
             >
               <RefreshCw className="h-4 w-4" />
               Fix &amp; Resubmit
             </button>
-            <p className="text-center text-[10px] text-gray-400 mt-2">
-              Clicking this will open a new page where you can upload corrected proof.
+            <button
+              onClick={() => setConfirmDeleteId(sub.submissionId)}
+              className="w-full rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 px-6 py-3 text-xs font-bold text-red-600 transition-all flex items-center justify-center gap-2"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </button>
+            <p className="text-center text-[10px] text-gray-400">
+              Fix &amp; Resubmit opens a separate page. Deleting permanently removes this entry.
             </p>
           </div>
         </div>

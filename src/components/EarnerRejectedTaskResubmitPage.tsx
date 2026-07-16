@@ -168,8 +168,8 @@ export default function EarnerRejectedTaskResubmitPage({
         setSubmitting(false);
       } else {
         setSubmitSuccess(true);
-        showToast("Resubmission sent! Redirecting to Pending Review…", "success");
-        setTimeout(() => navigate("/earner/pending"), 1500);
+        showToast("Resubmission sent! Redirecting to Rejected Tasks…", "success");
+        setTimeout(() => navigate("/earner/rejected"), 1500);
       }
     } catch {
       setSubmitError("Failed to submit. Please check your connection and try again.");
@@ -223,7 +223,7 @@ export default function EarnerRejectedTaskResubmitPage({
           <h2 className="font-bold text-gray-900">Resubmission Sent!</h2>
           <p className="text-xs text-gray-500 leading-relaxed">
             Your corrected proof has been sent for review. Redirecting you to{" "}
-            <strong>Pending Review</strong>…
+            <strong>Rejected Tasks</strong>…
           </p>
           <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-green-200 border-t-green-500" />
         </div>
