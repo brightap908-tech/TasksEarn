@@ -636,8 +636,8 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                   onClick={() => setActiveTab("rejected")}
                   className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 text-xs font-black shadow transition-all cursor-pointer w-full sm:w-auto"
                 >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Fix &amp; Resubmit
+                  <XCircle className="h-3.5 w-3.5" />
+                  View Rejected Tasks
                 </button>
               </div>
             )}
@@ -672,8 +672,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
               ) : (
                 <div className="space-y-3">
                    {metrics.recentSubmissions.map((sub, idx) => (
-                     <div key={idx} className="flex flex-col gap-2 border-b border-gray-50 pb-3 last:border-b-0 last:pb-0">
-                       <div className="flex items-center justify-between">
+                     <div key={idx} className="flex items-center justify-between gap-2 border-b border-gray-50 pb-3 last:border-b-0 last:pb-0">
                          <div className="flex items-center gap-2.5 min-w-0">
                            <PlatformIcon category={sub.category} size={14} showBg className="shrink-0" />
                            <div className="min-w-0">
@@ -692,18 +691,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                              </span>
                            </div>
                          </div>
-                       </div>
-                       {/* Fix & Resubmit button shown only for rejected recent submissions */}
-                       {sub.status === SubmissionStatus.REJECTED && (
-                         <button
-                           onClick={() => navigate(`/earner/rejected/${sub.id}`)}
-                           className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-[11px] font-black shadow-sm transition-all cursor-pointer"
-                         >
-                           <RefreshCw className="h-3 w-3" />
-                           Fix &amp; Resubmit
-                         </button>
-                       )}
-                    </div>
+                     </div>
                   ))}
                 </div>
               )}

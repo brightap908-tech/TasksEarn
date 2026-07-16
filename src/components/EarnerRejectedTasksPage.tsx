@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Trash2,
   Clock,
+  FileText,
 } from "lucide-react";
 
 interface RejectedSubmission {
@@ -23,6 +24,7 @@ interface RejectedSubmission {
   rejectedAt: string;
   submittedAt: string;
   status: string;
+  previousProofText: string;
   taskDescription: string;
   proofRequirements: string;
 }
@@ -257,7 +259,6 @@ export default function EarnerRejectedTasksPage({
             <div className="shrink-0 text-right">
               <p className="font-mono text-xl font-black text-blue-600">₦{sub.reward?.toLocaleString?.() ?? sub.reward}</p>
               <p className="text-[10px] text-gray-400 mt-0.5">reward</p>
-              {/* Current status badge */}
               <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-red-600">
                 <XCircle className="h-2.5 w-2.5" /> {sub.status}
               </span>
@@ -278,6 +279,23 @@ export default function EarnerRejectedTasksPage({
               </div>
             </div>
           </div>
+
+          {/* Previous submitted proof */}
+          {sub.previousProofText && (
+            <div className="p-5 border-b border-gray-50 bg-amber-50/30">
+              <div className="flex items-start gap-2.5">
+                <FileText className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                <div className="min-w-0 w-full">
+                  <p className="text-[10px] font-black text-amber-700 uppercase tracking-wide mb-1">
+                    Your Previous Submission
+                  </p>
+                  <p className="text-xs text-amber-900 leading-relaxed break-words whitespace-pre-line line-clamp-4">
+                    {sub.previousProofText}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Task instructions */}
           <div className="p-5 border-b border-gray-50 space-y-3">

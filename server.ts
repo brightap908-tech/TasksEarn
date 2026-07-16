@@ -1904,6 +1904,7 @@ app.get("/api/earner/rejected-submissions", async (req, res) => {
         s.rejected_at,
         s.submitted_at,
         s.status,
+        s.proof_text,
         t.description    AS task_description,
         t.proof_requirements
       FROM submissions s
@@ -1923,6 +1924,7 @@ app.get("/api/earner/rejected-submissions", async (req, res) => {
       rejectedAt:       r.rejected_at ? (r.rejected_at instanceof Date ? r.rejected_at.toISOString() : r.rejected_at) : null,
       submittedAt:      r.submitted_at instanceof Date ? r.submitted_at.toISOString() : r.submitted_at,
       status:           r.status,
+      previousProofText: r.proof_text || "",
       taskDescription:  r.task_description,
       proofRequirements: r.proof_requirements || "",
     })));
