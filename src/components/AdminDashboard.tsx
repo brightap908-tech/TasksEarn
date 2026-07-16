@@ -166,6 +166,12 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   const [usersList, setUsersList] = React.useState<any[]>([]);
   const [campaignsList, setCampaignsList] = React.useState<Task[]>([]);
   const [withdrawalsList, setWithdrawalsList] = React.useState<Transaction[]>([]);
+
+  // Withdrawal management state
+  const [rejectingWithdrawal, setRejectingWithdrawal] = React.useState<Transaction | null>(null);
+  const [rejectionReason, setRejectionReason] = React.useState("");
+  const [withdrawalActionLoading, setWithdrawalActionLoading] = React.useState<string | null>(null);
+  const [withdrawalActionMsg, setWithdrawalActionMsg] = React.useState<{ type: "success" | "error"; text: string } | null>(null);
   const [submissionsList, setSubmissionsList] = React.useState<TaskSubmission[]>([]);
   const [depositsList, setDepositsList] = React.useState<Transaction[]>([]);
   const [referralsList, setReferralsList] = React.useState<Referral[]>([]);
@@ -723,22 +729,67 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
     finally { setUserActionLoading(null); }
   };
 
-  // Approve / Reject Withdrawals
-  const handleReviewWithdrawal = async (txId: string, status: TransactionStatus) => {
-    if (!window.confirm(`Are you sure you want to mark this withdrawal as ${status}?`)) return;
+  // ── Withdrawal Management Actions ──────────────────────────────────────────
+  const showWdMsg = (type: "success" | "error", text: string) => {
+    setWithdrawalActionMsg({ type, text });
+    setTimeout(() => setWithdrawalActionMsg(null), 6000);
+  };
 
+  const handleApproveWithdrawal = async (tx: Transaction) => {
+    if (!window.confirm(`Approve and send ₦${tx.amount.toLocaleString()} to ${tx.bankDetails?.accountName || tx.userName} via Paystack?\n\nBank: ${tx.bankDetails?.bankName}\nAccount: ${tx.bankDetails?.accountNumber}\n\nThis will deduct the earner's wallet and initiate the bank transfer.`)) return;
+
+    setWithdrawalActionLoading(tx.id);
     try {
-      const res = await apiFetch(`/api/admin/withdrawals/${txId}/review`, {
+      const res = await apiFetch(`/api/admin/withdrawals/${tx.id}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ action: "approve" })
       });
-
-      if (res && res.success) {
-        fetchWithdrawals();
-        fetchStats();
+      if (res?.success) {
+        showWdMsg("success", `✓ Transfer initiated to ${tx.bankDetails?.accountName || tx.userName}. Paystack reference: ${res.transaction?.paystackTransferRef || "N/A (manual)"}`);
+      } else {
+        showWdMsg("error", res?.error || "Approval failed. Please try again.");
       }
-    } catch (e) {}
+      fetchWithdrawals();
+      fetchStats();
+    } catch (e) {
+      showWdMsg("error", "Network error — please check connection and retry.");
+    } finally {
+      setWithdrawalActionLoading(null);
+    }
+  };
+
+  const handleRejectWithdrawal = async () => {
+    if (!rejectingWithdrawal) return;
+    if (!rejectionReason.trim()) { alert("Please enter a rejection reason."); return; }
+
+    setWithdrawalActionLoading(rejectingWithdrawal.id);
+    try {
+      const res = await apiFetch(`/api/admin/withdrawals/${rejectingWithdrawal.id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reject", rejectionReason: rejectionReason.trim() })
+      });
+      if (res?.success) {
+        showWdMsg("success", `Withdrawal from ${rejectingWithdrawal.userName} rejected. Reason saved.`);
+        setRejectingWithdrawal(null);
+        setRejectionReason("");
+      } else {
+        showWdMsg("error", res?.error || "Rejection failed.");
+      }
+      fetchWithdrawals();
+      fetchStats();
+    } catch (e) {
+      showWdMsg("error", "Network error — please retry.");
+    } finally {
+      setWithdrawalActionLoading(null);
+    }
+  };
+
+  // Legacy alias kept so any other code that still calls it continues to compile
+  const handleReviewWithdrawal = async (txId: string, _status: TransactionStatus) => {
+    const tx = withdrawalsList.find(w => w.id === txId);
+    if (tx) await handleApproveWithdrawal(tx);
   };
 
   // Approve / Reject Earners Tasks Manually
@@ -2025,69 +2076,201 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         )}
 
         {/* TAB 4: WITHDRAWAL AUDITS */}
-        {activeTab === "withdrawals" && (
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Pending Bank Withdrawals</h3>
-              
-              {withdrawalsList.filter(w => w.status === TransactionStatus.PENDING).length === 0 ? (
-                <p className="text-center py-10 text-xs text-gray-400">All pending bank transfers have been disbursed!</p>
-              ) : (
-                <div className="space-y-3">
-                  {withdrawalsList.filter(w => w.status === TransactionStatus.PENDING).map((tx, idx) => (
-                    <div key={idx} className="rounded-xl border border-gray-100 bg-white p-4 text-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                      <div className="space-y-1">
-                        <p className="font-bold text-gray-800">Recipient: {tx.userName} ({tx.userRole})</p>
-                        <p className="font-mono text-gray-500 font-bold text-[11px]">
-                          Bank details: {tx.bankDetails?.bankName} • Account: {tx.bankDetails?.accountNumber} • Name: {tx.bankDetails?.accountName}
-                        </p>
-                        <p className="text-[10px] text-gray-400">Date requested: {new Date(tx.createdAt).toLocaleDateString()}</p>
-                      </div>
+        {activeTab === "withdrawals" && (() => {
+          const pending = withdrawalsList.filter(w => w.status === TransactionStatus.PENDING);
+          const history = withdrawalsList.filter(w => w.status !== TransactionStatus.PENDING);
 
-                      <div className="flex items-center gap-3 shrink-0 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0">
-                        <span className="font-mono font-bold text-lg text-red-600">₦{tx.amount.toLocaleString()}</span>
-                        <div className="flex gap-1.5">
-                          <button
-                            onClick={() => handleReviewWithdrawal(tx.id, TransactionStatus.SUCCESS)}
-                            className="rounded-lg bg-blue-600 hover:bg-blue-700 text-[10px] font-bold text-white px-2.5 py-1.5 flex items-center gap-1"
-                          >
-                            <Check className="h-3.5 w-3.5" /> Confirm Bank Sent
-                          </button>
-                          <button
-                            onClick={() => handleReviewWithdrawal(tx.id, TransactionStatus.REJECTED)}
-                            className="rounded-lg bg-red-600 hover:bg-red-700 text-[10px] font-bold text-white px-2.5 py-1.5 flex items-center gap-1"
-                          >
-                            <X className="h-3.5 w-3.5" /> Decline & Refund
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+          const statusBadge = (tx: Transaction) => {
+            const map: Record<string, string> = {
+              Success: "bg-green-50 text-green-700",
+              Approved: "bg-blue-50 text-blue-700",
+              Pending: "bg-amber-50 text-amber-700",
+              Rejected: "bg-red-50 text-red-600",
+              Failed: "bg-red-100 text-red-700",
+            };
+            return (
+              <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${map[tx.status] || "bg-gray-100 text-gray-500"}`}>
+                {tx.status}
+              </span>
+            );
+          };
+
+          return (
+            <div className="space-y-5">
+
+              {/* Feedback banner */}
+              {withdrawalActionMsg && (
+                <div className={`rounded-xl px-4 py-3 text-xs font-medium flex items-center gap-2 ${
+                  withdrawalActionMsg.type === "success"
+                    ? "bg-green-50 border border-green-100 text-green-700"
+                    : "bg-red-50 border border-red-100 text-red-700"
+                }`}>
+                  {withdrawalActionMsg.type === "success" ? <CheckCircle className="h-3.5 w-3.5 shrink-0" /> : <X className="h-3.5 w-3.5 shrink-0" />}
+                  <span>{withdrawalActionMsg.text}</span>
                 </div>
               )}
-            </div>
 
-            {/* Past withdrawal history */}
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Historic Withdrawal Disbursements</h3>
-              <div className="space-y-2 max-h-60 overflow-y-auto text-xs">
-                {withdrawalsList.filter(w => w.status !== TransactionStatus.PENDING).map((tx, idx) => (
-                  <div key={idx} className="flex justify-between items-center border-b border-gray-50 pb-2">
-                    <div>
-                      <p className="font-bold text-gray-800">{tx.userName} ({tx.bankDetails?.bankName})</p>
-                      <p className="text-[10px] text-gray-400">Disbursed on {new Date(tx.createdAt).toLocaleDateString()}</p>
+              {/* ── Rejection reason modal ─────────────────────────────────── */}
+              {rejectingWithdrawal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { setRejectingWithdrawal(null); setRejectionReason(""); }}>
+                  <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                        <X className="h-5 w-5 text-red-500" />
+                      </div>
+                      <div>
+                        <h3 className="font-display text-sm font-bold text-gray-900">Reject Withdrawal</h3>
+                        <p className="text-xs text-gray-400 mt-0.5">{rejectingWithdrawal.userName} · ₦{rejectingWithdrawal.amount.toLocaleString()}</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className="font-mono font-bold block text-gray-700">₦{tx.amount.toLocaleString()}</span>
-                      <span className={`text-[9px] font-bold uppercase ${tx.status === TransactionStatus.SUCCESS ? "text-blue-600" : "text-red-500"}`}>{tx.status}</span>
+                    <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-xs text-amber-800">
+                      The earner's wallet was <strong>not deducted</strong> — their funds remain intact. Only provide a clear reason.
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Rejection Reason <span className="text-red-500">*</span></label>
+                      <textarea
+                        value={rejectionReason}
+                        onChange={e => setRejectionReason(e.target.value)}
+                        placeholder="e.g. Account details could not be verified, duplicate request, etc."
+                        rows={3}
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-red-400 resize-none"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setRejectingWithdrawal(null); setRejectionReason(""); }}
+                        className="flex-1 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold py-2.5 hover:bg-gray-50">
+                        Cancel
+                      </button>
+                      <button onClick={handleRejectWithdrawal} disabled={!rejectionReason.trim() || withdrawalActionLoading === rejectingWithdrawal.id}
+                        className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2.5 disabled:opacity-60 flex items-center justify-center gap-1.5">
+                        <X className="h-3.5 w-3.5" />
+                        {withdrawalActionLoading === rejectingWithdrawal.id ? "Rejecting…" : "Confirm Reject"}
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
+              )}
 
-          </div>
-        )}
+              {/* ── Pending requests ──────────────────────────────────────── */}
+              <div className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-display text-sm font-bold text-gray-900">
+                    Pending Withdrawal Requests
+                    {pending.length > 0 && (
+                      <span className="ml-2 rounded-full bg-amber-500 text-white text-[9px] font-black px-2 py-0.5">{pending.length}</span>
+                    )}
+                  </h3>
+                </div>
+
+                {pending.length === 0 ? (
+                  <p className="text-center py-10 text-xs text-gray-400">No pending withdrawal requests — all clear!</p>
+                ) : (
+                  <div className="space-y-3">
+                    {pending.map((tx, idx) => {
+                      const isLoading = withdrawalActionLoading === tx.id;
+                      return (
+                        <div key={idx} className="rounded-xl border border-amber-100 bg-amber-50/30 p-4 text-xs space-y-3">
+                          {/* Header row */}
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="font-bold text-gray-900 text-sm">{tx.userName}</p>
+                              <p className="text-gray-400 text-[10px] mt-0.5">Requested {new Date(tx.createdAt).toLocaleString()}</p>
+                            </div>
+                            <span className="font-mono font-black text-xl text-gray-900">₦{tx.amount.toLocaleString()}</span>
+                          </div>
+
+                          {/* Bank details grid */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {[
+                              ["Bank", tx.bankDetails?.bankName || "—"],
+                              ["Account No.", tx.bankDetails?.accountNumber || "—"],
+                              ["Account Name", tx.bankDetails?.accountName || "—"],
+                            ].map(([label, value]) => (
+                              <div key={label} className="rounded-lg bg-white border border-gray-100 px-3 py-2">
+                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide mb-0.5">{label}</p>
+                                <p className="font-mono font-semibold text-gray-800 text-[11px]">{value}</p>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              onClick={() => handleApproveWithdrawal(tx)}
+                              disabled={isLoading}
+                              className="flex-1 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2.5 flex items-center justify-center gap-1.5 disabled:opacity-60"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                              {isLoading ? "Processing Paystack Transfer…" : "Approve & Send via Paystack"}
+                            </button>
+                            <button
+                              onClick={() => { setRejectingWithdrawal(tx); setRejectionReason(""); }}
+                              disabled={isLoading}
+                              className="flex-1 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold py-2.5 flex items-center justify-center gap-1.5 disabled:opacity-60 border border-red-100"
+                            >
+                              <X className="h-3.5 w-3.5" /> Reject Request
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* ── History ───────────────────────────────────────────────── */}
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <h3 className="font-display text-sm font-bold text-gray-900 mb-4">
+                  Withdrawal History
+                  <span className="ml-2 text-[10px] font-normal text-gray-400">({history.length} records)</span>
+                </h3>
+                {history.length === 0 ? (
+                  <p className="text-center py-8 text-xs text-gray-400">No completed withdrawals yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-gray-100 text-gray-400 uppercase text-[9px] font-bold tracking-wide">
+                          <th className="py-2.5 px-2">Earner</th>
+                          <th className="py-2.5 px-2">Amount</th>
+                          <th className="py-2.5 px-2">Bank</th>
+                          <th className="py-2.5 px-2">Account No.</th>
+                          <th className="py-2.5 px-2">Account Name</th>
+                          <th className="py-2.5 px-2">Date</th>
+                          <th className="py-2.5 px-2">Status</th>
+                          <th className="py-2.5 px-2">Paystack Ref / Note</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {history.map((tx, idx) => (
+                          <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50/50 text-xs">
+                            <td className="py-3 px-2 font-bold text-gray-800 whitespace-nowrap">{tx.userName}</td>
+                            <td className="py-3 px-2 font-mono font-bold text-gray-900 whitespace-nowrap">₦{tx.amount.toLocaleString()}</td>
+                            <td className="py-3 px-2 text-gray-600">{tx.bankDetails?.bankName || "—"}</td>
+                            <td className="py-3 px-2 font-mono text-gray-600">{tx.bankDetails?.accountNumber || "—"}</td>
+                            <td className="py-3 px-2 text-gray-600">{tx.bankDetails?.accountName || "—"}</td>
+                            <td className="py-3 px-2 text-gray-400 whitespace-nowrap">{new Date(tx.createdAt).toLocaleDateString()}</td>
+                            <td className="py-3 px-2">{statusBadge(tx)}</td>
+                            <td className="py-3 px-2 max-w-[180px]">
+                              {tx.paystackTransferRef ? (
+                                <span className="font-mono text-[10px] text-blue-600">{tx.paystackTransferRef}</span>
+                              ) : tx.rejectionReason ? (
+                                <span className="text-red-500 italic text-[10px]">{tx.rejectionReason}</span>
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          );
+        })()}
 
         {/* TAB: AUDITING CENTER (MANUALLY APPROVE/REJECT EARNER TASK SUBMISSIONS) */}
         {activeTab === "audits" && (() => {

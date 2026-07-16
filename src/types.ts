@@ -153,9 +153,12 @@ export interface Transaction {
   gateway?: string;
   bankDetails?: {
     bankName: string;
+    bankCode?: string;
     accountNumber: string;
     accountName: string;
   };
+  paystackTransferRef?: string;
+  rejectionReason?: string;
   createdAt: string;
 }
 
