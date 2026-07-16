@@ -35,6 +35,12 @@ var import_ws = require("ws");
 var import_web_push = __toESM(require("web-push"), 1);
 
 // src/types.ts
+var SubmissionStatus = /* @__PURE__ */ ((SubmissionStatus2) => {
+  SubmissionStatus2["PENDING"] = "Pending";
+  SubmissionStatus2["APPROVED"] = "Approved";
+  SubmissionStatus2["REJECTED"] = "Rejected";
+  return SubmissionStatus2;
+})(SubmissionStatus || {});
 var Platform = /* @__PURE__ */ ((Platform2) => {
   Platform2["INSTAGRAM"] = "Instagram";
   Platform2["FACEBOOK"] = "Facebook";
@@ -2829,7 +2835,15 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
-    const { status, feedback } = req.body;
+    const { feedback } = req.body;
+    const rawStatus = req.body.status;
+    const normalizedStatus = rawStatus ? Object.values(SubmissionStatus).find(
+      (v) => v.toLowerCase() === String(rawStatus).toLowerCase()
+    ) || rawStatus : rawStatus;
+    const status = normalizedStatus;
+    if (!status || status !== "Approved" /* APPROVED */ && status !== "Rejected" /* REJECTED */) {
+      return res.status(400).json({ error: "Invalid status. Must be 'Approved' or 'Rejected'." });
+    }
     const client = await pool.connect();
     let updatedSubmission;
     let adminCommData = null;
