@@ -2402,8 +2402,8 @@ app.post("/api/advertiser/tasks", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== UserRole.ADVERTISER) return res.status(403).json({ error: "Access denied" });
 
-    const { title, description, category, proofRequirements, link, totalSlots } = req.body;
-    if (!title || !description || !category || !proofRequirements || !link || !totalSlots) {
+    const { title, description, category, proofRequirements, link, totalSlots, platform: platformName } = req.body;
+    if (!title || !description || !category || !proofRequirements || !link || !totalSlots || !platformName) {
       return res.status(400).json({ error: "All campaign fields are required" });
     }
 
@@ -2413,16 +2413,15 @@ app.post("/api/advertiser/tasks", async (req, res) => {
     }
 
     // Pricing (advertiser cost and earner reward) is ALWAYS sourced from the
-    // admin-controlled task_pricing table in the database. Advertisers cannot
-    // supply or override the cost or earner payout — no hard-coded fallback.
-    const platform = getPlatformForCategory(category as TaskCategory);
-
-    const platformRes = await pool.query("SELECT * FROM social_platforms WHERE LOWER(name) = LOWER($1) LIMIT 1", [platform]);
+    // admin-controlled task_pricing table in the database, looked up by the
+    // platform name submitted by the frontend. No hard-coded fallback or enum
+    // mapping — this keeps frontend and backend calculations identical.
+    const platformRes = await pool.query("SELECT * FROM social_platforms WHERE LOWER(name) = LOWER($1) LIMIT 1", [platformName]);
     if (platformRes.rows.length === 0 || mapSocialPlatform(platformRes.rows[0]).status !== "Active") {
       return res.status(400).json({ error: "This platform is not currently available for new campaigns. Please contact the administrator." });
     }
 
-    const pricingRes = await pool.query("SELECT * FROM task_pricing WHERE platform = $1 LIMIT 1", [platform]);
+    const pricingRes = await pool.query("SELECT * FROM task_pricing WHERE LOWER(platform) = LOWER($1) LIMIT 1", [platformName]);
     if (pricingRes.rows.length === 0 || parseFloat(pricingRes.rows[0].cost_per_slot) <= 0) {
       return res.status(400).json({ error: "No pricing has been configured for this platform yet. Please contact the administrator." });
     }

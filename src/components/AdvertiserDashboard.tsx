@@ -156,17 +156,18 @@ export default function AdvertiserDashboard({
   const photoInputRef = React.useRef<HTMLInputElement>(null);
 
   // ── Calculations ──────────────────────────────────────────────────────────
+  // IMPORTANT: All pricing MUST come exclusively from the DB (via /api/pricing).
+  // No local fallback formulas — they cause frontend/backend cost mismatches.
   const category = campaignForm.platform
     ? `${campaignForm.platform} ${campaignForm.action}`
     : "";
-  const matchingPricing = pricingList.find(p => p.platform === campaignForm.platform);
-  const earningVal = matchingPricing
-    ? matchingPricing.earningPerSlot
-    : (parseFloat(campaignForm.earningPerSlot) || 0);
+  const matchingPricing = pricingList.find(
+    p => p.platform.toLowerCase() === campaignForm.platform.toLowerCase()
+  );
+  // Use DB values only; 0 means pricing not yet loaded or unavailable for platform
+  const earningVal = matchingPricing ? matchingPricing.earningPerSlot : 0;
   const slotsVal = parseInt(campaignForm.totalSlots) || 0;
-  const costPerSlot = matchingPricing
-    ? matchingPricing.costPerSlot
-    : Math.ceil(earningVal * 1.35);
+  const costPerSlot = matchingPricing ? matchingPricing.costPerSlot : 0;
   const totalCost = costPerSlot * slotsVal;
 
   // ── Default platform once loaded ──────────────────────────────────────────
@@ -259,8 +260,12 @@ export default function AdvertiserDashboard({
       setFormError("All campaign fields are required.");
       return;
     }
+    if (!matchingPricing) {
+      setFormError("Platform pricing is not available yet. Please try again or contact the administrator.");
+      return;
+    }
     if (totalCost > user.walletBalance) {
-      setFormError(`Insufficient balance. This campaign costs ₦${totalCost.toLocaleString()}. Please fund your wallet.`);
+      setFormError(`Insufficient balance. This campaign costs ₦${totalCost.toLocaleString()} (₦${costPerSlot}/slot × ${slotsVal} slots). Please fund your wallet.`);
       return;
     }
     setFormSubmitting(true);
@@ -274,10 +279,9 @@ export default function AdvertiserDashboard({
           title: campaignForm.title,
           description: campaignForm.description,
           category,
+          platform: campaignForm.platform,
           proofRequirements: campaignForm.proofRequirements,
           link: campaignForm.link,
-          costPerSlot,
-          earningPerSlot: earningVal,
           totalSlots: campaignForm.totalSlots
         })
       });
@@ -786,37 +790,48 @@ export default function AdvertiserDashboard({
                       </div>
                     </div>
 
-                    {/* Budget Estimator */}
-                    <div className="rounded-xl border border-blue-100 p-4 space-y-2.5 font-mono text-xs"
-                      style={{ background: "#DBEAFE" }}>
-                      <p className="font-sans text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">
-                        Campaign Budget Estimate
-                      </p>
-                      <div className="flex justify-between text-blue-700">
-                        <span>Platform cost per slot:</span>
-                        <span className="font-bold">₦{costPerSlot.toLocaleString()}</span>
+                    {/* Budget Estimator — always uses DB pricing; never computes locally */}
+                    {matchingPricing ? (
+                      <div className="rounded-xl border border-blue-100 p-4 space-y-2.5 font-mono text-xs"
+                        style={{ background: "#DBEAFE" }}>
+                        <p className="font-sans text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">
+                          Campaign Budget Estimate
+                        </p>
+                        <div className="flex justify-between text-blue-700">
+                          <span>Platform cost per slot:</span>
+                          <span className="font-bold">₦{costPerSlot.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-blue-700">
+                          <span>Total slots:</span>
+                          <span className="font-bold">× {slotsVal.toLocaleString()}</span>
+                        </div>
+                        <div className="border-t border-blue-200/60 pt-2 flex justify-between font-bold text-sm text-blue-800">
+                          <span>Total Campaign Cost:</span>
+                          <span>₦{totalCost.toLocaleString()}</span>
+                        </div>
+                        <div className="text-[10px] text-blue-500 font-sans pt-0.5">
+                          Wallet after launch: <strong>₦{(user.walletBalance - totalCost).toLocaleString()}</strong>
+                        </div>
                       </div>
-                      <div className="flex justify-between text-blue-700">
-                        <span>Total slots:</span>
-                        <span className="font-bold">× {slotsVal.toLocaleString()}</span>
+                    ) : (
+                      <div className="rounded-xl border border-amber-100 p-4 text-xs text-amber-700 font-sans"
+                        style={{ background: "#FFFBEB" }}>
+                        {pricingList.length === 0
+                          ? "Loading platform pricing…"
+                          : "Pricing is not configured for this platform yet. Contact the administrator."}
                       </div>
-                      <div className="border-t border-blue-200/60 pt-2 flex justify-between font-bold text-sm text-blue-800">
-                        <span>Total Campaign Cost:</span>
-                        <span>₦{totalCost.toLocaleString()}</span>
-                      </div>
-                      <div className="text-[10px] text-blue-500 font-sans pt-0.5">
-                        Wallet after launch: <strong>₦{(user.walletBalance - totalCost).toLocaleString()}</strong>
-                      </div>
-                    </div>
+                    )}
 
                     <button
                       type="submit"
-                      disabled={formSubmitting}
+                      disabled={formSubmitting || !matchingPricing}
                       className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-3 text-sm font-bold text-white shadow-sm hover:shadow-md transition-all disabled:opacity-60"
                     >
                       {formSubmitting
                         ? "Launching campaign..."
-                        : `Launch Campaign — ₦${totalCost.toLocaleString()}`}
+                        : matchingPricing
+                          ? `Launch Campaign — ₦${totalCost.toLocaleString()}`
+                          : "Pricing unavailable"}
                     </button>
                   </div>
                 </form>
