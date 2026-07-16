@@ -2155,19 +2155,28 @@ app.post("/api/advertiser/tasks", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
-    const { title, description, category, proofRequirements, link, totalSlots, platform: platformName } = req.body;
-    if (!title || !description || !category || !proofRequirements || !link || !totalSlots || !platformName) {
+    const { title, description, category, proofRequirements, link, totalSlots } = req.body;
+    if (!title || !description || !category || !proofRequirements || !link || !totalSlots) {
       return res.status(400).json({ error: "All campaign fields are required" });
     }
     const slots = parseInt(totalSlots);
     if (isNaN(slots) || slots <= 0) {
       return res.status(400).json({ error: "Invalid slot count" });
     }
-    const platformRes = await pool.query("SELECT * FROM social_platforms WHERE LOWER(name) = LOWER($1) LIMIT 1", [platformName]);
-    if (platformRes.rows.length === 0 || mapSocialPlatform(platformRes.rows[0]).status !== "Active") {
-      return res.status(400).json({ error: "This platform is not currently available for new campaigns. Please contact the administrator." });
+    const activePlatformsRes = await pool.query(
+      "SELECT * FROM social_platforms WHERE status = 'Active' ORDER BY LENGTH(name) DESC"
+    );
+    const activePlatforms = activePlatformsRes.rows.map(mapSocialPlatform);
+    const derivedPlatform = activePlatforms.find(
+      (p) => category.toLowerCase().startsWith(p.name.toLowerCase() + " ") || category.toLowerCase() === p.name.toLowerCase()
+    );
+    if (!derivedPlatform) {
+      return res.status(400).json({ error: "Unknown platform for this campaign category. Please contact the administrator." });
     }
-    const pricingRes = await pool.query("SELECT * FROM task_pricing WHERE LOWER(platform) = LOWER($1) LIMIT 1", [platformName]);
+    const pricingRes = await pool.query(
+      "SELECT * FROM task_pricing WHERE LOWER(platform) = LOWER($1) LIMIT 1",
+      [derivedPlatform.name]
+    );
     if (pricingRes.rows.length === 0 || parseFloat(pricingRes.rows[0].cost_per_slot) <= 0) {
       return res.status(400).json({ error: "No pricing has been configured for this platform yet. Please contact the administrator." });
     }
