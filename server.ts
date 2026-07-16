@@ -178,7 +178,7 @@ function mapSettings(row: any) {
     referralReward: parseFloat(row.referral_reward) || 0,
     withdrawalFee: parseFloat(row.withdrawal_fee) || 50,
     minWithdrawal: parseFloat(row.min_withdrawal) || 200,
-    minDeposit: parseFloat(row.min_deposit) || 1000,
+    minDeposit: parseFloat(row.min_deposit) || 100,
     contactEmail: row.contact_email,
     contactPhone: row.contact_phone,
     telegramChannel: row.telegram_channel || undefined,
@@ -1057,7 +1057,7 @@ A submission is rejected if you did not follow the instructions, if you did not 
     // Settings
     await client.query(`
       INSERT INTO settings (platform_name, referral_reward, withdrawal_fee, min_withdrawal, min_deposit, contact_email, contact_phone, telegram_channel, whatsapp_group)
-      VALUES ('TasksEarn', 0, 50, 200, 1000, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
+      VALUES ('TasksEarn', 0, 50, 200, 100, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
     `);
 
     // Task Pricing
@@ -1170,6 +1170,12 @@ const NIGERIAN_BANK_LIST = [
 ];
 
 const app = express();
+
+// Paystack webhook MUST receive the raw body so we can verify the HMAC-SHA512 signature.
+// Register express.raw() for this route BEFORE the global express.json() middleware so the
+// body-parser does not consume the stream first.
+app.use("/api/paystack/webhook", express.raw({ type: "application/json" }));
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -2726,9 +2732,11 @@ app.post("/api/advertiser/deposit/initialize", async (req, res) => {
       return res.status(400).json({ error: "PAYSTACK_SECRET_KEY environment variable is not configured." });
     }
 
-    const origin = req.headers.referer || req.headers.origin || `http://localhost:${PORT}`;
-    const baseOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
-    const callbackUrl = `${baseOrigin}/#paystack_ref=${ref}`;
+    // Use the canonical production domain for the Paystack callback URL.
+    // Deriving it from req.headers.referer is unreliable behind Replit's reverse proxy.
+    // If APP_BASE_URL is set in the environment it takes priority (useful for staging).
+    const appBaseUrl = (process.env.APP_BASE_URL || "https://tasksearn.name.ng").replace(/\/$/, "");
+    const callbackUrl = `${appBaseUrl}/#paystack_ref=${ref}`;
 
     const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
@@ -2814,6 +2822,156 @@ app.post("/api/advertiser/deposit/verify", async (req, res) => {
   } catch (err) {
     console.error("Deposit verify error:", err);
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Paystack Webhook ────────────────────────────────────────────────────────
+//
+// This endpoint receives server-to-server events from Paystack.
+// It is the ONLY reliable way to credit wallets — the browser callback can be
+// closed or lose connectivity, but Paystack retries webhooks automatically.
+//
+// ┌─────────────────────────────────────────────────────────────────────┐
+// │  Live Webhook URL  →  https://tasksearn.name.ng/api/paystack/webhook │
+// │  Live Callback URL →  https://tasksearn.name.ng                       │
+// └─────────────────────────────────────────────────────────────────────┘
+//
+// The route is pre-wired with express.raw() (see top of file) so the raw
+// request body is available as a Buffer for HMAC-SHA512 signature verification.
+
+app.post("/api/paystack/webhook", async (req, res) => {
+  // Respond 200 immediately — Paystack considers any non-2xx a failure and retries.
+  res.status(200).send("OK");
+
+  try {
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackKey) {
+      console.error("[Webhook] PAYSTACK_SECRET_KEY not configured — cannot verify signature");
+      return;
+    }
+
+    // ── 1. Verify HMAC-SHA512 Signature ──────────────────────────────────────
+    const signature = req.headers["x-paystack-signature"] as string | undefined;
+    if (!signature) {
+      console.warn("[Webhook] Request missing x-paystack-signature header — rejected");
+      return;
+    }
+
+    // express.raw() stores the body as a Buffer; fall back gracefully if not.
+    const rawBody: Buffer = Buffer.isBuffer(req.body)
+      ? req.body
+      : Buffer.from(JSON.stringify(req.body));
+
+    const expectedSig = crypto
+      .createHmac("sha512", paystackKey)
+      .update(rawBody)
+      .digest("hex");
+
+    if (signature !== expectedSig) {
+      console.warn("[Webhook] Signature mismatch — request rejected");
+      return;
+    }
+
+    // ── 2. Parse event ────────────────────────────────────────────────────────
+    const event = JSON.parse(rawBody.toString("utf8")) as { event: string; data: any };
+    console.log(`[Webhook] Event received: ${event.event}`);
+
+    // Only act on successful charge events; acknowledge everything else silently.
+    if (event.event !== "charge.success") return;
+
+    const data = event.data;
+    if (!data?.reference) {
+      console.warn("[Webhook] charge.success missing reference — skipping");
+      return;
+    }
+
+    const reference: string = data.reference;
+    const paystackAmountNaira: number = (data.amount ?? 0) / 100; // kobo → naira
+    const paystackStatus: string = data.status ?? "";
+
+    if (paystackStatus !== "success") {
+      console.log(`[Webhook] charge.success event but data.status='${paystackStatus}' — skipping`);
+      return;
+    }
+
+    // ── 3. Atomically credit wallet (duplicate-safe) ──────────────────────────
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // FOR UPDATE locks the row so concurrent webhook retries cannot double-credit.
+      const txRes = await client.query(
+        "SELECT * FROM transactions WHERE reference=$1 FOR UPDATE",
+        [reference]
+      );
+
+      if (txRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        console.warn(`[Webhook] No transaction found for reference: ${reference} — skipping`);
+        return;
+      }
+
+      const transaction = mapTransaction(txRes.rows[0])!;
+
+      // Duplicate prevention — already credited by this webhook or by the browser callback.
+      if (transaction.status === TransactionStatus.SUCCESS) {
+        await client.query("ROLLBACK");
+        console.log(`[Webhook] Reference ${reference} already credited — ignoring duplicate webhook`);
+        return;
+      }
+
+      // Skip if the transaction was already failed/rejected.
+      if (
+        transaction.status === TransactionStatus.FAILED ||
+        transaction.status === TransactionStatus.REJECTED
+      ) {
+        await client.query("ROLLBACK");
+        console.warn(`[Webhook] Reference ${reference} already in terminal state '${transaction.status}' — skipping`);
+        return;
+      }
+
+      // Sanity check: Paystack amount must match what we recorded at initialization.
+      if (Math.abs(paystackAmountNaira - transaction.amount) > 0.01) {
+        await client.query(
+          "UPDATE transactions SET status='Failed', description = description || ' [WEBHOOK AMOUNT MISMATCH]' WHERE id=$1",
+          [transaction.id]
+        );
+        await client.query("COMMIT");
+        console.error(
+          `[Webhook] Amount mismatch on ${reference}: expected ₦${transaction.amount}, Paystack sent ₦${paystackAmountNaira} — transaction flagged`
+        );
+        return;
+      }
+
+      // ── 4. Credit wallet and mark transaction successful ──────────────────
+      await client.query(
+        "UPDATE transactions SET status='Success' WHERE id=$1",
+        [transaction.id]
+      );
+      await client.query(
+        "UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2",
+        [transaction.amount, transaction.userId]
+      );
+      await client.query("COMMIT");
+
+      console.log(
+        `[Webhook] ✓ ₦${transaction.amount.toLocaleString()} credited to user ${transaction.userId} (ref: ${reference})`
+      );
+
+      // ── 5. Notify admin dashboard in real-time ────────────────────────────
+      await notifyAdmin({
+        type: "deposit",
+        message: `Wallet funded: ₦${transaction.amount.toLocaleString()} credited to ${transaction.userName} via Paystack webhook (ref: ${reference})`,
+        referenceId: transaction.id
+      });
+    } catch (dbErr) {
+      await client.query("ROLLBACK");
+      console.error("[Webhook] DB error processing charge.success:", dbErr);
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("[Webhook] Unexpected error:", err);
   }
 });
 
@@ -4190,7 +4348,7 @@ async function notifyEarners(task: { id: string; title: string; category: string
   }
 }
 
-async function notifyAdmin(notification: { type: "submission" | "withdrawal"; message: string; referenceId: string }) {
+async function notifyAdmin(notification: { type: "submission" | "withdrawal" | "deposit"; message: string; referenceId: string }) {
   const id = "notif-" + Math.random().toString(36).substr(2, 9);
   const now = new Date();
 

@@ -210,7 +210,7 @@ export interface WebsiteSettings {
 
 export interface AdminNotification {
   id: string;
-  type: "submission" | "withdrawal";
+  type: "submission" | "withdrawal" | "deposit";
   message: string;
   referenceId: string;
   createdAt: string;
