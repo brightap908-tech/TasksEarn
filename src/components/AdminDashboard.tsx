@@ -46,7 +46,13 @@ import {
   Trash2,
   PlusCircle,
   Pencil,
-  ListTodo
+  ListTodo,
+  Search,
+  Ban,
+  ShieldCheck,
+  UserX,
+  UserCircle2,
+  ChevronDown
 } from "lucide-react";
 import AdminTaskPricing from "./AdminTaskPricing";
 import AdminSocialPlatforms from "./AdminSocialPlatforms";
@@ -194,6 +200,15 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   // Adjust Balance Prompt box
   const [selectedUserForBalance, setSelectedUserForBalance] = React.useState<any | null>(null);
   const [adjustBalanceAmount, setAdjustBalanceAmount] = React.useState("");
+
+  // User Management — search, filter, profile view, delete confirm
+  const [userSearch, setUserSearch] = React.useState("");
+  const [userRoleFilter, setUserRoleFilter] = React.useState<"All" | "Earner" | "Advertiser">("All");
+  const [userStatusFilter, setUserStatusFilter] = React.useState<"All" | "Active" | "Banned">("All");
+  const [viewingUser, setViewingUser] = React.useState<any | null>(null);
+  const [deletingUser, setDeletingUser] = React.useState<any | null>(null);
+  const [userActionLoading, setUserActionLoading] = React.useState<string | null>(null);
+  const [userActionMsg, setUserActionMsg] = React.useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Announcement state
   const [annTitle, setAnnTitle] = React.useState("");
@@ -655,6 +670,57 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         fetchUsers();
       }
     } catch (e) {}
+  };
+
+  // ── User Management Actions ─────────────────────────────────────────────────
+  const showUserMsg = (type: "success" | "error", text: string) => {
+    setUserActionMsg({ type, text });
+    setTimeout(() => setUserActionMsg(null), 4000);
+  };
+
+  const handleBanUser = async (targetUser: any) => {
+    if (!window.confirm(`Ban ${targetUser.name}? They will be immediately logged out and unable to sign in.`)) return;
+    setUserActionLoading(targetUser.id);
+    try {
+      const res = await apiFetch(`/api/admin/users/${targetUser.id}/ban`, { method: "POST" });
+      if (res?.success) {
+        showUserMsg("success", `${targetUser.name} has been banned.`);
+        fetchUsers();
+      } else {
+        showUserMsg("error", res?.error || "Failed to ban user.");
+      }
+    } catch (e) { showUserMsg("error", "Request failed."); }
+    finally { setUserActionLoading(null); }
+  };
+
+  const handleUnbanUser = async (targetUser: any) => {
+    setUserActionLoading(targetUser.id);
+    try {
+      const res = await apiFetch(`/api/admin/users/${targetUser.id}/unban`, { method: "POST" });
+      if (res?.success) {
+        showUserMsg("success", `${targetUser.name} has been unbanned and can log in again.`);
+        fetchUsers();
+      } else {
+        showUserMsg("error", res?.error || "Failed to unban user.");
+      }
+    } catch (e) { showUserMsg("error", "Request failed."); }
+    finally { setUserActionLoading(null); }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deletingUser) return;
+    setUserActionLoading(deletingUser.id);
+    try {
+      const res = await apiFetch(`/api/admin/users/${deletingUser.id}`, { method: "DELETE" });
+      if (res?.success) {
+        showUserMsg("success", `${deletingUser.name} has been permanently deleted.`);
+        setDeletingUser(null);
+        fetchUsers();
+      } else {
+        showUserMsg("error", res?.error || "Failed to delete user.");
+      }
+    } catch (e) { showUserMsg("error", "Request failed."); }
+    finally { setUserActionLoading(null); }
   };
 
   // Approve / Reject Withdrawals
@@ -1411,93 +1477,272 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         )}
 
         {/* TAB 2: MANAGE USERS */}
-        {activeTab === "users" && (
-          <div className="space-y-6">
-            
-            {/* Balance adjuster modal */}
-            {selectedUserForBalance && (
-              <form onSubmit={handleAdjustBalance} className="rounded-2xl border border-red-100 bg-red-50/10 p-5 shadow-sm space-y-4 animate-fadeIn border-2">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-display text-sm font-bold text-red-900">Adjust Wallet Balance</h4>
-                    <p className="text-xs text-red-600">User: <strong>{selectedUserForBalance.name}</strong> ({selectedUserForBalance.role})</p>
+        {activeTab === "users" && (() => {
+          // Derived filtered list — computed inline so it reacts to state without extra effects
+          const filteredUsers = usersList.filter(usr => {
+            const q = userSearch.toLowerCase();
+            const matchSearch = !q ||
+              usr.name?.toLowerCase().includes(q) ||
+              usr.email?.toLowerCase().includes(q) ||
+              usr.username?.toLowerCase().includes(q);
+            const matchRole = userRoleFilter === "All" || usr.role === userRoleFilter;
+            const matchStatus = userStatusFilter === "All" ||
+              (userStatusFilter === "Banned" ? usr.isBanned : !usr.isBanned);
+            return matchSearch && matchRole && matchStatus;
+          });
+
+          return (
+            <div className="space-y-4">
+
+              {/* ── Feedback banner ───────────────────────────────────────── */}
+              {userActionMsg && (
+                <div className={`rounded-xl px-4 py-3 text-xs font-medium flex items-center gap-2 ${
+                  userActionMsg.type === "success"
+                    ? "bg-green-50 border border-green-100 text-green-700"
+                    : "bg-red-50 border border-red-100 text-red-700"
+                }`}>
+                  {userActionMsg.type === "success" ? <CheckCircle className="h-3.5 w-3.5 shrink-0" /> : <X className="h-3.5 w-3.5 shrink-0" />}
+                  {userActionMsg.text}
+                </div>
+              )}
+
+              {/* ── Balance adjuster modal ─────────────────────────────────── */}
+              {selectedUserForBalance && (
+                <form onSubmit={handleAdjustBalance} className="rounded-2xl border-2 border-amber-100 bg-amber-50/30 p-5 shadow-sm space-y-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-display text-sm font-bold text-amber-900">Adjust Wallet Balance</h4>
+                      <p className="text-xs text-amber-700">User: <strong>{selectedUserForBalance.name}</strong> ({selectedUserForBalance.role})</p>
+                    </div>
+                    <button type="button" onClick={() => setSelectedUserForBalance(null)} className="rounded-full bg-gray-200 p-1 text-gray-700"><X className="h-3.5 w-3.5" /></button>
                   </div>
-                  <button type="button" onClick={() => setSelectedUserForBalance(null)} className="rounded-full bg-gray-200 p-1 text-gray-700">✕</button>
+                  <div className="flex gap-3 max-w-sm">
+                    <input type="number" required value={adjustBalanceAmount}
+                      onChange={e => setAdjustBalanceAmount(e.target.value)}
+                      placeholder="New Wallet Balance (₦)"
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-mono focus:outline-none" />
+                    <button type="submit" className="rounded-xl bg-amber-600 hover:bg-amber-700 text-xs font-bold text-white px-5 py-2 whitespace-nowrap">
+                      Update Balance
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* ── Profile view modal ────────────────────────────────────── */}
+              {viewingUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setViewingUser(null)}>
+                  <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-display text-sm font-bold text-gray-900">User Profile</h3>
+                      <button onClick={() => setViewingUser(null)} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
+                        {viewingUser.photoUrl
+                          ? <img src={viewingUser.photoUrl} alt="" className="h-12 w-12 rounded-full object-cover" />
+                          : <UserCircle2 className="h-7 w-7 text-blue-300" />}
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm text-gray-900">{viewingUser.name}</p>
+                        <p className="text-xs text-gray-400">{viewingUser.email}</p>
+                      </div>
+                      <span className={`ml-auto shrink-0 rounded-full px-2.5 py-1 text-[9px] font-black uppercase ${viewingUser.isBanned ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
+                        {viewingUser.isBanned ? "Banned" : "Active"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      {[
+                        ["Username", viewingUser.username || "—"],
+                        ["Account Type", viewingUser.role],
+                        ["Wallet Balance", `₦${(viewingUser.walletBalance || 0).toLocaleString()}`],
+                        ["Phone", viewingUser.phone || "—"],
+                        ["Country", viewingUser.country || "—"],
+                        ["Business Name", viewingUser.businessName || "—"],
+                        ["Verification", viewingUser.isVerified ? "Verified" : "Unverified"],
+                        ["Registered", viewingUser.createdAt ? new Date(viewingUser.createdAt).toLocaleDateString() : "—"],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded-lg bg-gray-50 px-3 py-2">
+                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide mb-0.5">{label}</p>
+                          <p className="font-medium text-gray-800 truncate">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      {viewingUser.isBanned
+                        ? <button onClick={() => { setViewingUser(null); handleUnbanUser(viewingUser); }}
+                            className="flex-1 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2.5 flex items-center justify-center gap-1.5">
+                            <ShieldCheck className="h-3.5 w-3.5" /> Unban User
+                          </button>
+                        : <button onClick={() => { setViewingUser(null); handleBanUser(viewingUser); }}
+                            className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2.5 flex items-center justify-center gap-1.5">
+                            <Ban className="h-3.5 w-3.5" /> Ban User
+                          </button>}
+                      <button onClick={() => { setViewingUser(null); setDeletingUser(viewingUser); }}
+                        className="flex-1 rounded-xl bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-700 text-xs font-bold py-2.5 flex items-center justify-center gap-1.5">
+                        <UserX className="h-3.5 w-3.5" /> Delete Account
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Delete confirmation dialog ─────────────────────────────── */}
+              {deletingUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDeletingUser(null)}>
+                  <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                        <UserX className="h-5 w-5 text-red-500" />
+                      </div>
+                      <div>
+                        <h3 className="font-display text-sm font-bold text-gray-900">Delete User</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">This action is permanent and cannot be undone.</p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-xs text-red-700">
+                      Are you sure you want to permanently delete <strong>{deletingUser.name}</strong>? All their data — submissions, transactions, campaigns, and notifications — will be erased.
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => setDeletingUser(null)}
+                        className="flex-1 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold py-2.5 hover:bg-gray-50">
+                        Cancel
+                      </button>
+                      <button onClick={handleDeleteUser} disabled={userActionLoading === deletingUser.id}
+                        className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2.5 disabled:opacity-60 flex items-center justify-center gap-1.5">
+                        <Trash2 className="h-3.5 w-3.5" />
+                        {userActionLoading === deletingUser.id ? "Deleting…" : "Yes, Delete Permanently"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Main card ─────────────────────────────────────────────── */}
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <h3 className="font-display text-sm font-bold text-gray-900">
+                    All Users
+                    <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">{filteredUsers.length}</span>
+                  </h3>
+                  {/* Search */}
+                  <div className="relative max-w-xs w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Search name, email, username…"
+                      value={userSearch}
+                      onChange={e => setUserSearch(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
                 </div>
 
-                <div className="flex gap-3 max-w-sm">
-                  <input 
-                    type="number"
-                    required
-                    value={adjustBalanceAmount}
-                    onChange={(e) => setAdjustBalanceAmount(e.target.value)}
-                    placeholder="New Wallet Balance (₦)"
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-mono focus:outline-none"
-                  />
-                  <button type="submit" className="rounded-xl bg-red-600 hover:bg-red-700 text-xs font-bold text-white px-5 py-2 whitespace-nowrap">
-                    Update Balance
-                  </button>
+                {/* Filters */}
+                <div className="flex flex-wrap gap-2">
+                  {(["All", "Earner", "Advertiser"] as const).map(f => (
+                    <button key={f} onClick={() => setUserRoleFilter(f)}
+                      className={`rounded-full px-3 py-1 text-[10px] font-bold transition-colors ${userRoleFilter === f ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                      {f}
+                    </button>
+                  ))}
+                  <div className="w-px bg-gray-200 mx-1" />
+                  {(["All", "Active", "Banned"] as const).map(f => (
+                    <button key={f} onClick={() => setUserStatusFilter(f)}
+                      className={`rounded-full px-3 py-1 text-[10px] font-bold transition-colors ${userStatusFilter === f ? (f === "Banned" ? "bg-red-600 text-white" : "bg-blue-600 text-white") : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                      {f}
+                    </button>
+                  ))}
                 </div>
-              </form>
-            )}
 
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h3 className="font-display text-sm font-bold text-gray-900 mb-4">Platform Users Registry</h3>
-              
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-gray-100 text-gray-400 uppercase text-[9px] font-bold">
-                      <th className="py-2.5 px-1">Name</th>
-                      <th className="py-2.5 px-1">Email</th>
-                      <th className="py-2.5 px-1">Role</th>
-                      <th className="py-2.5 px-1">Wallet Balance</th>
-                      <th className="py-2.5 px-1">Verification</th>
-                      <th className="py-2.5 px-1 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {usersList.map((usr, idx) => (
-                      <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50/50">
-                        <td className="py-3 px-1 font-bold text-gray-800">{usr.name}</td>
-                        <td className="py-3 px-1 text-gray-500">{usr.email}</td>
-                        <td className="py-3 px-1">
-                          <span className={`inline-block rounded px-2 py-0.5 text-[9px] font-bold ${
-                            usr.role === UserRole.ADVERTISER ? "bg-indigo-50 text-indigo-700" : "bg-blue-50 text-blue-700"
-                          }`}>{usr.role}</span>
-                        </td>
-                        <td className="py-3 px-1 font-mono font-bold text-gray-800">₦{usr.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td className="py-3 px-1">
-                          <button 
-                            onClick={() => handleToggleVerification(usr)}
-                            className={`rounded-full px-2.5 py-0.5 text-[9px] font-black cursor-pointer uppercase ${
-                              usr.isVerified ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
-                            }`}
-                          >
-                            {usr.isVerified ? "Verified" : "Unverified"}
-                          </button>
-                        </td>
-                        <td className="py-3 px-1 text-right space-x-1.5 whitespace-nowrap">
-                          <button
-                            onClick={() => {
-                              setSelectedUserForBalance(usr);
-                              setAdjustBalanceAmount(usr.walletBalance.toString());
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }}
-                            className="rounded bg-gray-100 hover:bg-red-50 hover:text-red-600 text-[10px] font-bold text-gray-700 px-2 py-1"
-                          >
-                            Adjust Balance
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {/* Table */}
+                {filteredUsers.length === 0 ? (
+                  <p className="text-center py-12 text-xs text-gray-400">No users match your filters.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-gray-100 text-gray-400 uppercase text-[9px] font-bold tracking-wide">
+                          <th className="py-2.5 px-2">User</th>
+                          <th className="py-2.5 px-2">Username</th>
+                          <th className="py-2.5 px-2">Type</th>
+                          <th className="py-2.5 px-2">Wallet</th>
+                          <th className="py-2.5 px-2">Registered</th>
+                          <th className="py-2.5 px-2">Status</th>
+                          <th className="py-2.5 px-2 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredUsers.map((usr, idx) => {
+                          const isLoading = userActionLoading === usr.id;
+                          return (
+                            <tr key={idx} className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${usr.isBanned ? "opacity-60" : ""}`}>
+                              <td className="py-3 px-2">
+                                <p className="font-bold text-gray-800 leading-tight">{usr.name}</p>
+                                <p className="text-gray-400 text-[10px] mt-0.5 truncate max-w-[160px]">{usr.email}</p>
+                              </td>
+                              <td className="py-3 px-2 text-gray-500 font-mono">{usr.username || <span className="text-gray-300">—</span>}</td>
+                              <td className="py-3 px-2">
+                                <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                                  usr.role === UserRole.ADVERTISER ? "bg-indigo-50 text-indigo-700" : "bg-blue-50 text-blue-700"
+                                }`}>{usr.role}</span>
+                              </td>
+                              <td className="py-3 px-2 font-mono font-bold text-gray-800">
+                                ₦{(usr.walletBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-3 px-2 text-gray-400 whitespace-nowrap">
+                                {usr.createdAt ? new Date(usr.createdAt).toLocaleDateString() : "—"}
+                              </td>
+                              <td className="py-3 px-2">
+                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${
+                                  usr.isBanned ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"
+                                }`}>
+                                  {usr.isBanned ? <Ban className="h-2.5 w-2.5" /> : <ShieldCheck className="h-2.5 w-2.5" />}
+                                  {usr.isBanned ? "Banned" : "Active"}
+                                </span>
+                              </td>
+                              <td className="py-3 px-2 text-right">
+                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                  <button onClick={() => setViewingUser(usr)}
+                                    className="rounded bg-gray-100 hover:bg-blue-50 hover:text-blue-600 text-[10px] font-bold text-gray-600 px-2 py-1 flex items-center gap-1">
+                                    <Eye className="h-3 w-3" /> View
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedUserForBalance(usr);
+                                      setAdjustBalanceAmount(usr.walletBalance.toString());
+                                      window.scrollTo({ top: 0, behavior: "smooth" });
+                                    }}
+                                    className="rounded bg-gray-100 hover:bg-amber-50 hover:text-amber-700 text-[10px] font-bold text-gray-600 px-2 py-1">
+                                    ₦ Balance
+                                  </button>
+                                  {usr.isBanned ? (
+                                    <button onClick={() => handleUnbanUser(usr)} disabled={isLoading}
+                                      className="rounded bg-green-50 hover:bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 flex items-center gap-1 disabled:opacity-50">
+                                      <ShieldCheck className="h-3 w-3" /> {isLoading ? "…" : "Unban"}
+                                    </button>
+                                  ) : (
+                                    <button onClick={() => handleBanUser(usr)} disabled={isLoading}
+                                      className="rounded bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-bold px-2 py-1 flex items-center gap-1 disabled:opacity-50">
+                                      <Ban className="h-3 w-3" /> {isLoading ? "…" : "Ban"}
+                                    </button>
+                                  )}
+                                  <button onClick={() => setDeletingUser(usr)} disabled={isLoading}
+                                    className="rounded bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-bold px-2 py-1 flex items-center gap-1 disabled:opacity-50">
+                                    <Trash2 className="h-3 w-3" /> Delete
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
-
-          </div>
-        )}
+          );
+        })()}
 
         {/* TAB 3: CAMPAIGNS MODERATION */}
         {activeTab === "campaigns" && (

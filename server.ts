@@ -97,6 +97,7 @@ function mapUser(row: any) {
     businessName: row.business_name || undefined,
     photoUrl: row.photo_url || undefined,
     twoFactorEnabled: row.two_factor_enabled === true || row.two_factor_enabled === "true" || false,
+    isBanned: row.is_banned === true || row.is_banned === "true",
     notificationPrefs: notificationPrefs || {
       emailNotifications: true,
       campaignUpdates: true,
@@ -375,7 +376,12 @@ async function getAuthenticatedUser(req: express.Request): Promise<any | null> {
   const userId = authHeader.split(" ")[1];
   if (!userId) return null;
   const res = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
-  return res.rows.length > 0 ? mapUser(res.rows[0]) : null;
+  if (res.rows.length === 0) return null;
+  const user = mapUser(res.rows[0]);
+  // Banned users are treated as unauthenticated — all API calls fail immediately,
+  // effectively invalidating their session without needing a session store.
+  if (user.isBanned) return null;
+  return user;
 }
 
 // ─── Schema Bootstrap ───────────────────────────────────────────────────────
@@ -771,6 +777,24 @@ async function bootstrapTables() {
         [p.cost, p.earn, p.platform, p.oldCost, p.oldEarn]
       );
     }
+
+    // 28. Migrate: user ban/suspend support
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT FALSE`);
+
+    // 29. Admin action audit log — records every ban, unban, and delete action
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS admin_action_logs (
+        id VARCHAR(50) PRIMARY KEY,
+        admin_id VARCHAR(50) NOT NULL,
+        admin_name VARCHAR(150) NOT NULL,
+        action VARCHAR(50) NOT NULL,
+        target_user_id VARCHAR(50) NOT NULL,
+        target_user_name VARCHAR(150) NOT NULL,
+        target_user_email VARCHAR(150) NOT NULL,
+        notes TEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
@@ -1348,6 +1372,10 @@ app.post("/api/auth/login", async (req, res) => {
 
     const user = mapUser(result.rows[0]);
     if (user.password !== hashPassword(password)) return res.status(401).json({ error: "Invalid email or password" });
+
+    if (user.isBanned) {
+      return res.status(403).json({ error: "Your account has been banned. Please contact support." });
+    }
 
     if (!user.isVerified) {
       return res.status(400).json({ error: "EMAIL_NOT_VERIFIED", userId: user.id, email: user.email });
@@ -3184,6 +3212,127 @@ app.put("/api/admin/users/:id", async (req, res) => {
     res.json({ success: true, user: safe });
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
+
+// ─── Admin User Management — Ban / Unban / Delete ───────────────────────────
+
+app.post("/api/admin/users/:id/ban", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedUser(req);
+    if (!admin || admin.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const targetRes = await pool.query("SELECT * FROM users WHERE id = $1 AND role != 'Admin'", [req.params.id]);
+    if (targetRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
+    const target = mapUser(targetRes.rows[0]);
+
+    await pool.query("UPDATE users SET is_banned = TRUE WHERE id = $1", [target.id]);
+    await pool.query(
+      `INSERT INTO admin_action_logs (id, admin_id, admin_name, action, target_user_id, target_user_name, target_user_email, notes, created_at)
+       VALUES ($1,$2,$3,'ban',$4,$5,$6,$7,$8)`,
+      ["log-" + Math.random().toString(36).substr(2, 9), admin.id, admin.name,
+       target.id, target.name, target.email, req.body.notes || null, new Date()]
+    );
+    console.log(`[Admin] ${admin.name} banned user ${target.name} (${target.id})`);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.post("/api/admin/users/:id/unban", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedUser(req);
+    if (!admin || admin.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const targetRes = await pool.query("SELECT * FROM users WHERE id = $1 AND role != 'Admin'", [req.params.id]);
+    if (targetRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
+    const target = mapUser(targetRes.rows[0]);
+
+    await pool.query("UPDATE users SET is_banned = FALSE WHERE id = $1", [target.id]);
+    await pool.query(
+      `INSERT INTO admin_action_logs (id, admin_id, admin_name, action, target_user_id, target_user_name, target_user_email, notes, created_at)
+       VALUES ($1,$2,$3,'unban',$4,$5,$6,$7,$8)`,
+      ["log-" + Math.random().toString(36).substr(2, 9), admin.id, admin.name,
+       target.id, target.name, target.email, req.body.notes || null, new Date()]
+    );
+    console.log(`[Admin] ${admin.name} unbanned user ${target.name} (${target.id})`);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+app.delete("/api/admin/users/:id", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedUser(req);
+    if (!admin || admin.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const targetRes = await pool.query("SELECT * FROM users WHERE id = $1 AND role != 'Admin'", [req.params.id]);
+    if (targetRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
+    const target = mapUser(targetRes.rows[0]);
+    const uid = target.id;
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // Log first so the record exists even if later steps fail
+      await client.query(
+        `INSERT INTO admin_action_logs (id, admin_id, admin_name, action, target_user_id, target_user_name, target_user_email, notes, created_at)
+         VALUES ($1,$2,$3,'delete',$4,$5,$6,$7,$8)`,
+        ["log-" + Math.random().toString(36).substr(2, 9), admin.id, admin.name,
+         uid, target.name, target.email, null, new Date()]
+      );
+
+      // 1. Earner notifications
+      await client.query("DELETE FROM earner_notifications WHERE earner_id = $1", [uid]);
+
+      // 2. Submission history
+      await client.query("DELETE FROM submission_history WHERE earner_id = $1", [uid]);
+
+      // 3. Earner submissions — decrement filled_slots on affected tasks
+      const approvedSubs = await client.query(
+        "SELECT task_id, COUNT(*) AS cnt FROM submissions WHERE earner_id = $1 AND status = 'Approved' GROUP BY task_id",
+        [uid]
+      );
+      for (const row of approvedSubs.rows) {
+        await client.query(
+          "UPDATE tasks SET filled_slots = GREATEST(0, filled_slots - $1) WHERE id = $2",
+          [parseInt(row.cnt), row.task_id]
+        );
+      }
+      await client.query("DELETE FROM submissions WHERE earner_id = $1", [uid]);
+
+      // 4. Advertiser tasks + their related records
+      const ownedTasks = await client.query("SELECT id FROM tasks WHERE advertiser_id = $1", [uid]);
+      for (const row of ownedTasks.rows) {
+        await client.query("DELETE FROM submission_history WHERE task_id = $1", [row.id]);
+        await client.query("DELETE FROM submissions WHERE task_id = $1", [row.id]);
+        await client.query("DELETE FROM earner_notifications WHERE task_id = $1", [row.id]);
+        await client.query("DELETE FROM hidden_tasks WHERE task_id = $1", [row.id]);
+      }
+      await client.query("DELETE FROM tasks WHERE advertiser_id = $1", [uid]);
+
+      // 5. Transactions, referrals, commissions
+      await client.query("DELETE FROM transactions WHERE user_id = $1", [uid]);
+      await client.query("DELETE FROM referrals WHERE referrer_id = $1 OR referee_id = $1", [uid]);
+      await client.query("DELETE FROM admin_commissions WHERE user_id = $1", [uid]);
+
+      // 6. Push subscriptions and hidden tasks (foreign key cascades, but be explicit)
+      await client.query("DELETE FROM notification_subscriptions WHERE user_id = $1", [uid]);
+      await client.query("DELETE FROM hidden_tasks WHERE earner_id = $1", [uid]);
+
+      // 7. Delete the user record
+      await client.query("DELETE FROM users WHERE id = $1", [uid]);
+
+      await client.query("COMMIT");
+      console.log(`[Admin] ${admin.name} permanently deleted user ${target.name} (${uid})`);
+      res.json({ success: true });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// ─── Admin Tasks ─────────────────────────────────────────────────────────────
 
 app.get("/api/admin/tasks", async (req, res) => {
   try {
