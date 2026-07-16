@@ -279,7 +279,6 @@ export default function AdvertiserDashboard({
           title: campaignForm.title,
           description: campaignForm.description,
           category,
-          platform: campaignForm.platform,
           proofRequirements: campaignForm.proofRequirements,
           link: campaignForm.link,
           totalSlots: campaignForm.totalSlots
