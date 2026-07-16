@@ -390,7 +390,7 @@ For every friend you refer using your unique link who completes at least one tas
     referralReward: 0,
     withdrawalFee: 100,
     minWithdrawal: 2000,
-    minDeposit: 1000,
+    minDeposit: 100,
     contactEmail: "support@tasksearn.com",
     contactPhone: "09164444315",
     telegramChannel: "https://t.me/tasksearn_ng",

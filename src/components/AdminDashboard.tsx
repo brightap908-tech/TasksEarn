@@ -184,7 +184,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
     referralReward: 0,
     withdrawalFee: 50,
     minWithdrawal: 200,
-    minDeposit: 1000,
+    minDeposit: 100,
     contactEmail: "support@tasksearn.com",
     contactPhone: "09164444315",
     whatsappGroup: "https://wa.me/2349164444315"

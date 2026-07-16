@@ -194,7 +194,7 @@ export async function bootstrapTables() {
         referral_reward DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
         withdrawal_fee DECIMAL(10, 2) NOT NULL DEFAULT 100.00,
         min_withdrawal DECIMAL(10, 2) NOT NULL DEFAULT 2000.00,
-        min_deposit DECIMAL(10, 2) NOT NULL DEFAULT 1000.00,
+        min_deposit DECIMAL(10, 2) NOT NULL DEFAULT 100.00,
         contact_email VARCHAR(150) NOT NULL DEFAULT 'support@tasksearn.com',
         contact_phone VARCHAR(50) NOT NULL DEFAULT '+234 812 345 6789',
         telegram_channel VARCHAR(255) NULL,

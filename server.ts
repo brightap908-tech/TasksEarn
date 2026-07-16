@@ -360,7 +360,7 @@ async function getSettings(): Promise<ReturnType<typeof mapSettings>> {
     referralReward: 200,
     withdrawalFee: 50,
     minWithdrawal: 200,
-    minDeposit: 1000,
+    minDeposit: 100,
     contactEmail: "support@tasksearn.com",
     contactPhone: "09164444315",
     telegramChannel: "https://t.me/tasksearn_ng",
@@ -513,7 +513,7 @@ async function bootstrapTables() {
         referral_reward DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
         withdrawal_fee DECIMAL(10, 2) NOT NULL DEFAULT 50.00,
         min_withdrawal DECIMAL(10, 2) NOT NULL DEFAULT 200.00,
-        min_deposit DECIMAL(10, 2) NOT NULL DEFAULT 1000.00,
+        min_deposit DECIMAL(10, 2) NOT NULL DEFAULT 100.00,
         contact_email VARCHAR(150) NOT NULL DEFAULT 'support@tasksearn.com',
         contact_phone VARCHAR(50) NOT NULL DEFAULT '09164444315',
         telegram_channel VARCHAR(255) NULL,
@@ -727,12 +727,18 @@ async function bootstrapTables() {
       )
     `);
 
-    // 23. Migrate: update settings to new minimums (₦50 fee, ₦200 min withdrawal, ₦1000 min deposit).
+    // 23. Migrate: update settings to new minimums (₦50 fee, ₦200 min withdrawal, ₦100 min deposit).
     //     Runs on every boot; the WHERE guard makes it a no-op if already updated.
     await client.query(`
       UPDATE settings
-      SET withdrawal_fee = 50, min_withdrawal = 200, min_deposit = 1000
-      WHERE withdrawal_fee IN (100, 200) OR min_withdrawal IN (250, 2000) OR min_deposit IN (200, 500)
+      SET withdrawal_fee = 50, min_withdrawal = 200, min_deposit = 100
+      WHERE withdrawal_fee IN (100, 200) OR min_withdrawal IN (250, 2000) OR min_deposit IN (200, 500, 1000)
+    `);
+
+    // 27. Migrate: lower minimum deposit to ₦100 (previously ₦1000).
+    //     Belt-and-suspenders: run unconditionally if any row still has 1000.
+    await client.query(`
+      UPDATE settings SET min_deposit = 100 WHERE min_deposit = 1000
     `);
 
     // 24. Update task_pricing to the official advertiser price list.
@@ -2703,8 +2709,8 @@ app.post("/api/advertiser/deposit/initialize", async (req, res) => {
 
     const settings = await getSettings();
     const depositAmount = parseFloat(req.body.amount);
-    if (isNaN(depositAmount) || depositAmount < (settings?.minDeposit || 1000)) {
-      return res.status(400).json({ error: `Minimum deposit amount is ₦${settings?.minDeposit || 1000}` });
+    if (isNaN(depositAmount) || depositAmount < (settings?.minDeposit || 100)) {
+      return res.status(400).json({ error: `Minimum deposit amount is ₦${(settings?.minDeposit || 100).toLocaleString()}` });
     }
 
     const txId = "tx-" + Math.random().toString(36).substr(2, 9);

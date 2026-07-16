@@ -68,8 +68,9 @@ export default function AdvertiserDashboard({
   apiFetch,
   settings
 }: AdvertiserDashboardProps) {
-  const minDeposit = settings?.minDeposit || 1000;
+  const minDeposit = settings?.minDeposit || 100;
   const [fundAmount, setFundAmount] = React.useState(String(minDeposit));
+  const [fundError, setFundError] = React.useState("");
   const VALID_ADVERTISER_TABS: Tab[] = ["overview", "create", "manage", "audit", "transactions", "price-list", "profile", "wallet", "fund", "pending-submissions", "approved", "rejected", "notifications", "settings"];
   const { section } = useParams<{ section?: string }>();
   const navigate = useNavigate();
@@ -1552,17 +1553,24 @@ export default function AdvertiserDashboard({
               type="number"
               min={minDeposit}
               value={fundAmount}
-              onChange={(e) => setFundAmount(e.target.value)}
+              onChange={(e) => { setFundAmount(e.target.value); setFundError(""); }}
               placeholder={`Min: ₦${minDeposit.toLocaleString()}`}
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none font-mono mb-3"
+              className={`w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none font-mono mb-1 ${
+                fundError ? "border-red-400 focus:border-red-500" : "border-gray-200 focus:border-blue-500"
+              }`}
             />
+            {fundError ? (
+              <p className="text-[11px] font-semibold text-red-500 mb-3">{fundError}</p>
+            ) : (
+              <p className="text-[10px] text-gray-400 mb-3">Minimum deposit: ₦{minDeposit.toLocaleString()}</p>
+            )}
 
             <div className="flex flex-wrap gap-2 mb-5">
-              {[minDeposit, 5000, 10000, 20000].filter((v, i, arr) => arr.indexOf(v) === i).map((v) => (
+              {[minDeposit, 500, 1000, 5000, 10000, 20000].filter((v, i, arr) => arr.indexOf(v) === i && v >= minDeposit).map((v) => (
                 <button
                   key={v}
                   type="button"
-                  onClick={() => setFundAmount(String(v))}
+                  onClick={() => { setFundAmount(String(v)); setFundError(""); }}
                   className="rounded-full border border-blue-100 bg-blue-50 hover:bg-blue-100 px-3 py-1 text-[11px] font-bold text-blue-700 transition-all cursor-pointer"
                 >
                   ₦{v.toLocaleString()}
@@ -1571,8 +1579,21 @@ export default function AdvertiserDashboard({
             </div>
 
             <button
-              onClick={() => onOpenDeposit(fundAmount)}
-              className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-3 text-sm font-bold text-white shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2"
+              onClick={() => {
+                const amt = parseFloat(fundAmount);
+                if (isNaN(amt) || amt < minDeposit) {
+                  setFundError(`Minimum deposit amount is ₦${minDeposit.toLocaleString()}.`);
+                  return;
+                }
+                setFundError("");
+                onOpenDeposit(fundAmount);
+              }}
+              disabled={isNaN(parseFloat(fundAmount)) || parseFloat(fundAmount) < minDeposit}
+              className={`w-full rounded-xl py-3 text-sm font-bold text-white shadow-sm transition-all flex items-center justify-center gap-2 ${
+                isNaN(parseFloat(fundAmount)) || parseFloat(fundAmount) < minDeposit
+                  ? "bg-gray-300 cursor-not-allowed"
+                  : "bg-blue-600 hover:bg-blue-700 cursor-pointer"
+              }`}
             >
               💳 Continue to Paystack Checkout
             </button>

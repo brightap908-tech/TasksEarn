@@ -85,7 +85,7 @@ export default function App() {
     referralReward: 0,
     withdrawalFee: 50,
     minWithdrawal: 250,
-    minDeposit: 1000,
+    minDeposit: 100,
     contactEmail: "support@tasksearn.com",
     contactPhone: "09164444315",
     whatsappGroup: "https://wa.me/2349164444315"
@@ -161,9 +161,11 @@ export default function App() {
 
   // Paystack Deposit Modal State
   const [depositOpen, setDepositOpen] = React.useState(false);
-  const [depositAmount, setDepositAmount] = React.useState("5000");
+  const [depositAmount, setDepositAmount] = React.useState("1000");
+  const [depositError, setDepositError] = React.useState("");
   const openDeposit = (amount?: string) => {
     if (amount) setDepositAmount(amount);
+    setDepositError("");
     setDepositOpen(true);
   };
   const [depositGateway, setDepositGateway] = React.useState("Paystack");
@@ -646,9 +648,10 @@ export default function App() {
     e.preventDefault();
     const amount = parseFloat(depositAmount);
     if (isNaN(amount) || amount < settings.minDeposit) {
-      alert(`Minimum deposit is ₦${settings.minDeposit.toLocaleString()}`);
+      setDepositError(`Minimum deposit amount is ₦${settings.minDeposit.toLocaleString()}.`);
       return;
     }
+    setDepositError("");
 
     setDepositProcessing(true);
     try {
@@ -660,7 +663,7 @@ export default function App() {
       });
 
       if (!initRes || initRes.error) {
-        alert(initRes?.error || "Failed to initialize payment transaction.");
+        setDepositError(initRes?.error || "Failed to initialize payment transaction.");
         setDepositProcessing(false);
         return;
       }
@@ -671,11 +674,11 @@ export default function App() {
         // Real environment: redirect to Paystack Checkout URL
         window.location.href = authorization_url;
       } else {
-        alert("Payment gateway did not return a valid checkout URL.");
+        setDepositError("Payment gateway did not return a valid checkout URL.");
         setDepositProcessing(false);
       }
     } catch (err) {
-      alert("Payment gateway connection failed.");
+      setDepositError("Payment gateway connection failed. Please try again.");
       setDepositProcessing(false);
     }
   };
@@ -1623,12 +1626,25 @@ export default function App() {
                   <label className="block text-[10px] font-bold uppercase mb-1.5" style={{ color: "#475569", letterSpacing: "0.07em" }}>Fund Amount (Naira ₦)</label>
                   <input
                     type="number" required min={settings.minDeposit}
-                    value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
-                    placeholder="Min: 1000"
+                    value={depositAmount}
+                    onChange={(e) => { setDepositAmount(e.target.value); setDepositError(""); }}
+                    placeholder={`Min: ₦${settings.minDeposit.toLocaleString()}`}
                     className="w-full rounded-xl px-3 py-2 text-sm font-mono"
-                    style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
+                    style={{
+                      background: "#FFFFFF",
+                      border: `1px solid ${depositError ? "#EF4444" : "#E2E8F0"}`,
+                      color: "#0F172A"
+                    }}
                   />
-                  <span className="block text-[10px] mt-1" style={{ color: "#374151" }}>Min deposit: ₦{settings.minDeposit.toLocaleString()}</span>
+                  {depositError ? (
+                    <span className="block text-[10px] mt-1 font-semibold" style={{ color: "#EF4444" }}>
+                      {depositError}
+                    </span>
+                  ) : (
+                    <span className="block text-[10px] mt-1" style={{ color: "#374151" }}>
+                      Minimum deposit: ₦{settings.minDeposit.toLocaleString()}
+                    </span>
+                  )}
                 </div>
 
                 <div
@@ -1640,8 +1656,19 @@ export default function App() {
 
                 <button
                   type="submit"
-                  className="w-full rounded-xl py-3 text-xs font-bold text-white cursor-pointer transition-all"
-                  style={{ background: "linear-gradient(135deg,#2563EB,#2563eb)", boxShadow: "0 4px 16px rgba(37,99,235,0.30)" }}
+                  disabled={isNaN(parseFloat(depositAmount)) || parseFloat(depositAmount) < settings.minDeposit}
+                  className="w-full rounded-xl py-3 text-xs font-bold text-white transition-all"
+                  style={{
+                    background: (isNaN(parseFloat(depositAmount)) || parseFloat(depositAmount) < settings.minDeposit)
+                      ? "#94A3B8"
+                      : "linear-gradient(135deg,#2563EB,#2563eb)",
+                    boxShadow: (isNaN(parseFloat(depositAmount)) || parseFloat(depositAmount) < settings.minDeposit)
+                      ? "none"
+                      : "0 4px 16px rgba(37,99,235,0.30)",
+                    cursor: (isNaN(parseFloat(depositAmount)) || parseFloat(depositAmount) < settings.minDeposit)
+                      ? "not-allowed"
+                      : "pointer"
+                  }}
                 >
                   Pay ₦{parseFloat(depositAmount || "0").toLocaleString()} via Paystack
                 </button>

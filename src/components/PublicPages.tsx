@@ -57,7 +57,7 @@ export default function PublicPages({ view, pagesContent, settings }: PublicPage
     },
     {
       q: "How can I fund my Advertiser wallet?",
-      a: "Advertisers can instantly fund their wallets via Paystack or Flutterwave. We support Naira Debit cards, Bank Transfers, OPay, PalmPay, and Moniepoint. The minimum deposit is ₦1,000.",
+      a: "Advertisers can instantly fund their wallets via Paystack or Flutterwave. We support Naira Debit cards, Bank Transfers, OPay, PalmPay, and Moniepoint. The minimum deposit is ₦100.",
     },
     {
       q: "What is the minimum withdrawal for Earners?",
