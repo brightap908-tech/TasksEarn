@@ -21,7 +21,6 @@ import LoginPopupModal from "./components/LoginPopupModal";
 import PublicPages from "./components/PublicPages";
 import EarnerDashboard from "./components/EarnerDashboard";
 import EarnerTaskSubmitPage from "./components/EarnerTaskSubmitPage";
-import EarnerTaskResubmitPage from "./components/EarnerTaskResubmitPage";
 import EarnerRejectedTasksPage from "./components/EarnerRejectedTasksPage";
 import EarnerRejectedTaskResubmitPage from "./components/EarnerRejectedTaskResubmitPage";
 import AdvertiserDashboard from "./components/AdvertiserDashboard";
@@ -1463,7 +1462,7 @@ export default function App() {
         <Route path="/privacy" element={<><BackButton fallback="/" /><PublicPages view="privacy" pagesContent={pagesContent} settings={settings} /></>} />
 
         {/* ROLE PROTECTED: EARNER REJECTED TASKS PAGES (must be before /earner/:section) */}
-        <Route path="/earner/rejected-tasks/:taskId/resubmit" element={
+        <Route path="/earner/rejected-tasks/:submissionId/resubmit" element={
           user && user.role === UserRole.EARNER ? (
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
               <EarnerRejectedTaskResubmitPage apiFetch={apiFetch} showToast={showToast} />
@@ -1479,13 +1478,6 @@ export default function App() {
         } />
 
         {/* ROLE PROTECTED: EARNER TASK SUBMISSION PAGE (must be before /earner/:section) */}
-        <Route path="/earner/tasks/:taskId/resubmit" element={
-          user && user.role === UserRole.EARNER ? (
-            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-              <EarnerTaskResubmitPage apiFetch={apiFetch} showToast={showToast} />
-            </div>
-          ) : (<Navigate to="/login" replace />)
-        } />
         <Route path="/earner/tasks/:taskId/submit" element={
           user && user.role === UserRole.EARNER ? (
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">

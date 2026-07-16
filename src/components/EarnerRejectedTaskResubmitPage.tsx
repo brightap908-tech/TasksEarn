@@ -25,14 +25,15 @@ export default function EarnerRejectedTaskResubmitPage({
   apiFetch,
   showToast,
 }: EarnerRejectedTaskResubmitPageProps) {
-  const { taskId } = useParams<{ taskId: string }>();
+  // Route uses :submissionId — more precise than :taskId and works even
+  // when the task is paused/completed after the initial rejection.
+  const { submissionId } = useParams<{ submissionId: string }>();
   const navigate = useNavigate();
 
-  // Task state
-  const [task, setTask] = React.useState<any | null>(null);
+  // Submission + task data (fetched from the dedicated resubmit-info endpoint)
+  const [info, setInfo] = React.useState<any | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [notFound, setNotFound] = React.useState(false);
-  const [notRejected, setNotRejected] = React.useState(false);
 
   // Form state
   const [proofText, setProofText] = React.useState("");
@@ -45,23 +46,20 @@ export default function EarnerRejectedTaskResubmitPage({
   const [submitError, setSubmitError] = React.useState("");
   const [submitSuccess, setSubmitSuccess] = React.useState(false);
 
-  // Fetch the task on mount
+  // Fetch resubmit info on mount
   React.useEffect(() => {
     window.scrollTo(0, 0);
-    const fetchTask = async () => {
+    const fetchInfo = async () => {
       setLoading(true);
+      setNotFound(false);
       try {
-        const data = await apiFetch(`/api/earner/tasks/${taskId}`);
+        const data = await apiFetch(
+          `/api/earner/submissions/${submissionId}/resubmit-info`
+        );
         if (!data || data.error) {
           setNotFound(true);
-        } else if (data.id) {
-          if (data.submissionStatus !== "Rejected") {
-            setNotRejected(true);
-          } else {
-            setTask(data);
-          }
         } else {
-          setNotFound(true);
+          setInfo(data);
         }
       } catch {
         setNotFound(true);
@@ -69,10 +67,10 @@ export default function EarnerRejectedTaskResubmitPage({
         setLoading(false);
       }
     };
-    if (taskId) fetchTask();
-  }, [taskId]);
+    if (submissionId) fetchInfo();
+  }, [submissionId]);
 
-  // Image compression helper (same as EarnerTaskSubmitPage)
+  // Image compression (same as EarnerTaskSubmitPage)
   const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const img = new window.Image();
@@ -108,7 +106,7 @@ export default function EarnerRejectedTaskResubmitPage({
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      setSubmitError("File is too large. Maximum allowed size is 10MB.");
+      setSubmitError("File is too large. Maximum allowed size is 10 MB.");
       return;
     }
     setFileName(file.name);
@@ -131,14 +129,8 @@ export default function EarnerRejectedTaskResubmitPage({
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragActive(true);
-  };
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragActive(false);
-  };
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragActive(true); };
+  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); setIsDragActive(false); };
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragActive(false);
@@ -147,7 +139,7 @@ export default function EarnerRejectedTaskResubmitPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!task) return;
+    if (!info) return;
     if (!proofText && !proofScreenshot) {
       setSubmitError("Please provide verification notes or upload a screenshot.");
       return;
@@ -156,11 +148,13 @@ export default function EarnerRejectedTaskResubmitPage({
     setSubmitError("");
 
     const finalProofText = proofText.trim()
-      ? `📝 Earner Notes:\n${proofText.trim()}`
+      ? `📝 Earner Notes (Resubmission):\n${proofText.trim()}`
       : "See uploaded screenshot proof.";
 
     try {
-      const res = await apiFetch(`/api/earner/tasks/${task.id}/submit`, {
+      // Submit against the task endpoint — it already handles the Rejected → Pending
+      // transition and does NOT require the task to be Active for resubmissions.
+      const res = await apiFetch(`/api/earner/tasks/${info.taskId}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -174,18 +168,16 @@ export default function EarnerRejectedTaskResubmitPage({
         setSubmitting(false);
       } else {
         setSubmitSuccess(true);
-        showToast("Task resubmitted! Redirecting to Pending Review…", "success");
-        setTimeout(() => {
-          navigate("/earner/pending");
-        }, 1500);
+        showToast("Resubmission sent! Redirecting to Pending Review…", "success");
+        setTimeout(() => navigate("/earner/pending"), 1500);
       }
     } catch {
-      setSubmitError("Failed to submit proof. Please try again.");
+      setSubmitError("Failed to submit. Please check your connection and try again.");
       setSubmitting(false);
     }
   };
 
-  // ── Loading ───────────────────────────────────────────────────────────────
+  // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -197,40 +189,17 @@ export default function EarnerRejectedTaskResubmitPage({
     );
   }
 
-  // ── Not rejected (already pending/approved) ───────────────────────────────
-  if (notRejected) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center space-y-4 max-w-sm">
-          <div className="mx-auto h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-            <CheckCircle2 className="h-6 w-6 text-blue-500" />
-          </div>
-          <h2 className="font-bold text-gray-900">Not a Rejected Task</h2>
-          <p className="text-xs text-gray-400">
-            This task is not currently rejected. It may already be pending review or completed.
-          </p>
-          <button
-            onClick={() => navigate("/earner/rejected-tasks")}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 text-white px-5 py-2.5 text-xs font-bold hover:bg-blue-700 transition-all"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back to Rejected Tasks
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // ── Not found ─────────────────────────────────────────────────────────────
-  if (notFound || !task) {
+  if (notFound || !info) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center space-y-4 max-w-sm">
           <div className="mx-auto h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
             <XCircle className="h-6 w-6 text-red-500" />
           </div>
-          <h2 className="font-bold text-gray-900">Task Not Found</h2>
+          <h2 className="font-bold text-gray-900">Submission Not Found</h2>
           <p className="text-xs text-gray-400">
-            This task may no longer be available. It might have been paused or all slots filled.
+            This submission may no longer be in a rejected state — it may have already been resubmitted or approved.
           </p>
           <button
             onClick={() => navigate("/earner/rejected-tasks")}
@@ -243,7 +212,7 @@ export default function EarnerRejectedTaskResubmitPage({
     );
   }
 
-  // ── Success ───────────────────────────────────────────────────────────────
+  // ── Success ────────────────────────────────────────────────────────────────
   if (submitSuccess) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -256,7 +225,7 @@ export default function EarnerRejectedTaskResubmitPage({
             Your corrected proof has been sent for review. Redirecting you to{" "}
             <strong>Pending Review</strong>…
           </p>
-          <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-green-200 border-t-green-600" />
+          <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-green-200 border-t-green-500" />
         </div>
       </div>
     );
@@ -276,8 +245,8 @@ export default function EarnerRejectedTaskResubmitPage({
           Rejected Tasks
         </button>
         <span className="text-xs text-gray-400">›</span>
-        <span className="text-xs font-semibold text-gray-600 truncate">
-          Fix &amp; Resubmit
+        <span className="text-xs font-semibold text-red-600 truncate flex items-center gap-1">
+          <RefreshCw className="h-3 w-3" /> Fix &amp; Resubmit
         </span>
       </div>
 
@@ -292,7 +261,7 @@ export default function EarnerRejectedTaskResubmitPage({
               Why This Task Was Rejected
             </p>
             <p className="text-xs text-red-800 leading-relaxed">
-              {task.submissionFeedback ||
+              {info.rejectionReason ||
                 "No specific reason provided. Please review the task requirements carefully and upload clearer proof."}
             </p>
           </div>
@@ -304,18 +273,18 @@ export default function EarnerRejectedTaskResubmitPage({
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-bold text-blue-800">
-              {task.category}
+              {info.category}
             </span>
             <h1 className="font-bold text-gray-900 text-base mt-2 leading-snug">
-              {task.title}
+              {info.taskTitle}
             </h1>
             <p className="text-xs text-gray-400 mt-0.5">
-              Campaign by: {task.advertiserName}
+              Campaign by: {info.advertiserName}
             </p>
           </div>
           <div className="shrink-0 text-right">
             <p className="font-mono text-2xl font-black text-blue-600">
-              ₦{task.earningPerSlot}
+              ₦{info.earningPerSlot?.toLocaleString?.() ?? info.earningPerSlot}
             </p>
           </div>
         </div>
@@ -326,22 +295,24 @@ export default function EarnerRejectedTaskResubmitPage({
               Task Instructions
             </p>
             <p className="text-gray-700 leading-relaxed whitespace-pre-line">
-              {task.description}
+              {info.description}
             </p>
           </div>
-          <div>
-            <p className="font-bold text-gray-500 uppercase text-[10px] mb-1">
-              Proof Requirements
-            </p>
-            <p className="text-gray-700 leading-relaxed">
-              {task.proofRequirements}
-            </p>
-          </div>
+          {info.proofRequirements && (
+            <div>
+              <p className="font-bold text-gray-500 uppercase text-[10px] mb-1">
+                Proof Requirements
+              </p>
+              <p className="text-gray-700 leading-relaxed">
+                {info.proofRequirements}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Step 1 — Redo the task (only shown if task has a link) */}
-      {task.link && (
+      {/* Step 1 — Redo the task (only if there is a task link) */}
+      {info.link && (
         <div className="rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 shadow-sm">
           <div className="flex items-start gap-4">
             <div className="shrink-0 h-9 w-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow">
@@ -352,14 +323,11 @@ export default function EarnerRejectedTaskResubmitPage({
                 Redo the Task First
               </p>
               <p className="text-xs text-blue-700 leading-relaxed mb-4">
-                Open the advertiser's page in a <strong>new tab</strong> and
-                complete the action again (follow, like, join, subscribe, etc.)
-                to make sure your new proof is correct. Then come back here for{" "}
-                <strong>Step 2</strong>.
+                Open the advertiser's page in a <strong>new tab</strong> and complete the action again (follow, like, join, subscribe, etc.) to make sure your new proof is correct. Then come back here for <strong>Step 2</strong>.
               </p>
               <div className="flex flex-col sm:flex-row gap-2">
                 <a
-                  href={task.link}
+                  href={info.link}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-3 text-xs font-bold text-white shadow transition-all"
@@ -373,14 +341,14 @@ export default function EarnerRejectedTaskResubmitPage({
                 </div>
               </div>
               <p className="text-[10px] text-blue-500 mt-3 break-all">
-                🔗 {task.link}
+                🔗 {info.link}
               </p>
             </div>
           </div>
           <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-blue-400">
             <div className="flex-1 border-t border-dashed border-blue-200" />
             <span className="flex items-center gap-1 shrink-0">
-              After redoing the task, scroll down to Step {task.link ? "2" : "1"}
+              After redoing the task, scroll down to Step 2
               <ArrowRight className="h-3 w-3" />
             </span>
             <div className="flex-1 border-t border-dashed border-blue-200" />
@@ -388,14 +356,14 @@ export default function EarnerRejectedTaskResubmitPage({
         </div>
       )}
 
-      {/* Step 2 (or Step 1 if no link) — Proof submission form */}
+      {/* Step 2 (or Step 1 if no link) — Corrected proof form */}
       <form
         onSubmit={handleSubmit}
         className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm space-y-5"
       >
         <div className="flex items-center gap-3 border-b border-gray-50 pb-4">
           <div className="shrink-0 h-9 w-9 rounded-full bg-red-500 text-white flex items-center justify-center font-black text-sm shadow">
-            {task.link ? "2" : <RefreshCw className="h-4 w-4" />}
+            {info.link ? "2" : <RefreshCw className="h-4 w-4" />}
           </div>
           <div>
             <h2 className="text-sm font-bold text-gray-800">
@@ -427,7 +395,7 @@ export default function EarnerRejectedTaskResubmitPage({
             value={proofText}
             onChange={(e) => setProofText(e.target.value)}
             placeholder="Provide your social media handle, username, account details, or any info needed to verify…"
-            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-none"
+            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:border-red-400 focus:outline-none"
           />
         </div>
 
@@ -435,31 +403,27 @@ export default function EarnerRejectedTaskResubmitPage({
         <div>
           <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1.5 flex items-center gap-1">
             <ImageIcon className="h-3 w-3 text-gray-400" />
-            Screenshot Proof
+            New Screenshot Proof
             <span className="ml-1 text-gray-400 normal-case font-normal">
               (required if no notes)
             </span>
           </label>
 
           {compressing ? (
-            <div className="rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/40 p-6 text-center">
-              <div className="mx-auto h-7 w-7 rounded-full border-2 border-blue-400 border-t-transparent animate-spin mb-2" />
-              <p className="text-[11px] font-bold text-blue-600">
-                Compressing image…
-              </p>
+            <div className="rounded-xl border-2 border-dashed border-red-300 bg-red-50/40 p-6 text-center">
+              <div className="mx-auto h-7 w-7 rounded-full border-2 border-red-400 border-t-transparent animate-spin mb-2" />
+              <p className="text-[11px] font-bold text-red-600">Compressing image…</p>
             </div>
           ) : !proofScreenshot ? (
             <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              onClick={() =>
-                document.getElementById("resubmit-file-input")?.click()
-              }
+              onClick={() => document.getElementById("resubmit-file-input")?.click()}
               className={`group relative rounded-xl border-2 border-dashed p-6 text-center cursor-pointer transition-all ${
                 isDragActive
                   ? "border-red-400 bg-red-50/40"
-                  : "border-gray-200 hover:border-red-400 hover:bg-slate-50/50"
+                  : "border-gray-200 hover:border-red-300 hover:bg-slate-50/50"
               }`}
             >
               <input
@@ -473,13 +437,11 @@ export default function EarnerRejectedTaskResubmitPage({
               />
               <UploadCloud
                 className={`mx-auto h-7 w-7 transition-transform duration-300 group-hover:-translate-y-0.5 ${
-                  isDragActive
-                    ? "text-red-400"
-                    : "text-gray-400 group-hover:text-red-400"
+                  isDragActive ? "text-red-500" : "text-gray-400 group-hover:text-red-400"
                 }`}
               />
               <p className="mt-2 text-[11px] font-bold text-gray-700">
-                Drag &amp; drop your screenshot here, or{" "}
+                Drag &amp; drop your new screenshot here, or{" "}
                 <span className="text-red-500 hover:underline">browse files</span>
               </p>
               <p className="text-[9px] text-gray-400 mt-0.5">
@@ -546,7 +508,7 @@ export default function EarnerRejectedTaskResubmitPage({
                   setFileSize("External URL");
                 }
               }}
-              className="text-[9px] font-bold text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
+              className="text-[9px] font-bold text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
             >
               Or paste a direct screenshot URL instead
             </button>

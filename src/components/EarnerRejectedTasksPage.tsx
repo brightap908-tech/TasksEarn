@@ -223,7 +223,7 @@ export default function EarnerRejectedTasksPage({
           <div className="p-5">
             <button
               onClick={() =>
-                navigate(`/earner/rejected-tasks/${sub.taskId}/resubmit`)
+                navigate(`/earner/rejected-tasks/${sub.submissionId}/resubmit`)
               }
               className="w-full rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 px-6 py-3.5 text-sm font-black text-white shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
             >

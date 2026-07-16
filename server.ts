@@ -1757,27 +1757,16 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       return res.status(400).json({ error: "Please provide proof details: notes, a link, or a screenshot." });
     }
 
-    // Open a transaction before reading task/slot state so we can lock the
-    // task row and prevent two concurrent submissions racing past the capacity
-    // check. filled_slots is intentionally NOT incremented here — the slot
-    // model increments it on approval only (see advertiser/admin review flows).
     await client.query("BEGIN");
 
-    const taskRes = await client.query(
-      "SELECT * FROM tasks WHERE id = $1 FOR UPDATE",
-      [taskId]
-    );
-    if (taskRes.rows.length === 0 || taskRes.rows[0].status !== TaskStatus.ACTIVE) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Task is not active or not found" });
-    }
-    const task = mapTask(taskRes.rows[0]);
-
-    // Screenshot is stored as-is (TEXT column supports base64 data URLs of any length).
-    // Store null instead of an empty string so the column value is meaningful.
     const screenshot = proofScreenshot || null;
     const finalProofText = proofText || "See uploaded screenshot proof.";
 
+    // ── Check for an existing submission FIRST ──────────────────────────────
+    // This determines the path: resubmission (Rejected → Pending) vs new submission.
+    // For resubmissions the slot is already reserved, so the task does NOT need
+    // to be Active — the earner deserves a chance to correct their proof even
+    // if the advertiser paused the campaign after the initial rejection.
     const alreadySub = await client.query(
       "SELECT id, status FROM submissions WHERE task_id = $1 AND earner_id = $2",
       [taskId, user.id]
@@ -1796,10 +1785,20 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         return res.status(400).json({ error: "You have already successfully completed this task." });
       }
 
-      // status === 'Rejected' — earner is allowed to correct and resubmit.
-      // The slot is reserved for this earner so no capacity check is needed.
-      // Update the existing record in-place so we keep one row per earner-task pair.
-      // The old proof screenshot is replaced with the new one (old image already nulled by cleanup).
+      // status === 'Rejected' — earner is resubmitting a corrected proof.
+      // Fetch the task WITHOUT requiring Active status — the slot is reserved.
+      const taskRes = await client.query(
+        "SELECT * FROM tasks WHERE id = $1 FOR UPDATE",
+        [taskId]
+      );
+      if (taskRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Task not found" });
+      }
+      const task = mapTask(taskRes.rows[0]);
+
+      // Update the existing record in-place (one row per earner-task pair).
+      // The old screenshot was already nulled by cleanupRejectedSubmissionProof.
       const resubmittedAt = new Date();
       await client.query(
         `UPDATE submissions
@@ -1813,7 +1812,6 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         [finalProofText, screenshot, resubmittedAt, existing.id]
       );
 
-      // Log resubmission in audit history
       await client.query(`
         INSERT INTO submission_history (id, submission_id, task_id, task_title, earner_id, earner_name, event_type, feedback, created_at)
         VALUES ($1,$2,$3,$4,$5,$6,'resubmitted','',$7)
@@ -1828,9 +1826,19 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       return res.status(200).json({ success: true, message: "Task resubmitted successfully", submission: mapSubmission(subRes.rows[0]) });
     }
 
-    // Capacity check for new earners: count approved slots (filledSlots) plus
-    // all currently pending or rejected-but-reserved slots to prevent overbooking.
-    // Earners retrying a rejected submission skip this — their slot is already counted.
+    // ── NEW SUBMISSION PATH ──────────────────────────────────────────────────
+    // No prior submission — task must be Active and have remaining capacity.
+    const taskRes = await client.query(
+      "SELECT * FROM tasks WHERE id = $1 FOR UPDATE",
+      [taskId]
+    );
+    if (taskRes.rows.length === 0 || taskRes.rows[0].status !== TaskStatus.ACTIVE) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Task is not active or not found" });
+    }
+    const task = mapTask(taskRes.rows[0]);
+
+    // Count occupied slots (Pending + Rejected-reserved) to prevent overbooking.
     const occupiedRes = await client.query(
       "SELECT COUNT(*) FROM submissions WHERE task_id=$1 AND status IN ('Pending','Rejected')",
       [taskId]
@@ -1920,6 +1928,61 @@ app.get("/api/earner/rejected-submissions", async (req, res) => {
     })));
   } catch (err) {
     console.error("Rejected submissions error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Returns all data needed to render the Fix & Resubmit page for a specific
+// rejected submission. Intentionally does NOT require the task to be Active —
+// the earner's slot is reserved and they should always be able to fix & retry.
+app.get("/api/earner/submissions/:submissionId/resubmit-info", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.EARNER) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query(`
+      SELECT
+        s.id             AS submission_id,
+        s.task_id,
+        s.task_title,
+        s.category,
+        s.reward,
+        s.feedback       AS rejection_reason,
+        s.rejected_at,
+        s.status,
+        t.description    AS task_description,
+        t.proof_requirements,
+        t.link           AS task_link,
+        t.earning_per_slot,
+        t.advertiser_name
+      FROM submissions s
+      JOIN tasks t ON t.id = s.task_id
+      WHERE s.id = $1
+        AND s.earner_id = $2
+        AND s.status    = 'Rejected'
+    `, [req.params.submissionId, user.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Rejected submission not found" });
+    }
+    const r = result.rows[0];
+    res.json({
+      submissionId:      r.submission_id,
+      taskId:            r.task_id,
+      taskTitle:         r.task_title,
+      category:          r.category,
+      reward:            parseFloat(r.reward) || 0,
+      rejectionReason:   r.rejection_reason || "",
+      rejectedAt:        r.rejected_at ? (r.rejected_at instanceof Date ? r.rejected_at.toISOString() : r.rejected_at) : null,
+      status:            r.status,
+      description:       r.task_description,
+      proofRequirements: r.proof_requirements || "",
+      link:              r.task_link || "",
+      earningPerSlot:    parseFloat(r.earning_per_slot) || 0,
+      advertiserName:    r.advertiser_name,
+    });
+  } catch (err) {
+    console.error("[Resubmit info] Error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });

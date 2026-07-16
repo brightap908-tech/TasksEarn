@@ -1557,7 +1557,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                     <div className="border-t border-red-50 px-5 py-4 flex items-center justify-between gap-3 bg-red-50/30">
                       <p className="text-[10px] text-gray-400 hidden sm:block">Fix the issue above and upload new proof to earn your reward.</p>
                       <button
-                        onClick={() => navigate(`/earner/tasks/${sub.taskId}/resubmit`)}
+                        onClick={() => navigate(`/earner/rejected-tasks/${sub.id}/resubmit`)}
                         className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-5 py-2.5 text-xs font-bold shadow-sm transition-all cursor-pointer shrink-0 w-full sm:w-auto justify-center sm:justify-start"
                       >
                         <RefreshCw className="h-3.5 w-3.5" />
