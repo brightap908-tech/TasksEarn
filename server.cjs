@@ -240,7 +240,7 @@ function mapSettings(row) {
     referralReward: parseFloat(row.referral_reward) || 0,
     withdrawalFee: parseFloat(row.withdrawal_fee) || 50,
     minWithdrawal: parseFloat(row.min_withdrawal) || 200,
-    minDeposit: parseFloat(row.min_deposit) || 1e3,
+    minDeposit: parseFloat(row.min_deposit) || 100,
     contactEmail: row.contact_email,
     contactPhone: row.contact_phone,
     telegramChannel: row.telegram_channel || void 0,
@@ -980,7 +980,7 @@ A submission is rejected if you did not follow the instructions, if you did not 
     ]);
     await client.query(`
       INSERT INTO settings (platform_name, referral_reward, withdrawal_fee, min_withdrawal, min_deposit, contact_email, contact_phone, telegram_channel, whatsapp_group)
-      VALUES ('TasksEarn', 0, 50, 200, 1000, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
+      VALUES ('TasksEarn', 0, 50, 200, 100, 'support@tasksearn.com', '09164444315', 'https://t.me/tasksearn_ng', 'https://wa.me/2349164444315')
     `);
     const pricing = getInitialPricing();
     for (const p of pricing) {
@@ -1091,6 +1091,7 @@ var NIGERIAN_BANK_LIST = [
   { name: "VFD Microfinance Bank", code: "566" }
 ];
 var app = (0, import_express.default)();
+app.use("/api/paystack/webhook", import_express.default.raw({ type: "application/json" }));
 app.use(import_express.default.json({ limit: "50mb" }));
 app.use(import_express.default.urlencoded({ limit: "50mb", extended: true }));
 app.get("/api/public/pages", async (_req, res) => {
@@ -2452,9 +2453,8 @@ app.post("/api/advertiser/deposit/initialize", async (req, res) => {
     if (!paystackKey) {
       return res.status(400).json({ error: "PAYSTACK_SECRET_KEY environment variable is not configured." });
     }
-    const origin = req.headers.referer || req.headers.origin || `http://localhost:${PORT}`;
-    const baseOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
-    const callbackUrl = `${baseOrigin}/#paystack_ref=${ref}`;
+    const appBaseUrl = (process.env.APP_BASE_URL || "https://tasksearn.name.ng").replace(/\/$/, "");
+    const callbackUrl = `${appBaseUrl}/#paystack_ref=${ref}`;
     const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: { "Authorization": `Bearer ${paystackKey}`, "Content-Type": "application/json" },
@@ -2531,6 +2531,101 @@ app.post("/api/advertiser/deposit/verify", async (req, res) => {
   } catch (err) {
     console.error("Deposit verify error:", err);
     res.status(500).json({ error: "Server error" });
+  }
+});
+app.post("/api/paystack/webhook", async (req, res) => {
+  res.status(200).send("OK");
+  try {
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackKey) {
+      console.error("[Webhook] PAYSTACK_SECRET_KEY not configured \u2014 cannot verify signature");
+      return;
+    }
+    const signature = req.headers["x-paystack-signature"];
+    if (!signature) {
+      console.warn("[Webhook] Request missing x-paystack-signature header \u2014 rejected");
+      return;
+    }
+    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
+    const expectedSig = import_crypto.default.createHmac("sha512", paystackKey).update(rawBody).digest("hex");
+    if (signature !== expectedSig) {
+      console.warn("[Webhook] Signature mismatch \u2014 request rejected");
+      return;
+    }
+    const event = JSON.parse(rawBody.toString("utf8"));
+    console.log(`[Webhook] Event received: ${event.event}`);
+    if (event.event !== "charge.success") return;
+    const data = event.data;
+    if (!data?.reference) {
+      console.warn("[Webhook] charge.success missing reference \u2014 skipping");
+      return;
+    }
+    const reference = data.reference;
+    const paystackAmountNaira = (data.amount ?? 0) / 100;
+    const paystackStatus = data.status ?? "";
+    if (paystackStatus !== "success") {
+      console.log(`[Webhook] charge.success event but data.status='${paystackStatus}' \u2014 skipping`);
+      return;
+    }
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const txRes = await client.query(
+        "SELECT * FROM transactions WHERE reference=$1 FOR UPDATE",
+        [reference]
+      );
+      if (txRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        console.warn(`[Webhook] No transaction found for reference: ${reference} \u2014 skipping`);
+        return;
+      }
+      const transaction = mapTransaction(txRes.rows[0]);
+      if (transaction.status === "Success" /* SUCCESS */) {
+        await client.query("ROLLBACK");
+        console.log(`[Webhook] Reference ${reference} already credited \u2014 ignoring duplicate webhook`);
+        return;
+      }
+      if (transaction.status === "Failed" /* FAILED */ || transaction.status === "Rejected" /* REJECTED */) {
+        await client.query("ROLLBACK");
+        console.warn(`[Webhook] Reference ${reference} already in terminal state '${transaction.status}' \u2014 skipping`);
+        return;
+      }
+      if (Math.abs(paystackAmountNaira - transaction.amount) > 0.01) {
+        await client.query(
+          "UPDATE transactions SET status='Failed', description = description || ' [WEBHOOK AMOUNT MISMATCH]' WHERE id=$1",
+          [transaction.id]
+        );
+        await client.query("COMMIT");
+        console.error(
+          `[Webhook] Amount mismatch on ${reference}: expected \u20A6${transaction.amount}, Paystack sent \u20A6${paystackAmountNaira} \u2014 transaction flagged`
+        );
+        return;
+      }
+      await client.query(
+        "UPDATE transactions SET status='Success' WHERE id=$1",
+        [transaction.id]
+      );
+      await client.query(
+        "UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2",
+        [transaction.amount, transaction.userId]
+      );
+      await client.query("COMMIT");
+      console.log(
+        `[Webhook] \u2713 \u20A6${transaction.amount.toLocaleString()} credited to user ${transaction.userId} (ref: ${reference})`
+      );
+      await notifyAdmin({
+        type: "deposit",
+        message: `Wallet funded: \u20A6${transaction.amount.toLocaleString()} credited to ${transaction.userName} via Paystack webhook (ref: ${reference})`,
+        referenceId: transaction.id
+      });
+    } catch (dbErr) {
+      await client.query("ROLLBACK");
+      console.error("[Webhook] DB error processing charge.success:", dbErr);
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("[Webhook] Unexpected error:", err);
   }
 });
 app.get("/api/user/transactions", async (req, res) => {
