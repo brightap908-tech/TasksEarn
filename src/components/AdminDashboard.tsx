@@ -736,7 +736,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   };
 
   const handleApproveWithdrawal = async (tx: Transaction) => {
-    if (!window.confirm(`Approve and send ₦${tx.amount.toLocaleString()} to ${tx.bankDetails?.accountName || tx.userName} via Paystack?\n\nBank: ${tx.bankDetails?.bankName}\nAccount: ${tx.bankDetails?.accountNumber}\n\nThis will deduct the earner's wallet and initiate the bank transfer.`)) return;
+    if (!window.confirm(`Approve withdrawal request of ₦${tx.amount.toLocaleString()} for ${tx.bankDetails?.accountName || tx.userName}?\n\nBank: ${tx.bankDetails?.bankName}\nAccount: ${tx.bankDetails?.accountNumber}\n\nStatus will change to Approved. Use "Mark as Paid" after you send the funds manually.`)) return;
 
     setWithdrawalActionLoading(tx.id);
     try {
@@ -746,7 +746,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         body: JSON.stringify({ action: "approve" })
       });
       if (res?.success) {
-        showWdMsg("success", `✓ Transfer initiated to ${tx.bankDetails?.accountName || tx.userName}. Paystack reference: ${res.transaction?.paystackTransferRef || "N/A (manual)"}`);
+        showWdMsg("success", `✓ Withdrawal approved for ${tx.bankDetails?.accountName || tx.userName}. Send the funds manually, then click "Mark as Paid".`);
       } else {
         showWdMsg("error", res?.error || "Approval failed. Please try again.");
       }
@@ -754,6 +754,29 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
       fetchStats();
     } catch (e) {
       showWdMsg("error", "Network error — please check connection and retry.");
+    } finally {
+      setWithdrawalActionLoading(null);
+    }
+  };
+
+  const handleMarkPaid = async (tx: Transaction) => {
+    if (!window.confirm(`Mark ₦${tx.amount.toLocaleString()} withdrawal for ${tx.bankDetails?.accountName || tx.userName} as Paid?\n\nOnly do this after you have successfully sent the funds to their bank account.`)) return;
+
+    setWithdrawalActionLoading(tx.id);
+    try {
+      const res = await apiFetch(`/api/admin/withdrawals/${tx.id}/mark-paid`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      if (res?.success) {
+        showWdMsg("success", `✓ Withdrawal for ${tx.bankDetails?.accountName || tx.userName} marked as Paid.`);
+      } else {
+        showWdMsg("error", res?.error || "Failed to mark as paid.");
+      }
+      fetchWithdrawals();
+      fetchStats();
+    } catch (e) {
+      showWdMsg("error", "Network error — please retry.");
     } finally {
       setWithdrawalActionLoading(null);
     }
@@ -1387,7 +1410,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
           { tab: "admin-tasks" as AdminTab, icon: <ListTodo className="h-4 w-4 text-slate-400" />, label: `Task Management (${adminTasksList.filter(t => t.status === TaskStatus.ACTIVE).length})` },
           { tab: "pricing" as AdminTab, icon: <Coins className="h-4 w-4 text-slate-400" />, label: "Pricing Settings" },
           { tab: "platform-earnings" as AdminTab, icon: <TrendingUp className="h-4 w-4 text-slate-400" />, label: "Wallet & Commission" },
-          { tab: "withdrawals" as AdminTab, icon: <CreditCard className="h-4 w-4 text-slate-400" />, label: `Withdrawals (${withdrawalsList.filter(w => w.status === TransactionStatus.PENDING).length})` },
+          { tab: "withdrawals" as AdminTab, icon: <CreditCard className="h-4 w-4 text-slate-400" />, label: `Withdrawals (${withdrawalsList.filter(w => w.status === TransactionStatus.PENDING || w.status === TransactionStatus.APPROVED).length})` },
           { tab: "announcements" as AdminTab, icon: <Megaphone className="h-4 w-4 text-slate-400" />, label: "Popup Messages" },
           { tab: "notifications" as AdminTab, icon: <Bell className="h-4 w-4 text-slate-400" />, label: `Notifications (${unreadCount})` },
           { tab: "reports" as AdminTab, icon: <TrendingUp className="h-4 w-4 text-slate-400" />, label: "Reports" },
@@ -2078,11 +2101,11 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         {/* TAB 4: WITHDRAWAL AUDITS */}
         {activeTab === "withdrawals" && (() => {
           const pending = withdrawalsList.filter(w => w.status === TransactionStatus.PENDING);
-          const history = withdrawalsList.filter(w => w.status !== TransactionStatus.PENDING);
 
           const statusBadge = (tx: Transaction) => {
             const map: Record<string, string> = {
               Success: "bg-green-50 text-green-700",
+              Paid: "bg-green-100 text-green-800",
               Approved: "bg-blue-50 text-blue-700",
               Pending: "bg-amber-50 text-amber-700",
               Rejected: "bg-red-50 text-red-600",
@@ -2094,6 +2117,9 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
               </span>
             );
           };
+
+          const approved = withdrawalsList.filter(w => w.status === TransactionStatus.APPROVED);
+          const history = withdrawalsList.filter(w => w.status !== TransactionStatus.PENDING && w.status !== TransactionStatus.APPROVED);
 
           return (
             <div className="space-y-5">
@@ -2124,7 +2150,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                       </div>
                     </div>
                     <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-xs text-amber-800">
-                      The earner's wallet was <strong>not deducted</strong> — their funds remain intact. Only provide a clear reason.
+                      The earner's deducted funds will be <strong>refunded</strong> to their wallet automatically. Provide a clear reason.
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Rejection Reason <span className="text-red-500">*</span></label>
@@ -2201,7 +2227,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                               className="flex-1 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2.5 flex items-center justify-center gap-1.5 disabled:opacity-60"
                             >
                               <Check className="h-3.5 w-3.5" />
-                              {isLoading ? "Processing Paystack Transfer…" : "Approve & Send via Paystack"}
+                              {isLoading ? "Approving…" : "Approve Request"}
                             </button>
                             <button
                               onClick={() => { setRejectingWithdrawal(tx); setRejectionReason(""); }}
@@ -2217,6 +2243,60 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                   </div>
                 )}
               </div>
+
+              {/* ── Approved — Awaiting Manual Payment ─────────────────── */}
+              {approved.length > 0 && (
+                <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-display text-sm font-bold text-gray-900">
+                      Approved — Awaiting Payment
+                      <span className="ml-2 rounded-full bg-blue-500 text-white text-[9px] font-black px-2 py-0.5">{approved.length}</span>
+                    </h3>
+                    <p className="text-[10px] text-blue-600">Send funds manually, then click Mark as Paid</p>
+                  </div>
+                  <div className="space-y-3">
+                    {approved.map((tx, idx) => {
+                      const isLoading = withdrawalActionLoading === tx.id;
+                      return (
+                        <div key={idx} className="rounded-xl border border-blue-100 bg-blue-50/30 p-4 text-xs space-y-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="font-bold text-gray-900 text-sm">{tx.userName}</p>
+                              <p className="text-gray-400 text-[10px] mt-0.5">Requested {new Date(tx.createdAt).toLocaleString()}</p>
+                            </div>
+                            <span className="font-mono font-black text-xl text-gray-900">₦{tx.amount.toLocaleString()}</span>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {[
+                              ["Bank", tx.bankDetails?.bankName || "—"],
+                              ["Account No.", tx.bankDetails?.accountNumber || "—"],
+                              ["Account Name", tx.bankDetails?.accountName || "—"],
+                            ].map(([label, value]) => (
+                              <div key={label} className="rounded-lg bg-white border border-gray-100 px-3 py-2">
+                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide mb-0.5">{label}</p>
+                                <p className="font-mono font-semibold text-gray-800 text-[11px]">{value}</p>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="flex gap-2 pt-1">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 border border-blue-200 px-3 py-1 text-[9px] font-black uppercase tracking-wide text-blue-700">
+                              <Check className="h-2.5 w-2.5" /> Approved
+                            </span>
+                            <button
+                              onClick={() => handleMarkPaid(tx)}
+                              disabled={isLoading}
+                              className="flex-1 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 flex items-center justify-center gap-1.5 disabled:opacity-60"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                              {isLoading ? "Updating…" : "Mark as Paid"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* ── History ───────────────────────────────────────────────── */}
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">

@@ -1096,18 +1096,26 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
               </div>
 
               {withdrawSuccess ? (
-                <div className="rounded-xl bg-blue-50 border border-blue-100 p-5 text-center animate-fadeIn space-y-2">
-                  <p className="text-sm font-bold text-blue-800">🎉 Payout Request Received!</p>
-                  <p className="text-xs text-blue-600 leading-relaxed">
-                    We have successfully queued your withdrawal to {bankName} (Acct: {accountNumber}) for verification audit. 
-                    Your account balance has been deducted accordingly.
+                <div className="rounded-xl bg-amber-50 border border-amber-200 p-5 text-center animate-fadeIn space-y-2">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <span className="text-lg">⏳</span>
+                    <p className="text-sm font-bold text-amber-900">Withdrawal Request Submitted</p>
+                  </div>
+                  <p className="text-xs text-amber-700 leading-relaxed">
+                    Your withdrawal request is awaiting admin approval. Funds will be sent after verification.
                   </p>
-                  <button 
-                    onClick={() => { setWithdrawSuccess(false); setIsVerified(false); setAccountName(""); setVerifySuccess(""); setVerifyError(""); setAccountNumber(""); }}
-                    className="mt-2 text-xs font-bold text-blue-700 hover:underline"
-                  >
-                    Submit Another Request
-                  </button>
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 border border-amber-200 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-amber-700 mt-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block"></span>
+                    Pending Admin Review
+                  </div>
+                  <div className="pt-1">
+                    <button 
+                      onClick={() => { setWithdrawSuccess(false); setIsVerified(false); setAccountName(""); setVerifySuccess(""); setVerifyError(""); setAccountNumber(""); }}
+                      className="mt-1 text-xs font-bold text-amber-700 hover:underline"
+                    >
+                      Submit Another Request
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <form onSubmit={handleWithdrawal} className="space-y-4 max-w-md">
@@ -1388,17 +1396,44 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                 <div className="text-center py-8 text-xs text-gray-400">No transactions yet. Complete tasks to start earning!</div>
               ) : (
                 <div className="divide-y divide-gray-50">
-                  {transactions.map((tx: any, idx: number) => (
-                    <div key={idx} className="flex justify-between items-center py-3">
-                      <div>
-                        <p className="text-xs font-semibold text-gray-800">{tx.description}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{new Date(tx.createdAt).toLocaleDateString()} · {tx.type}</p>
+                  {transactions.map((tx: any, idx: number) => {
+                    const isWithdrawal = tx.type === "Withdrawal";
+                    const wdLabel = isWithdrawal
+                      ? tx.status === "Pending" ? "Withdrawal Request - Pending"
+                      : tx.status === "Approved" ? "Withdrawal Approved - Awaiting Payment"
+                      : tx.status === "Paid" ? "Withdrawal Paid"
+                      : tx.status === "Rejected" ? "Withdrawal Rejected"
+                      : tx.status === "Success" ? "Withdrawal Successful"
+                      : tx.description
+                      : null;
+                    const displayLabel = isWithdrawal ? wdLabel : tx.description;
+                    const wdBadgeColor = isWithdrawal
+                      ? tx.status === "Pending" ? "bg-amber-100 text-amber-700 border-amber-200"
+                      : tx.status === "Approved" ? "bg-blue-100 text-blue-700 border-blue-200"
+                      : tx.status === "Paid" ? "bg-green-100 text-green-700 border-green-200"
+                      : tx.status === "Rejected" ? "bg-red-100 text-red-600 border-red-200"
+                      : "bg-gray-100 text-gray-500 border-gray-200"
+                      : null;
+                    return (
+                      <div key={idx} className="flex justify-between items-start py-3">
+                        <div className="flex-1 min-w-0 mr-3">
+                          <p className="text-xs font-semibold text-gray-800">{displayLabel}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">{new Date(tx.createdAt).toLocaleDateString()} · {tx.type}</p>
+                          {isWithdrawal && wdBadgeColor && (
+                            <span className={`inline-block mt-1 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${wdBadgeColor}`}>
+                              {tx.status}
+                            </span>
+                          )}
+                          {isWithdrawal && tx.status === "Rejected" && tx.rejectionReason && (
+                            <p className="text-[10px] text-red-500 mt-0.5 italic">Reason: {tx.rejectionReason}</p>
+                          )}
+                        </div>
+                        <span className={`font-mono text-sm font-bold shrink-0 ${tx.amount > 0 ? "text-blue-600" : "text-red-500"}`}>
+                          {tx.amount > 0 ? "+" : ""}₦{Math.abs(tx.amount).toLocaleString()}
+                        </span>
                       </div>
-                      <span className={`font-mono text-sm font-bold ${tx.amount > 0 ? "text-blue-600" : "text-red-500"}`}>
-                        {tx.amount > 0 ? "+" : ""}₦{Math.abs(tx.amount).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

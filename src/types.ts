@@ -77,7 +77,8 @@ export enum TransactionStatus {
   APPROVED = "Approved",
   REJECTED = "Rejected",
   SUCCESS = "Success",
-  FAILED = "Failed"
+  FAILED = "Failed",
+  PAID = "Paid"
 }
 
 export interface User {
