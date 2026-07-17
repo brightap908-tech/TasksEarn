@@ -230,6 +230,7 @@ function mapTransaction(row) {
     bankDetails: bankDetails || void 0,
     paystackTransferRef: row.paystack_transfer_ref || void 0,
     rejectionReason: row.rejection_reason || void 0,
+    withdrawalFee: row.withdrawal_fee != null ? parseFloat(row.withdrawal_fee) : void 0,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
   };
 }
@@ -728,6 +729,7 @@ async function bootstrapTables() {
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT FALSE`);
     await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS paystack_transfer_ref VARCHAR(150) NULL`);
     await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS rejection_reason TEXT NULL`);
+    await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS withdrawal_fee DECIMAL(10,2) NULL`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS admin_action_logs (
         id VARCHAR(50) PRIMARY KEY,
@@ -2132,9 +2134,9 @@ app.post("/api/earner/withdraw", async (req, res) => {
       const ref = "W-BANK-" + Math.floor(1e7 + Math.random() * 9e7);
       const bankDetails = JSON.stringify({ bankName, bankCode: bankCode ? String(bankCode) : null, accountNumber, accountName });
       await client.query(`
-        INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, bank_details, created_at)
-        VALUES ($1,$2,$3,$4,$5,'Withdrawal','Pending',$6,$7,$8,$9)
-      `, [txId, user.id, user.name, user.role, withdrawAmount, `Withdrawal to ${bankName} (${accountNumber})`, ref, bankDetails, /* @__PURE__ */ new Date()]);
+        INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, bank_details, withdrawal_fee, created_at)
+        VALUES ($1,$2,$3,$4,$5,'Withdrawal','Pending',$6,$7,$8,$9,$10)
+      `, [txId, user.id, user.name, user.role, withdrawAmount, `Withdrawal to ${bankName} (${accountNumber})`, ref, bankDetails, fee, /* @__PURE__ */ new Date()]);
       await client.query("COMMIT");
       const newBalance = currentBalance - totalDeduction;
       notifyAdmin({ type: "withdrawal", message: `New withdrawal request of \u20A6${withdrawAmount.toLocaleString()} from ${user.name}`, referenceId: txId });
@@ -3257,9 +3259,11 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
         return res.status(400).json({ error: "This withdrawal has already been reviewed" });
       }
       if (isReject) {
+        const storedFee = txSnapshot.withdrawalFee != null ? txSnapshot.withdrawalFee : 0;
+        const totalRefund = txSnapshot.amount + storedFee;
         await client.query(
           "UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2",
-          [txSnapshot.amount, txSnapshot.userId]
+          [totalRefund, txSnapshot.userId]
         );
         await client.query(
           "UPDATE transactions SET status='Rejected', rejection_reason=$1 WHERE id=$2",
