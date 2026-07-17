@@ -625,9 +625,23 @@ export default function UnifiedDashboard({
 
           <div>
             <label className="block text-xs font-semibold uppercase mb-2" style={{ color: "#64748B", letterSpacing: "0.06em" }}>
-              Slots: <span style={{ color: "#2563EB" }}>{cp.slots}</span>
+              Slots: <span style={{ color: "#2563EB" }}>{cp.slots.toLocaleString()}</span>
             </label>
-            <input type="range" min={10} max={1000} step={10} value={cp.slots} onChange={e => setCp(p => ({...p, slots: parseInt(e.target.value)}))} style={{ width: "100%", border: "none", padding: 0 }}/>
+            <input type="range" min={1} max={100000} step={100} value={cp.slots}
+              onChange={e => setCp(p => ({...p, slots: Math.max(1, Math.min(100000, parseInt(e.target.value) || 1))}))}
+              style={{ width: "100%", border: "none", padding: 0 }}/>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.625rem" }}>
+              <label className="text-[11px] font-semibold shrink-0" style={{ color: "#64748B" }}>Or type:</label>
+              <input
+                type="number" min={1} max={100000} value={cp.slots}
+                onChange={e => {
+                  const v = parseInt(e.target.value);
+                  setCp(p => ({...p, slots: isNaN(v) ? 1 : Math.max(1, Math.min(100000, v))}));
+                }}
+                style={{ flex: 1, background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0F172A" }}
+              />
+            </div>
+            <p className="text-[10px] mt-1" style={{ color: "#94A3B8" }}>Min 1 · Max 100,000</p>
           </div>
 
           {cp.platform && (
@@ -638,7 +652,7 @@ export default function UnifiedDashboard({
                   <p className="font-black text-base" style={{ color: "#7C3AED" }}>₦{costPerSlot}</p>
                 </div>
                 <div>
-                  <p className="text-xs" style={{ color: "#94A3B8" }}>Total ({cp.slots} slots)</p>
+                  <p className="text-xs" style={{ color: "#94A3B8" }}>Total ({cp.slots.toLocaleString()} slots)</p>
                   <p className="font-black text-base" style={{ color: "#7C3AED" }}>₦{totalCost.toLocaleString()}</p>
                 </div>
               </div>
