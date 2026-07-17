@@ -2109,7 +2109,7 @@ async function resolveBankAccount(accountNumber, bankName, bankCode) {
   const resolvedCode = bankCode || NIGERIAN_BANK_LIST.find((b) => b.name === bankName)?.code;
   const paystackKey = process.env.PAYSTACK_SECRET_KEY;
   if (!paystackKey) {
-    return { success: true, accountName: `Verified Account Holder (${bankName || "Nigerian Bank"})`, isSimulated: true };
+    return { success: true, accountName: `Verified Account Holder (${bankName || "Nigerian Bank"})`, bankCode: resolvedCode, isSimulated: true };
   }
   if (!resolvedCode) return { success: false, error: "Could not determine bank code for the selected bank" };
   try {
@@ -2118,7 +2118,7 @@ async function resolveBankAccount(accountNumber, bankName, bankCode) {
     });
     const data = await response.json();
     if (data?.status && data?.data) {
-      return { success: true, accountName: data.data.account_name };
+      return { success: true, accountName: data.data.account_name, bankCode: resolvedCode };
     }
     return { success: false, error: data.message || "Could not resolve bank account. Please check the details and try again." };
   } catch {
@@ -2176,9 +2176,25 @@ app.post("/api/verify-bank", async (req, res) => {
     const { accountNumber, bankCode, bankName } = req.body;
     const result = await resolveBankAccount(accountNumber, bankName, bankCode);
     if ("error" in result) return res.status(400).json({ error: result.error });
-    res.json({ success: true, accountName: result.accountName, isSimulated: result.isSimulated });
+    res.json({ success: true, accountName: result.accountName, bankCode: result.bankCode, isSimulated: result.isSimulated });
   } catch (err) {
     console.error("Verify bank error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.post("/api/earner/verify-account", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: "Authentication required" });
+    const { accountNumber, bankCode, bankName } = req.body;
+    if (!accountNumber || !bankName) {
+      return res.status(400).json({ error: "accountNumber and bankName are required" });
+    }
+    const result = await resolveBankAccount(String(accountNumber), bankName, bankCode ? String(bankCode) : void 0);
+    if ("error" in result) return res.status(400).json({ error: result.error });
+    res.json({ success: true, accountName: result.accountName, bankCode: result.bankCode, isSimulated: result.isSimulated });
+  } catch (err) {
+    console.error("Verify account error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
