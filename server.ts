@@ -2383,7 +2383,9 @@ app.post("/api/earner/withdraw", async (req, res) => {
     }
 
     // Never trust client-side verification state — re-resolve the account server-side.
-    const verification = await resolveBankAccount(String(accountNumber), bankName);
+    // Pass bankCode directly so the resolver never falls back to an error-prone name lookup
+    // (Paystack bank names like "OPay" differ from hardcoded list names like "OPay Microfinance Bank").
+    const verification = await resolveBankAccount(String(accountNumber), bankName, bankCode ? String(bankCode) : undefined);
     if ("error" in verification) {
       return res.status(400).json({ error: `Bank account verification failed: ${verification.error}` });
     }
@@ -2422,8 +2424,8 @@ app.post("/api/earner/withdraw", async (req, res) => {
 
     const txId = "tx-" + Math.random().toString(36).substr(2, 9);
     const ref = "W-BANK-" + Math.floor(10000000 + Math.random() * 90000000);
-    // Store bank_code in JSONB so the admin approval can create Paystack recipient without a lookup
-    const bankDetails = JSON.stringify({ bankName, bankCode: bankCode || undefined, accountNumber, accountName });
+    // Always persist bankCode — admin approval uses it to create the Paystack recipient.
+    const bankDetails = JSON.stringify({ bankName, bankCode: bankCode ? String(bankCode) : null, accountNumber, accountName });
 
     await pool.query(`
       INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, bank_details, created_at)

@@ -310,6 +310,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
         setAccountName(res.accountName);
         setIsVerified(true);
         setVerifySuccess(`✓ Verified: ${res.accountName}${res.isSimulated ? " (simulated)" : ""}`);
+        setWithdrawError(""); // clear any stale withdrawal submission error
       } else {
         setVerifyError(res?.error || "Verification failed. Please check account details.");
       }
