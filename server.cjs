@@ -147,6 +147,7 @@ function mapUser(row) {
     isVerified: row.is_verified === true || row.is_verified === "true",
     isActivated,
     walletBalance: parseFloat(row.wallet_balance) || 0,
+    adBalance: parseFloat(row.ad_balance) || 0,
     referralCode: row.referral_code || void 0,
     referredBy: row.referred_by || void 0,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
@@ -733,6 +734,10 @@ async function bootstrapTables() {
     await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS withdrawal_fee DECIMAL(10,2) NULL`);
     await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ NULL`);
     await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS marked_by_admin_id VARCHAR(50) NULL`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ad_balance DECIMAL(15,2) NOT NULL DEFAULT 0.00`);
+    await client.query(`UPDATE users SET ad_balance = wallet_balance, wallet_balance = 0 WHERE role = 'Advertiser' AND ad_balance = 0 AND wallet_balance > 0`);
+    await client.query(`UPDATE users SET role = 'User' WHERE role IN ('Earner', 'Advertiser')`);
+    await client.query(`UPDATE users SET referral_code = UPPER(SUBSTRING(name, 1, 4)) || (FLOOR(100 + random() * 900))::text WHERE referral_code IS NULL AND role != 'Admin'`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS admin_action_logs (
         id VARCHAR(50) PRIMARY KEY,
@@ -1199,7 +1204,7 @@ app.get("/api/public/settings", async (_req, res) => {
 });
 app.get("/api/public/stats", async (_req, res) => {
   try {
-    const earnersCount = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'Earner'");
+    const earnersCount = await pool.query("SELECT COUNT(*) FROM users WHERE role != 'Admin'");
     const tasksCount = await pool.query("SELECT COUNT(*) FROM tasks");
     const totalPaidOut = await pool.query(
       "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'Withdrawal' AND status = 'Success'"
@@ -1230,16 +1235,17 @@ app.get("/api/public/stats", async (_req, res) => {
   }
 });
 app.post("/api/auth/register", async (req, res) => {
-  const { name, email, password, role, referralCode } = req.body;
-  if (!name || !email || !password || !role) return res.status(400).json({ error: "All fields are required" });
+  const { name, email, password, referralCode } = req.body;
+  if (!name || !email || !password) return res.status(400).json({ error: "All fields are required" });
   try {
     const existing = await pool.query("SELECT id FROM users WHERE LOWER(email) = LOWER($1)", [email]);
     if (existing.rows.length > 0) return res.status(400).json({ error: "Email address already registered" });
-    const userReferralCode = role === "Earner" /* EARNER */ ? name.substring(0, 4).toUpperCase() + Math.floor(100 + Math.random() * 900) : null;
+    const role = "User";
+    const userReferralCode = name.substring(0, 4).toUpperCase() + Math.floor(100 + Math.random() * 900);
     const userId = "u-" + Math.random().toString(36).substr(2, 9);
     let referredByUserId;
-    if (referralCode && role === "Earner" /* EARNER */) {
-      const referrer = await pool.query("SELECT id FROM users WHERE referral_code = $1 AND role = 'Earner'", [referralCode]);
+    if (referralCode) {
+      const referrer = await pool.query("SELECT id FROM users WHERE referral_code = $1 AND role != 'Admin'", [referralCode]);
       if (referrer.rows.length > 0) referredByUserId = referrer.rows[0].id;
     }
     const verificationCode = Math.floor(1e5 + Math.random() * 9e5).toString();
@@ -1393,7 +1399,7 @@ app.get("/api/pricing", async (_req, res) => {
 app.get("/api/advertiser/pricing", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Advertiser" /* ADVERTISER */ && user.role !== "Admin" /* ADMIN */) {
+    if (!user || user.role === "Admin" /* ADMIN */) {
       return res.status(403).json({ error: "Access denied" });
     }
     const result = await pool.query(
@@ -1531,10 +1537,60 @@ app.delete("/api/admin/platforms/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+app.get("/api/user/dashboard", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const subs = await pool.query("SELECT * FROM submissions WHERE earner_id = $1", [user.id]);
+    const submissions = subs.rows.map(mapSubmission);
+    const approved = submissions.filter((s) => s.status === "Approved" /* APPROVED */);
+    const pending = submissions.filter((s) => s.status === "Pending" /* PENDING */);
+    const rejected = submissions.filter((s) => s.status === "Rejected" /* REJECTED */);
+    const totalEarned = approved.reduce((sum, s) => sum + s.reward, 0);
+    const campaignsRes = await pool.query("SELECT * FROM tasks WHERE advertiser_id = $1", [user.id]);
+    const campaigns = campaignsRes.rows.map(mapTask);
+    const activeCampaigns = campaigns.filter((t) => t.status === "Active" /* ACTIVE */).length;
+    const totalSpentRes = await pool.query(
+      "SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE user_id=$1 AND type='Campaign Spend' AND status='Success'",
+      [user.id]
+    );
+    const submittedTaskIds = submissions.map((s) => s.taskId);
+    let availableTasksCount = 0;
+    if (submittedTaskIds.length > 0) {
+      const avail = await pool.query(`SELECT COUNT(*) FROM tasks WHERE status='Active' AND id != ALL($1::varchar[])`, [submittedTaskIds]);
+      availableTasksCount = parseInt(avail.rows[0].count);
+    } else {
+      const avail = await pool.query("SELECT COUNT(*) FROM tasks WHERE status='Active'");
+      availableTasksCount = parseInt(avail.rows[0].count);
+    }
+    const refs = await pool.query("SELECT COUNT(*) FROM referrals WHERE referrer_id = $1", [user.id]);
+    const recentSubs = [...submissions].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()).slice(0, 5);
+    const recentTxRes = await pool.query("SELECT * FROM transactions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 5", [user.id]);
+    res.json({
+      walletBalance: user.walletBalance,
+      adBalance: user.adBalance || 0,
+      totalEarned,
+      totalSpent: parseFloat(totalSpentRes.rows[0].total),
+      approvedCount: approved.length,
+      pendingCount: pending.length,
+      rejectedCount: rejected.length,
+      availableTasksCount,
+      activeCampaigns,
+      campaignsCount: campaigns.length,
+      referralsCount: parseInt(refs.rows[0].count),
+      referralCode: user.referralCode,
+      recentSubmissions: recentSubs,
+      recentTransactions: recentTxRes.rows.map(mapTransaction)
+    });
+  } catch (err) {
+    console.error("User dashboard error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 app.get("/api/earner/dashboard", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const subs = await pool.query("SELECT * FROM submissions WHERE earner_id = $1", [user.id]);
     const submissions = subs.rows.map(mapSubmission);
     const approved = submissions.filter((s) => s.status === "Approved" /* APPROVED */);
@@ -1577,7 +1633,7 @@ app.get("/api/earner/dashboard", async (req, res) => {
 app.get("/api/earner/tasks", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const tasks = await pool.query(`
       SELECT t.*
       FROM tasks t
@@ -1602,7 +1658,7 @@ app.get("/api/earner/tasks", async (req, res) => {
 app.get("/api/earner/tasks/:id", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const taskId = req.params.id;
     const taskRes = await pool.query(`
       SELECT t.*, s.status AS sub_status, s.feedback AS sub_feedback
@@ -1624,7 +1680,7 @@ app.get("/api/earner/tasks/:id", async (req, res) => {
 app.post("/api/earner/tasks/:id/hide", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const taskId = req.params.id;
     const id = `ht_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     await pool.query(
@@ -1643,7 +1699,7 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
   const client = await pool.connect();
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const taskId = req.params.id;
     const { proofText, proofScreenshot } = req.body;
     if (!proofText && !proofScreenshot) {
@@ -1747,7 +1803,7 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
 app.get("/api/earner/submissions", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const result = await pool.query("SELECT * FROM submissions WHERE earner_id = $1 ORDER BY submitted_at DESC", [user.id]);
     res.json(result.rows.map(mapSubmission));
   } catch (err) {
@@ -1757,7 +1813,7 @@ app.get("/api/earner/submissions", async (req, res) => {
 app.get("/api/earner/rejected-submissions", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const result = await pool.query(`
       SELECT
         s.id             AS submission_id,
@@ -1800,7 +1856,7 @@ app.get("/api/earner/rejected-submissions", async (req, res) => {
 app.get("/api/earner/submissions/:submissionId/resubmit-info", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const result = await pool.query(`
       SELECT
         s.id             AS submission_id,
@@ -1849,7 +1905,7 @@ app.get("/api/earner/submissions/:submissionId/resubmit-info", async (req, res) 
 app.delete("/api/earner/submissions/:id", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -1890,7 +1946,7 @@ app.delete("/api/earner/submissions/:id", async (req, res) => {
 app.get("/api/earner/referrals", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const refs = await pool.query("SELECT * FROM referrals WHERE referrer_id = $1 ORDER BY created_at DESC", [user.id]);
     res.json({
       referralCode: user.referralCode,
@@ -1914,7 +1970,7 @@ app.get("/api/earner/referrals", async (req, res) => {
 app.get("/api/earner/notifications", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const result = await pool.query(
       "SELECT * FROM earner_notifications WHERE earner_id=$1 ORDER BY created_at DESC LIMIT 200",
       [user.id]
@@ -1927,7 +1983,7 @@ app.get("/api/earner/notifications", async (req, res) => {
 app.post("/api/earner/notifications/read-all", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     await pool.query("UPDATE earner_notifications SET read=true WHERE earner_id=$1", [user.id]);
     res.json({ success: true });
   } catch (err) {
@@ -1937,7 +1993,7 @@ app.post("/api/earner/notifications/read-all", async (req, res) => {
 app.post("/api/earner/notifications/:id/read", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const result = await pool.query(
       "UPDATE earner_notifications SET read=true WHERE id=$1 AND earner_id=$2 RETURNING *",
       [req.params.id, user.id]
@@ -1954,7 +2010,7 @@ app.get("/api/notifications/vapid-public-key", (_req, res) => {
 app.get("/api/notifications/status", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const result = await pool.query(
       "SELECT created_at FROM notification_subscriptions WHERE user_id=$1 AND active=true ORDER BY created_at DESC LIMIT 1",
       [user.id]
@@ -1972,7 +2028,7 @@ app.get("/api/notifications/status", async (req, res) => {
 app.post("/api/notifications/subscribe", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const { endpoint, p256dh, auth } = req.body;
     if (!endpoint || !p256dh || !auth) {
       return res.status(400).json({ error: "Missing subscription fields: endpoint, p256dh, auth" });
@@ -1994,7 +2050,7 @@ app.post("/api/notifications/subscribe", async (req, res) => {
 app.post("/api/notifications/unsubscribe", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     await pool.query(
       "UPDATE notification_subscriptions SET active=false, updated_at=NOW() WHERE user_id=$1",
       [user.id]
@@ -2129,7 +2185,7 @@ app.post("/api/verify-bank", async (req, res) => {
 app.post("/api/earner/withdraw", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Earner" /* EARNER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const { amount, bankName, bankCode, accountNumber, accountName } = req.body;
     if (!amount || !bankName || !accountNumber || !accountName) {
       return res.status(400).json({ error: "All bank transfer fields are required" });
@@ -2223,7 +2279,7 @@ app.post("/api/earner/withdraw", async (req, res) => {
 app.get("/api/advertiser/dashboard", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const tasks = await pool.query("SELECT * FROM tasks WHERE advertiser_id = $1 ORDER BY created_at DESC", [user.id]);
     const taskList = tasks.rows.map(mapTask);
     const taskIds = taskList.map((t) => t.id);
@@ -2257,7 +2313,7 @@ app.get("/api/advertiser/dashboard", async (req, res) => {
 app.get("/api/advertiser/tasks", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const result = await pool.query("SELECT * FROM tasks WHERE advertiser_id = $1 ORDER BY created_at DESC", [user.id]);
     res.json(result.rows.map(mapTask));
   } catch (err) {
@@ -2267,7 +2323,7 @@ app.get("/api/advertiser/tasks", async (req, res) => {
 app.post("/api/advertiser/tasks", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const { title, description, category, proofRequirements, link, totalSlots } = req.body;
     if (!title || !description || !category || !proofRequirements || !link || !totalSlots) {
       return res.status(400).json({ error: "All campaign fields are required" });
@@ -2297,21 +2353,21 @@ app.post("/api/advertiser/tasks", async (req, res) => {
     const finalCostPerSlot = pricing.costPerSlot;
     const finalEarningPerSlot = pricing.earningPerSlot;
     const totalCost = finalCostPerSlot * slots;
-    if (user.walletBalance < totalCost) {
-      return res.status(400).json({ error: `Insufficient balance. Campaign costs \u20A6${totalCost.toLocaleString()} (\u20A6${finalCostPerSlot}/slot).` });
+    if ((user.adBalance || 0) < totalCost) {
+      return res.status(400).json({ error: `Insufficient Ad Balance. Campaign costs \u20A6${totalCost.toLocaleString()} (\u20A6${finalCostPerSlot}/slot). Please fund your Ad Wallet first.` });
     }
     const client = await pool.connect();
     let newTask;
     let newBalance;
     try {
       await client.query("BEGIN");
-      const lockedUser = await client.query("SELECT wallet_balance FROM users WHERE id=$1 FOR UPDATE", [user.id]);
-      const currentBalance = parseFloat(lockedUser.rows[0].wallet_balance);
+      const lockedUser = await client.query("SELECT ad_balance FROM users WHERE id=$1 FOR UPDATE", [user.id]);
+      const currentBalance = parseFloat(lockedUser.rows[0].ad_balance);
       if (currentBalance < totalCost) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ error: `Insufficient balance. Campaign costs \u20A6${totalCost.toLocaleString()}.` });
+        return res.status(400).json({ error: `Insufficient Ad Balance. Campaign costs \u20A6${totalCost.toLocaleString()}.` });
       }
-      await client.query("UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2", [totalCost, user.id]);
+      await client.query("UPDATE users SET ad_balance = ad_balance - $1 WHERE id = $2", [totalCost, user.id]);
       const newTaskId = "task-" + Math.random().toString(36).substr(2, 9);
       const taskInsert = await client.query(`
         INSERT INTO tasks (id, title, description, category, proof_requirements, link, cost_per_slot, earning_per_slot, total_slots, filled_slots, status, advertiser_id, advertiser_name, created_at)
@@ -2350,7 +2406,7 @@ app.post("/api/advertiser/tasks", async (req, res) => {
 app.put("/api/advertiser/tasks/:id/toggle", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const taskRes = await pool.query("SELECT * FROM tasks WHERE id = $1 AND advertiser_id = $2", [req.params.id, user.id]);
     if (taskRes.rows.length === 0) return res.status(404).json({ error: "Task not found" });
     const task = mapTask(taskRes.rows[0]);
@@ -2366,7 +2422,7 @@ app.put("/api/advertiser/tasks/:id/toggle", async (req, res) => {
 app.delete("/api/advertiser/tasks/:id", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const client = await pool.connect();
     let refundAmount = 0;
     let newBalance = 0;
@@ -2381,7 +2437,7 @@ app.delete("/api/advertiser/tasks/:id", async (req, res) => {
       const remainingSlots = task.totalSlots - task.filledSlots;
       refundAmount = remainingSlots * task.costPerSlot;
       if (refundAmount > 0) {
-        await client.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2", [refundAmount, user.id]);
+        await client.query("UPDATE users SET ad_balance = ad_balance + $1 WHERE id=$2", [refundAmount, user.id]);
         await client.query(`
           INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
           VALUES ($1,$2,$3,$4,$5,'Deposit','Success',$6,$7,$8)
@@ -2416,7 +2472,7 @@ app.delete("/api/advertiser/tasks/:id", async (req, res) => {
 app.get("/api/advertiser/submissions/:id", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const taskRes = await pool.query("SELECT id FROM tasks WHERE advertiser_id = $1", [user.id]);
     const taskIds = taskRes.rows.map((r) => r.id);
     if (taskIds.length === 0) return res.status(404).json({ error: "Submission not found" });
@@ -2433,7 +2489,7 @@ app.get("/api/advertiser/submissions/:id", async (req, res) => {
 app.get("/api/advertiser/submissions", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const taskRes = await pool.query("SELECT id FROM tasks WHERE advertiser_id = $1", [user.id]);
     const taskIds = taskRes.rows.map((r) => r.id);
     if (taskIds.length === 0) return res.json([]);
@@ -2449,7 +2505,7 @@ app.get("/api/advertiser/submissions", async (req, res) => {
 app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const { status, feedback } = req.body;
     if (!status || status !== "Approved" /* APPROVED */ && status !== "Rejected" /* REJECTED */) {
       return res.status(400).json({ error: "Invalid status selection" });
@@ -2558,7 +2614,7 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
 app.post("/api/advertiser/deposit/initialize", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const settings = await getSettings();
     const depositAmount = parseFloat(req.body.amount);
     if (isNaN(depositAmount) || depositAmount < (settings?.minDeposit || 100)) {
@@ -2594,7 +2650,7 @@ app.post("/api/advertiser/deposit/initialize", async (req, res) => {
 app.post("/api/advertiser/deposit/verify", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== "Advertiser" /* ADVERTISER */) return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const { reference } = req.body;
     if (!reference) return res.status(400).json({ error: "Transaction reference is required" });
     const paystackKey = process.env.PAYSTACK_SECRET_KEY;
@@ -2634,10 +2690,10 @@ app.post("/api/advertiser/deposit/verify", async (req, res) => {
           return res.status(400).json({ error: "Transaction amount mismatch. Audit flag raised." });
         }
         await client.query("UPDATE transactions SET status='Success' WHERE id=$1", [transaction.id]);
-        await client.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2", [transaction.amount, user.id]);
+        await client.query("UPDATE users SET ad_balance = ad_balance + $1 WHERE id=$2", [transaction.amount, user.id]);
         await client.query("COMMIT");
-        const freshUser = await pool.query("SELECT wallet_balance FROM users WHERE id=$1", [user.id]);
-        return res.json({ success: true, walletBalance: parseFloat(freshUser.rows[0].wallet_balance), transaction: { ...transaction, status: "Success" } });
+        const freshUser = await pool.query("SELECT wallet_balance, ad_balance FROM users WHERE id=$1", [user.id]);
+        return res.json({ success: true, walletBalance: parseFloat(freshUser.rows[0].wallet_balance), adBalance: parseFloat(freshUser.rows[0].ad_balance), transaction: { ...transaction, status: "Success" } });
       } else {
         await client.query("UPDATE transactions SET status='Failed' WHERE id=$1", [transaction.id]);
         await client.query("COMMIT");
@@ -2727,7 +2783,7 @@ app.post("/api/paystack/webhook", async (req, res) => {
         [transaction.id]
       );
       await client.query(
-        "UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2",
+        "UPDATE users SET ad_balance = ad_balance + $1 WHERE id=$2",
         [transaction.amount, transaction.userId]
       );
       await client.query("COMMIT");
@@ -2846,8 +2902,8 @@ app.get("/api/admin/dashboard", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const [earners, advertisers, tasks, totalEarned, pendingWd, totalDep, recentUsers, recentTx, settings] = await Promise.all([
-      pool.query("SELECT COUNT(*) FROM users WHERE role='Earner'"),
-      pool.query("SELECT COUNT(*) FROM users WHERE role='Advertiser'"),
+      pool.query("SELECT COUNT(*) FROM users WHERE role != 'Admin'"),
+      pool.query("SELECT COUNT(*) FROM users WHERE role != 'Admin'"),
       pool.query("SELECT COUNT(*) FROM tasks"),
       pool.query("SELECT COALESCE(SUM(reward),0) AS total FROM submissions WHERE status='Approved'"),
       pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE type='Withdrawal' AND status='Pending'"),
@@ -3139,7 +3195,7 @@ app.delete("/api/admin/tasks/:id", async (req, res) => {
           "tx-" + Math.random().toString(36).substr(2, 9),
           task.advertiserId,
           task.advertiserName,
-          "Advertiser" /* ADVERTISER */,
+          "User",
           refundAmount,
           `Refund for campaign deleted by admin: ${task.title} (${remainingSlots} slots)`,
           "T-REFUND-ADM-" + Math.floor(1e7 + Math.random() * 9e7),
@@ -4181,7 +4237,7 @@ async function notifyEarners(task) {
     const platform = getPlatformForCategory(task.category);
     const message = `\u{1F514} New task available! "${task.title}" \u2014 Earn \u20A6${task.earningPerSlot.toLocaleString()} on ${platform}. Complete it now!`;
     const now = /* @__PURE__ */ new Date();
-    const earnersRes = await pool.query("SELECT id FROM users WHERE role='Earner'");
+    const earnersRes = await pool.query("SELECT id FROM users WHERE role != 'Admin' AND is_verified = true");
     if (earnersRes.rows.length === 0) return;
     for (const earner of earnersRes.rows) {
       const nid = "en-" + Math.random().toString(36).substr(2, 9);
