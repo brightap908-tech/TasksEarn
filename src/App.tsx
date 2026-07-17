@@ -705,7 +705,7 @@ export default function App() {
   ];
 
   return (
-    <div className="flex min-h-screen flex-col font-sans" style={{ background: isDarkMode ? "#0b1220" : "#FFFFFF", color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>
+    <div className="flex min-h-screen flex-col font-sans" style={{ background: isDarkMode ? "#0b1220" : "#F8FAFC", color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>
 
       {loginPopup && (
         <LoginPopupModal announcement={loginPopup} onClose={() => setLoginPopup(null)} />
@@ -727,7 +727,7 @@ export default function App() {
       <RouteProgressBar />
 
       {/* Main Dynamic Content View Stage */}
-      <main className={`flex-grow ${user ? "pb-16 md:pb-0" : ""}`}>
+      <main className={`flex-grow ${user ? "pb-20 md:pb-0" : ""}`}>
 
         <AnimatePresence mode="wait" initial={false}>
         <motion.div

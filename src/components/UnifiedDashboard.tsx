@@ -26,16 +26,16 @@ interface Props {
 }
 
 const SIDEBAR_ITEMS = [
-  { id: "overview", label: "Dashboard", icon: LayoutDashboard },
-  { id: "tasks", label: "Available Tasks", icon: ClipboardList },
-  { id: "my-tasks", label: "My Tasks", icon: CheckSquare },
-  { id: "create-campaign", label: "Create Campaign", icon: Megaphone },
-  { id: "my-campaigns", label: "My Campaigns", icon: BarChart2 },
-  { id: "wallet", label: "Wallet", icon: Wallet },
-  { id: "withdraw", label: "Withdraw", icon: ArrowDownCircle },
-  { id: "referrals", label: "Referrals", icon: Users },
-  { id: "notifications", label: "Notifications", icon: Bell },
-  { id: "profile", label: "Profile & Settings", icon: Settings },
+  { id: "overview",         label: "Dashboard",         icon: LayoutDashboard },
+  { id: "tasks",            label: "Available Tasks",   icon: ClipboardList },
+  { id: "my-tasks",         label: "My Tasks",          icon: CheckSquare },
+  { id: "create-campaign",  label: "Create Campaign",   icon: Megaphone },
+  { id: "my-campaigns",     label: "My Campaigns",      icon: BarChart2 },
+  { id: "wallet",           label: "Wallet",            icon: Wallet },
+  { id: "withdraw",         label: "Withdraw",          icon: ArrowDownCircle },
+  { id: "referrals",        label: "Referrals",         icon: Users },
+  { id: "notifications",    label: "Notifications",     icon: Bell },
+  { id: "profile",          label: "Profile & Settings", icon: Settings },
 ];
 
 const BANKS = [
@@ -73,49 +73,32 @@ export default function UnifiedDashboard({
   const [loading, setLoading] = React.useState(false);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
 
-  // Overview
-  const [dashData, setDashData] = React.useState<any>(null);
-
-  // Tasks
-  const [tasks, setTasks] = React.useState<any[]>([]);
-  const [taskFilter, setTaskFilter] = React.useState("All");
-
-  // My tasks
-  const [submissions, setSubmissions] = React.useState<any[]>([]);
-  const [subTab, setSubTab] = React.useState<"All"|"Pending"|"Approved"|"Rejected">("All");
-
-  // Create campaign
-  const [cp, setCp] = React.useState({ platform:"", action:"", title:"", desc:"", link:"", proof:"", slots:100 });
+  const [dashData, setDashData]         = React.useState<any>(null);
+  const [tasks, setTasks]               = React.useState<any[]>([]);
+  const [taskFilter, setTaskFilter]     = React.useState("All");
+  const [submissions, setSubmissions]   = React.useState<any[]>([]);
+  const [subTab, setSubTab]             = React.useState<"All"|"Pending"|"Approved"|"Rejected">("All");
+  const [cp, setCp]                     = React.useState({ platform:"", action:"", title:"", desc:"", link:"", proof:"", slots:100 });
   const [campaignPricing, setCampaignPricing] = React.useState<any[]>([]);
   const [campaignSubmitting, setCampaignSubmitting] = React.useState(false);
-
-  // My campaigns
-  const [campaigns, setCampaigns] = React.useState<any[]>([]);
-  const [camTab, setCamTab] = React.useState<"All"|"Active"|"Paused"|"Completed">("All");
-  const [expandedCam, setExpandedCam] = React.useState<string|null>(null);
-  const [camSubs, setCamSubs] = React.useState<Record<string,any[]>>({});
-
-  // Wallet
+  const [campaigns, setCampaigns]       = React.useState<any[]>([]);
+  const [camTab, setCamTab]             = React.useState<"All"|"Active"|"Paused"|"Completed">("All");
+  const [expandedCam, setExpandedCam]   = React.useState<string|null>(null);
+  const [camSubs, setCamSubs]           = React.useState<Record<string,any[]>>({});
   const [transactions, setTransactions] = React.useState<any[]>([]);
-  const [txTab, setTxTab] = React.useState<"All"|"Deposits"|"Earnings"|"Withdrawals"|"Spending">("All");
-
-  // Withdraw
-  const [wd, setWd] = React.useState({ amount:"", bankName:"", bankCode:"", accountNumber:"", accountName:"" });
-  const [wdLoading, setWdLoading] = React.useState(false);
-  const [wdVerifying, setWdVerifying] = React.useState(false);
-  const [wdVerified, setWdVerified] = React.useState(false);
-  const [pendingWds, setPendingWds] = React.useState<any[]>([]);
-
-  // Referrals
-  const [referrals, setReferrals] = React.useState<any[]>([]);
-  const [refStats, setRefStats] = React.useState<any>(null);
-  const [copied, setCopied] = React.useState(false);
-
-  // Profile
-  const [prof, setProf] = React.useState({ name: user.name, username: user.username||"", phone: user.phone||"", country: user.country||"", business: user.businessName||"" });
-  const [profLoading, setProfLoading] = React.useState(false);
-  const [pw, setPw] = React.useState({ old:"", new:"", confirm:"" });
-  const [pwLoading, setPwLoading] = React.useState(false);
+  const [txTab, setTxTab]               = React.useState<"All"|"Deposits"|"Earnings"|"Withdrawals"|"Spending">("All");
+  const [wd, setWd]                     = React.useState({ amount:"", bankName:"", bankCode:"", accountNumber:"", accountName:"" });
+  const [wdLoading, setWdLoading]       = React.useState(false);
+  const [wdVerifying, setWdVerifying]   = React.useState(false);
+  const [wdVerified, setWdVerified]     = React.useState(false);
+  const [pendingWds, setPendingWds]     = React.useState<any[]>([]);
+  const [referrals, setReferrals]       = React.useState<any[]>([]);
+  const [refStats, setRefStats]         = React.useState<any>(null);
+  const [copied, setCopied]             = React.useState(false);
+  const [prof, setProf]                 = React.useState({ name: user.name, username: user.username||"", phone: user.phone||"", country: user.country||"", business: user.businessName||"" });
+  const [profLoading, setProfLoading]   = React.useState(false);
+  const [pw, setPw]                     = React.useState({ old:"", new:"", confirm:"" });
+  const [pwLoading, setPwLoading]       = React.useState(false);
 
   const unreadCount = earnerNotifications.filter(n => !n.read).length;
 
@@ -167,35 +150,46 @@ export default function UnifiedDashboard({
 
   const fmt = (n: number) => `₦${(n||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+  // ─── Card style helpers ──────────────────────────────────────────────────────
+  const card = (extra?: React.CSSProperties): React.CSSProperties => ({
+    background: isDarkMode ? "rgba(255,255,255,0.04)" : "#ffffff",
+    border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0",
+    borderRadius: "1rem",
+    boxShadow: isDarkMode ? "none" : "0 2px 12px rgba(15,23,42,0.05)",
+    ...extra,
+  });
+
   // ─── Section Renderers ──────────────────────────────────────────────────────
 
   const renderOverview = () => (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0f172a", fontFamily: "var(--font-display)" }}>
-          Welcome back, {user.name.split(" ")[0]} 👋
+    <div className="space-y-4 animate-fadeIn">
+      {/* Welcome banner */}
+      <div className="rounded-2xl p-4" style={{ background: "linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)", boxShadow: "0 6px 20px rgba(37,99,235,0.30)" }}>
+        <p className="text-xs font-semibold text-blue-200">Welcome back 👋</p>
+        <h1 className="text-lg font-black text-white mt-0.5" style={{ fontFamily: "var(--font-display)", letterSpacing: "-0.02em" }}>
+          {user.name.split(" ")[0]}
         </h1>
-        <p className="text-sm mt-1" style={{ color: "#64748b" }}>Your earnings and campaign overview</p>
+        <p className="text-xs text-blue-200 mt-1">Your earnings & campaign overview</p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      {/* Stats Grid — 2 cols on mobile, 3 on desktop */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.625rem" }}>
         {[
-          { label: "Earnings Balance", value: fmt(user.walletBalance), color: "#2563EB", icon: <Wallet className="h-5 w-5"/>, action: () => navTo("withdraw"), actionLabel: "Withdraw" },
-          { label: "Ad Balance", value: fmt(adBal), color: "#7c3aed", icon: <Megaphone className="h-5 w-5"/>, action: () => onOpenDeposit(), actionLabel: "Fund" },
-          { label: "Available Tasks", value: dashData?.availableTasksCount ?? "—", color: "#0891b2", icon: <ClipboardList className="h-5 w-5"/>, action: () => navTo("tasks"), actionLabel: "Browse" },
-          { label: "Active Campaigns", value: dashData?.activeCampaigns ?? "—", color: "#059669", icon: <BarChart2 className="h-5 w-5"/>, action: () => navTo("my-campaigns"), actionLabel: "Manage" },
-          { label: "Total Earned", value: fmt(dashData?.totalEarned || 0), color: "#16a34a", icon: <TrendingUp className="h-5 w-5"/>, action: () => navTo("my-tasks"), actionLabel: "View" },
-          { label: "Total Spent", value: fmt(dashData?.totalSpent || 0), color: "#dc2626", icon: <TrendingDown className="h-5 w-5"/>, action: () => navTo("wallet"), actionLabel: "History" },
-        ].map(stat => (
-          <div key={stat.label} className="rounded-2xl p-4 space-y-3" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#fff", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0", boxShadow: isDarkMode ? "none" : "0 2px 8px rgba(15,23,42,0.04)" }}>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold" style={{ color: "#94a3b8" }}>{stat.label}</span>
-              <span className="p-1.5 rounded-lg" style={{ background: `${stat.color}20`, color: stat.color }}>{stat.icon}</span>
+          { label: "Earnings",       value: fmt(user.walletBalance),          color: "#2563EB", bg: "rgba(37,99,235,0.08)",   icon: <Wallet className="h-4 w-4"/>,       action: () => navTo("withdraw"),       actionLabel: "Withdraw" },
+          { label: "Ad Balance",     value: fmt(adBal),                       color: "#7C3AED", bg: "rgba(124,58,237,0.08)",  icon: <Megaphone className="h-4 w-4"/>,    action: () => onOpenDeposit(),         actionLabel: "Fund" },
+          { label: "Tasks",          value: dashData?.availableTasksCount ?? "—", color: "#0891B2", bg: "rgba(8,145,178,0.08)",  icon: <ClipboardList className="h-4 w-4"/>, action: () => navTo("tasks"),         actionLabel: "Browse" },
+          { label: "Campaigns",      value: dashData?.activeCampaigns ?? "—", color: "#059669", bg: "rgba(5,150,105,0.08)",  icon: <BarChart2 className="h-4 w-4"/>,    action: () => navTo("my-campaigns"),   actionLabel: "Manage" },
+          { label: "Total Earned",   value: fmt(dashData?.totalEarned || 0),  color: "#16A34A", bg: "rgba(22,163,74,0.08)",  icon: <TrendingUp className="h-4 w-4"/>,   action: () => navTo("my-tasks"),       actionLabel: "View" },
+          { label: "Total Spent",    value: fmt(dashData?.totalSpent || 0),   color: "#DC2626", bg: "rgba(220,38,38,0.08)",  icon: <TrendingDown className="h-4 w-4"/>, action: () => navTo("wallet"),         actionLabel: "History" },
+        ].map((stat, i) => (
+          <div key={stat.label} className="rounded-2xl p-3 flex flex-col gap-2 animate-fadeIn" style={{ ...card(), animationDelay: `${i * 0.05}s` }}>
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-[11px] font-semibold leading-tight" style={{ color: "#94A3B8" }}>{stat.label}</span>
+              <span className="p-1.5 rounded-lg shrink-0" style={{ background: stat.bg, color: stat.color }}>{stat.icon}</span>
             </div>
-            <p className="text-lg font-black font-mono" style={{ color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>{stat.value}</p>
-            <button onClick={stat.action} className="text-xs font-bold flex items-center gap-1 cursor-pointer" style={{ color: stat.color }}>
-              {stat.actionLabel} <ArrowRight className="h-3 w-3"/>
+            <p className="text-sm font-black font-mono leading-none break-all" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>{stat.value}</p>
+            <button onClick={stat.action} className="text-[11px] font-bold flex items-center gap-1 cursor-pointer" style={{ color: stat.color, background: "none", border: "none", padding: 0, minHeight: "auto" }}>
+              {stat.actionLabel} <ArrowRight className="h-2.5 w-2.5"/>
             </button>
           </div>
         ))}
@@ -203,39 +197,39 @@ export default function UnifiedDashboard({
 
       {/* Submission Stats */}
       {dashData && (
-        <div className="rounded-2xl p-4" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#fff", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
-          <h3 className="text-sm font-bold mb-3" style={{ color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>Task Submissions</h3>
-          <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-2xl p-4" style={card()}>
+          <h3 className="text-sm font-bold mb-3" style={{ color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>Task Submissions</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem" }}>
             {[
-              { label: "Approved", count: dashData.approvedCount, color: "#22c55e" },
-              { label: "Pending", count: dashData.pendingCount, color: "#f59e0b" },
-              { label: "Rejected", count: dashData.rejectedCount, color: "#ef4444" },
+              { label: "Approved", count: dashData.approvedCount, color: "#22c55e", bg: "rgba(34,197,94,0.08)" },
+              { label: "Pending",  count: dashData.pendingCount,  color: "#f59e0b", bg: "rgba(245,158,11,0.08)" },
+              { label: "Rejected", count: dashData.rejectedCount, color: "#ef4444", bg: "rgba(239,68,68,0.08)" },
             ].map(s => (
-              <div key={s.label} className="text-center p-3 rounded-xl" style={{ background: `${s.color}10` }}>
-                <p className="text-2xl font-black" style={{ color: s.color }}>{s.count}</p>
-                <p className="text-xs font-semibold mt-1" style={{ color: "#94a3b8" }}>{s.label}</p>
+              <div key={s.label} className="text-center p-2.5 rounded-xl" style={{ background: s.bg }}>
+                <p className="text-xl font-black leading-none" style={{ color: s.color }}>{s.count}</p>
+                <p className="text-[11px] font-semibold mt-1 leading-none" style={{ color: "#94A3B8" }}>{s.label}</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Recent Activity */}
+      {/* Recent Transactions */}
       {dashData?.recentTransactions?.length > 0 && (
-        <div className="rounded-2xl p-4" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#fff", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
+        <div className="rounded-2xl p-4" style={card()}>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold" style={{ color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>Recent Transactions</h3>
-            <button onClick={() => navTo("wallet")} className="text-xs font-bold cursor-pointer" style={{ color: "#2563EB" }}>View All</button>
+            <h3 className="text-sm font-bold" style={{ color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>Recent Transactions</h3>
+            <button onClick={() => navTo("wallet")} className="text-xs font-bold cursor-pointer" style={{ color: "#2563EB", background: "none", border: "none", padding: 0, minHeight: "auto" }}>View All</button>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-0">
             {dashData.recentTransactions.slice(0, 5).map((tx: any) => (
-              <div key={tx.id} className="flex items-center justify-between py-2" style={{ borderBottom: isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1px solid #F1F5F9" }}>
-                <div>
-                  <p className="text-xs font-semibold" style={{ color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>{tx.type}</p>
-                  <p className="text-[10px]" style={{ color: "#94a3b8" }}>{new Date(tx.createdAt).toLocaleDateString()}</p>
+              <div key={tx.id} className="flex items-center justify-between py-2.5" style={{ borderBottom: isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1px solid #F1F5F9" }}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold truncate" style={{ color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>{tx.type}</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: "#94A3B8" }}>{new Date(tx.createdAt).toLocaleDateString()}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold font-mono" style={{ color: tx.type === "Task Earnings" || tx.type === "Referral Bonus" || tx.type === "Deposit" ? "#22c55e" : "#ef4444" }}>
+                <div className="text-right ml-2 shrink-0">
+                  <p className="text-xs font-bold font-mono" style={{ color: tx.type === "Task Earnings" || tx.type === "Referral Bonus" || tx.type === "Deposit" ? "#22c55e" : "#ef4444" }}>
                     {tx.type === "Task Earnings" || tx.type === "Referral Bonus" || tx.type === "Deposit" ? "+" : "-"}{fmt(tx.amount)}
                   </p>
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: statusColor(tx.status), background: statusBg(tx.status) }}>{tx.status}</span>
@@ -246,15 +240,15 @@ export default function UnifiedDashboard({
         </div>
       )}
 
-      {/* Quick actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <button onClick={() => navTo("tasks")} className="rounded-2xl p-4 text-left cursor-pointer transition-all hover:opacity-80" style={{ background: "linear-gradient(135deg,#2563EB,#1d4ed8)", color: "#fff" }}>
-          <ClipboardList className="h-5 w-5 mb-2"/>
+      {/* Quick Actions */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.625rem" }}>
+        <button onClick={() => navTo("tasks")} className="rounded-2xl p-4 text-left cursor-pointer transition-all hover:opacity-90 animate-fadeIn" style={{ background: "linear-gradient(135deg,#2563EB,#1D4ED8)", color: "#fff", animationDelay: "0.1s" }}>
+          <ClipboardList className="h-5 w-5 mb-2 opacity-90"/>
           <p className="text-sm font-bold">Browse Tasks</p>
-          <p className="text-[11px] opacity-70 mt-0.5">Earn money completing tasks</p>
+          <p className="text-[11px] opacity-70 mt-0.5">Earn completing tasks</p>
         </button>
-        <button onClick={() => navTo("create-campaign")} className="rounded-2xl p-4 text-left cursor-pointer transition-all hover:opacity-80" style={{ background: "linear-gradient(135deg,#7c3aed,#6d28d9)", color: "#fff" }}>
-          <Plus className="h-5 w-5 mb-2"/>
+        <button onClick={() => navTo("create-campaign")} className="rounded-2xl p-4 text-left cursor-pointer transition-all hover:opacity-90 animate-fadeIn" style={{ background: "linear-gradient(135deg,#7C3AED,#6D28D9)", color: "#fff", animationDelay: "0.15s" }}>
+          <Plus className="h-5 w-5 mb-2 opacity-90"/>
           <p className="text-sm font-bold">Create Campaign</p>
           <p className="text-[11px] opacity-70 mt-0.5">Grow your social presence</p>
         </button>
@@ -267,60 +261,65 @@ export default function UnifiedDashboard({
     const filtered = taskFilter === "All" ? tasks : tasks.filter((t:any) => t.category?.startsWith(taskFilter));
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 animate-fadeIn">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>Available Tasks</h2>
-          <button onClick={() => loadSection("tasks")} className="p-2 rounded-xl cursor-pointer" style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
-            <RefreshCw className="h-4 w-4" style={{ color: "#94a3b8" }}/>
+          <h2 className="text-base font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>Available Tasks</h2>
+          <button onClick={() => loadSection("tasks")} className="p-2 rounded-xl cursor-pointer" style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0", minHeight: "auto" }}>
+            <RefreshCw className="h-4 w-4" style={{ color: "#94A3B8" }}/>
           </button>
         </div>
 
-        {/* Platform filter */}
-        <div className="flex gap-2 flex-wrap">
+        {/* Platform filter chips */}
+        <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap" }}>
           {platformOptions.slice(0, 8).map(p => (
             <button key={p} onClick={() => setTaskFilter(p)}
-              className="rounded-full px-3 py-1 text-xs font-bold cursor-pointer transition-all"
-              style={taskFilter === p ? { background: "#2563EB", color: "#fff" } : { background: isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC", color: isDarkMode ? "#94a3b8" : "#64748b", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.10)" : "#E2E8F0") }}>
+              style={{
+                borderRadius: "9999px", padding: "0.25rem 0.75rem", fontSize: "0.75rem", fontWeight: 700,
+                cursor: "pointer", minHeight: "auto", border: "1px solid",
+                background: taskFilter === p ? "#2563EB" : (isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC"),
+                color: taskFilter === p ? "#fff" : (isDarkMode ? "#94A3B8" : "#64748B"),
+                borderColor: taskFilter === p ? "#2563EB" : (isDarkMode ? "rgba(255,255,255,0.10)" : "#E2E8F0"),
+              }}>
               {p}
             </button>
           ))}
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-4" style={{ borderColor: "rgba(37,99,235,0.20)", borderTopColor: "#2563EB" }}/></div>
+          <div className="flex justify-center py-12"><div className="h-7 w-7 animate-spin rounded-full border-4" style={{ borderColor: "rgba(37,99,235,0.20)", borderTopColor: "#2563EB" }}/></div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-16" style={{ color: "#94a3b8" }}>
-            <ClipboardList className="h-12 w-12 mx-auto mb-3 opacity-30"/>
-            <p className="font-semibold">No tasks available right now</p>
+          <div className="text-center py-12" style={{ color: "#94A3B8" }}>
+            <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-25"/>
+            <p className="font-semibold text-sm">No tasks available right now</p>
             <p className="text-xs mt-1">Check back soon for new opportunities</p>
           </div>
         ) : (
-          <div className="grid gap-3">
+          <div style={{ display: "grid", gap: "0.625rem" }}>
             {filtered.map((task:any) => {
               const alreadyDone = task.submissionStatus && task.submissionStatus !== "Rejected";
               return (
-                <div key={task.id} className="rounded-2xl p-4" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#fff", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
-                  <div className="flex items-start justify-between gap-3">
+                <div key={task.id} className="rounded-2xl p-3.5" style={card()}>
+                  <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(37,99,235,0.10)", color: "#2563EB" }}>{task.category}</span>
                         {task.filledSlots >= task.totalSlots && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.10)", color: "#ef4444" }}>Full</span>}
                       </div>
-                      <h3 className="font-bold text-sm leading-tight" style={{ color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>{task.title}</h3>
-                      <p className="text-xs mt-1 line-clamp-2" style={{ color: "#64748b" }}>{task.description}</p>
-                      <div className="flex items-center gap-4 mt-2">
-                        <span className="text-xs font-semibold" style={{ color: "#64748b" }}>{task.filledSlots}/{task.totalSlots} slots</span>
+                      <h3 className="font-bold text-sm leading-snug" style={{ color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>{task.title}</h3>
+                      <p className="text-xs mt-1 leading-relaxed" style={{ color: "#64748B" }} dangerouslySetInnerHTML={{ __html: task.description?.substring(0, 80) + (task.description?.length > 80 ? "…" : "") || "" }} />
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className="text-xs" style={{ color: "#64748B" }}>{task.filledSlots}/{task.totalSlots} slots</span>
                         <span className="text-sm font-black" style={{ color: "#22c55e" }}>+₦{(task.earningPerSlot||0).toLocaleString()}</span>
                       </div>
                     </div>
-                    <div className="shrink-0">
+                    <div className="shrink-0 mt-0.5">
                       {alreadyDone ? (
                         <span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{ background: statusBg(task.submissionStatus), color: statusColor(task.submissionStatus) }}>{task.submissionStatus}</span>
                       ) : task.filledSlots >= task.totalSlots ? null : (
                         <button onClick={() => navigate(`/dashboard/tasks/${task.id}/submit`)}
-                          className="rounded-xl px-3 py-2 text-xs font-bold text-white cursor-pointer transition-all"
-                          style={{ background: "linear-gradient(135deg,#2563EB,#1d4ed8)", boxShadow: "0 2px 8px rgba(37,99,235,0.30)" }}>
-                          Start Task
+                          className="rounded-xl px-3 py-2 text-xs font-bold text-white cursor-pointer"
+                          style={{ background: "linear-gradient(135deg,#2563EB,#1D4ED8)", boxShadow: "0 2px 8px rgba(37,99,235,0.28)", minHeight: "auto" }}>
+                          Start
                         </button>
                       )}
                     </div>
@@ -337,57 +336,62 @@ export default function UnifiedDashboard({
   const renderMyTasks = () => {
     const filtered = subTab === "All" ? submissions : submissions.filter((s:any) => s.status === subTab);
     return (
-      <div className="space-y-4">
-        <h2 className="text-lg font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>My Tasks</h2>
-        <div className="flex gap-2 flex-wrap">
+      <div className="space-y-4 animate-fadeIn">
+        <h2 className="text-base font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>My Tasks</h2>
+        <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap" }}>
           {(["All","Pending","Approved","Rejected"] as const).map(tab => (
             <button key={tab} onClick={() => setSubTab(tab)}
-              className="rounded-full px-3 py-1 text-xs font-bold cursor-pointer"
-              style={subTab === tab ? { background: "#2563EB", color: "#fff" } : { background: isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC", color: "#64748b", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.10)" : "#E2E8F0") }}>
-              {tab} {tab === "All" ? `(${submissions.length})` : `(${submissions.filter((s:any) => s.status === tab).length})`}
+              style={{
+                borderRadius: "9999px", padding: "0.25rem 0.75rem", fontSize: "0.75rem", fontWeight: 700,
+                cursor: "pointer", minHeight: "auto", border: "1px solid",
+                background: subTab === tab ? "#2563EB" : (isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC"),
+                color: subTab === tab ? "#fff" : "#64748B",
+                borderColor: subTab === tab ? "#2563EB" : (isDarkMode ? "rgba(255,255,255,0.10)" : "#E2E8F0"),
+              }}>
+              {tab} ({tab === "All" ? submissions.length : submissions.filter((s:any) => s.status === tab).length})
             </button>
           ))}
         </div>
         {loading ? (
-          <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-4" style={{ borderColor: "rgba(37,99,235,0.20)", borderTopColor: "#2563EB" }}/></div>
+          <div className="flex justify-center py-12"><div className="h-7 w-7 animate-spin rounded-full border-4" style={{ borderColor: "rgba(37,99,235,0.20)", borderTopColor: "#2563EB" }}/></div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-16" style={{ color: "#94a3b8" }}>
-            <CheckSquare className="h-12 w-12 mx-auto mb-3 opacity-30"/>
-            <p className="font-semibold">No {subTab !== "All" ? subTab.toLowerCase() : ""} submissions yet</p>
-            <button onClick={() => navTo("tasks")} className="mt-4 text-sm font-bold cursor-pointer" style={{ color: "#2563EB" }}>Browse available tasks →</button>
+          <div className="text-center py-12" style={{ color: "#94A3B8" }}>
+            <CheckSquare className="h-10 w-10 mx-auto mb-3 opacity-25"/>
+            <p className="font-semibold text-sm">No {subTab !== "All" ? subTab.toLowerCase() : ""} submissions yet</p>
+            <button onClick={() => navTo("tasks")} className="mt-3 text-sm font-bold cursor-pointer" style={{ color: "#2563EB", background: "none", border: "none", minHeight: "auto" }}>Browse available tasks →</button>
           </div>
         ) : (
-          <div className="grid gap-3">
+          <div style={{ display: "grid", gap: "0.625rem" }}>
             {filtered.map((sub:any) => (
-              <div key={sub.id} className="rounded-2xl p-4" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#fff", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
-                <div className="flex items-start justify-between gap-3">
+              <div key={sub.id} className="rounded-2xl p-3.5" style={card()}>
+                <div className="flex items-start gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(37,99,235,0.10)", color: "#2563EB" }}>{sub.category}</span>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: statusColor(sub.status), background: statusBg(sub.status) }}>{sub.status}</span>
                     </div>
-                    <h3 className="font-bold text-sm" style={{ color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>{sub.taskTitle}</h3>
+                    <h3 className="font-bold text-sm" style={{ color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>{sub.taskTitle}</h3>
                     {sub.feedback && (
                       <div className="mt-2 rounded-xl p-2" style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)" }}>
                         <p className="text-xs font-semibold" style={{ color: "#ef4444" }}>Feedback: {sub.feedback}</p>
                       </div>
                     )}
                     <div className="flex items-center gap-3 mt-2">
-                      <span className="text-xs" style={{ color: "#94a3b8" }}>{new Date(sub.submittedAt).toLocaleDateString()}</span>
+                      <span className="text-[11px]" style={{ color: "#94A3B8" }}>{new Date(sub.submittedAt).toLocaleDateString()}</span>
                       <span className="text-sm font-black font-mono" style={{ color: "#22c55e" }}>+₦{(sub.reward||0).toLocaleString()}</span>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-2 shrink-0">
                     {sub.status === "Rejected" && (
                       <button onClick={() => navigate(`/dashboard/my-tasks/${sub.id}/resubmit`)}
                         className="rounded-xl px-3 py-1.5 text-xs font-bold text-white cursor-pointer"
-                        style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)" }}>
+                        style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)", minHeight: "auto" }}>
                         Resubmit
                       </button>
                     )}
                     {sub.status === "Pending" && (
                       <button onClick={() => handleDeleteSubmission(sub.id)}
-                        className="rounded-xl p-1.5 cursor-pointer" style={{ background: "rgba(239,68,68,0.10)", color: "#ef4444" }}>
+                        className="rounded-xl p-1.5 cursor-pointer" style={{ background: "rgba(239,68,68,0.10)", color: "#ef4444", minHeight: "auto" }}>
                         <Trash2 className="h-4 w-4"/>
                       </button>
                     )}
@@ -404,29 +408,32 @@ export default function UnifiedDashboard({
   const renderCreateCampaign = () => {
     const canAfford = adBal >= totalCost;
     return (
-      <div className="space-y-4 max-w-2xl">
+      <div className="space-y-4 animate-fadeIn" style={{ maxWidth: "640px" }}>
         <div>
-          <h2 className="text-lg font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>Create Campaign</h2>
-          <p className="text-xs mt-1" style={{ color: "#64748b" }}>Fund with your Ad Wallet. Current Ad Balance: <span className="font-bold text-purple-500">{fmt(adBal)}</span></p>
+          <h2 className="text-base font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>Create Campaign</h2>
+          <p className="text-xs mt-1" style={{ color: "#64748B" }}>
+            Ad Wallet: <span className="font-bold" style={{ color: "#7C3AED" }}>{fmt(adBal)}</span>
+          </p>
         </div>
 
         {adBal === 0 && (
           <div className="rounded-2xl p-4 flex items-start gap-3" style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.20)" }}>
-            <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#7c3aed" }}/>
+            <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#7C3AED" }}/>
             <div>
-              <p className="text-sm font-bold" style={{ color: "#7c3aed" }}>Fund your Ad Wallet first</p>
-              <p className="text-xs mt-0.5" style={{ color: "#94a3b8" }}>You need funds in your Ad Wallet to create campaigns.</p>
-              <button onClick={() => onOpenDeposit()} className="mt-2 text-xs font-bold cursor-pointer" style={{ color: "#7c3aed" }}>+ Fund Ad Wallet →</button>
+              <p className="text-sm font-bold" style={{ color: "#7C3AED" }}>Fund your Ad Wallet first</p>
+              <p className="text-xs mt-0.5" style={{ color: "#94A3B8" }}>You need funds to create campaigns.</p>
+              <button onClick={() => onOpenDeposit()} className="mt-2 text-xs font-bold cursor-pointer" style={{ color: "#7C3AED", background: "none", border: "none", padding: 0, minHeight: "auto" }}>+ Fund Ad Wallet →</button>
             </div>
           </div>
         )}
 
         <form onSubmit={handleCreateCampaign} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Platform + Action — stacked on mobile */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "0.75rem" }}>
             <div>
-              <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b" }}>Platform *</label>
+              <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748B", letterSpacing: "0.06em" }}>Platform *</label>
               <select value={cp.platform} onChange={e => setCp(p => ({...p, platform: e.target.value}))} required
-                className="w-full rounded-xl px-3 py-2.5 text-sm" style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>
+                style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>
                 <option value="">Select platform</option>
                 {campaignPricing.map(p => (
                   <option key={p.platform} value={p.platform}>{p.platform} — ₦{p.costPerSlot}/slot</option>
@@ -434,9 +441,9 @@ export default function UnifiedDashboard({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b" }}>Action *</label>
+              <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748B", letterSpacing: "0.06em" }}>Action *</label>
               <select value={cp.action} onChange={e => setCp(p => ({...p, action: e.target.value}))} required
-                className="w-full rounded-xl px-3 py-2.5 text-sm" style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>
+                style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>
                 <option value="">Select action</option>
                 {ACTIONS.map(a => <option key={a} value={a}>{a}</option>)}
               </select>
@@ -445,54 +452,56 @@ export default function UnifiedDashboard({
 
           {[
             { label: "Campaign Title *", key: "title", ph: "e.g. Follow our Instagram page @brand" },
-            { label: "Description", key: "desc", ph: "Describe what users need to do..." },
-            { label: "Target Link *", key: "link", ph: "https://..." },
-            { label: "Proof Requirements *", key: "proof", ph: "Screenshot of follow confirmation, your username..." },
+            { label: "Description", key: "desc", ph: "Describe what users need to do…" },
+            { label: "Target Link *", key: "link", ph: "https://…" },
+            { label: "Proof Requirements *", key: "proof", ph: "Screenshot of follow confirmation, your username…" },
           ].map(f => (
             <div key={f.key}>
-              <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b" }}>{f.label}</label>
+              <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748B", letterSpacing: "0.06em" }}>{f.label}</label>
               {f.key === "desc" || f.key === "proof" ? (
                 <textarea value={(cp as any)[f.key]} onChange={e => setCp(p => ({...p, [f.key]: e.target.value}))}
-                  placeholder={f.ph} rows={2}
-                  className="w-full rounded-xl px-3 py-2.5 text-sm resize-none"
-                  style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0f172a" }}/>
+                  placeholder={f.ph} rows={3}
+                  style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0F172A", resize: "vertical" }}/>
               ) : (
                 <input type={f.key === "link" ? "url" : "text"} value={(cp as any)[f.key]} onChange={e => setCp(p => ({...p, [f.key]: e.target.value}))}
                   placeholder={f.ph} required={f.label.includes("*")}
-                  className="w-full rounded-xl px-3 py-2.5 text-sm"
-                  style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0f172a" }}/>
+                  style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0F172A" }}/>
               )}
             </div>
           ))}
 
           <div>
-            <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b" }}>Number of Slots: <span className="text-blue-500">{cp.slots}</span></label>
-            <input type="range" min={10} max={1000} step={10} value={cp.slots} onChange={e => setCp(p => ({...p, slots: parseInt(e.target.value)}))} className="w-full"/>
+            <label className="block text-xs font-semibold uppercase mb-2" style={{ color: "#64748B", letterSpacing: "0.06em" }}>
+              Slots: <span style={{ color: "#2563EB" }}>{cp.slots}</span>
+            </label>
+            <input type="range" min={10} max={1000} step={10} value={cp.slots} onChange={e => setCp(p => ({...p, slots: parseInt(e.target.value)}))} style={{ width: "100%", border: "none", padding: 0 }}/>
           </div>
 
-          {/* Cost preview */}
           {cp.platform && (
             <div className="rounded-2xl p-4" style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.20)" }}>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }} className="text-sm">
                 <div>
-                  <p className="text-xs" style={{ color: "#94a3b8" }}>Cost per slot</p>
-                  <p className="font-black" style={{ color: "#7c3aed" }}>₦{costPerSlot}</p>
+                  <p className="text-xs" style={{ color: "#94A3B8" }}>Cost per slot</p>
+                  <p className="font-black text-base" style={{ color: "#7C3AED" }}>₦{costPerSlot}</p>
                 </div>
                 <div>
-                  <p className="text-xs" style={{ color: "#94a3b8" }}>Total cost ({cp.slots} slots)</p>
-                  <p className="font-black" style={{ color: "#7c3aed" }}>₦{totalCost.toLocaleString()}</p>
+                  <p className="text-xs" style={{ color: "#94A3B8" }}>Total ({cp.slots} slots)</p>
+                  <p className="font-black text-base" style={{ color: "#7C3AED" }}>₦{totalCost.toLocaleString()}</p>
                 </div>
               </div>
               {!canAfford && adBal > 0 && (
-                <p className="text-xs font-semibold mt-2" style={{ color: "#ef4444" }}>⚠️ Insufficient Ad Balance. Need ₦{(totalCost - adBal).toLocaleString()} more. <button type="button" onClick={() => onOpenDeposit(`${totalCost - adBal}`)} className="underline cursor-pointer">Fund wallet</button></p>
+                <p className="text-xs font-semibold mt-2" style={{ color: "#ef4444" }}>
+                  ⚠️ Need ₦{(totalCost - adBal).toLocaleString()} more.{" "}
+                  <button type="button" onClick={() => onOpenDeposit(`${totalCost - adBal}`)} className="underline cursor-pointer" style={{ color: "#ef4444", background: "none", border: "none", padding: 0, minHeight: "auto" }}>Fund wallet</button>
+                </p>
               )}
             </div>
           )}
 
           <button type="submit" disabled={campaignSubmitting || !canAfford}
-            className="w-full rounded-xl py-3 text-sm font-bold text-white cursor-pointer transition-all"
-            style={{ background: (!canAfford || campaignSubmitting) ? "#94a3b8" : "linear-gradient(135deg,#7c3aed,#6d28d9)", cursor: (!canAfford || campaignSubmitting) ? "not-allowed" : "pointer" }}>
-            {campaignSubmitting ? "Creating Campaign..." : !canAfford ? "Insufficient Ad Balance" : `Create Campaign — ₦${totalCost.toLocaleString()}`}
+            className="w-full rounded-xl py-3 text-sm font-bold text-white cursor-pointer"
+            style={{ background: (!canAfford || campaignSubmitting) ? "#94A3B8" : "linear-gradient(135deg,#7C3AED,#6D28D9)", cursor: (!canAfford || campaignSubmitting) ? "not-allowed" : "pointer" }}>
+            {campaignSubmitting ? "Creating Campaign…" : !canAfford ? "Insufficient Ad Balance" : `Create Campaign — ₦${totalCost.toLocaleString()}`}
           </button>
         </form>
       </div>
@@ -502,56 +511,61 @@ export default function UnifiedDashboard({
   const renderMyCampaigns = () => {
     const filtered = camTab === "All" ? campaigns : campaigns.filter((c:any) => c.status === camTab);
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>My Campaigns</h2>
-          <button onClick={() => navTo("create-campaign")} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white cursor-pointer" style={{ background: "linear-gradient(135deg,#7c3aed,#6d28d9)" }}>
-            <Plus className="h-3.5 w-3.5"/> New Campaign
+      <div className="space-y-4 animate-fadeIn">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="text-base font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>My Campaigns</h2>
+          <button onClick={() => navTo("create-campaign")} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white cursor-pointer" style={{ background: "linear-gradient(135deg,#7C3AED,#6D28D9)", minHeight: "auto" }}>
+            <Plus className="h-3.5 w-3.5"/> New
           </button>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap" }}>
           {(["All","Active","Paused","Completed"] as const).map(tab => (
             <button key={tab} onClick={() => setCamTab(tab)}
-              className="rounded-full px-3 py-1 text-xs font-bold cursor-pointer"
-              style={camTab === tab ? { background: "#7c3aed", color: "#fff" } : { background: isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC", color: "#64748b", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.10)" : "#E2E8F0") }}>
+              style={{
+                borderRadius: "9999px", padding: "0.25rem 0.75rem", fontSize: "0.75rem", fontWeight: 700,
+                cursor: "pointer", minHeight: "auto", border: "1px solid",
+                background: camTab === tab ? "#7C3AED" : (isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC"),
+                color: camTab === tab ? "#fff" : "#64748B",
+                borderColor: camTab === tab ? "#7C3AED" : (isDarkMode ? "rgba(255,255,255,0.10)" : "#E2E8F0"),
+              }}>
               {tab}
             </button>
           ))}
         </div>
         {loading ? (
-          <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-4" style={{ borderColor: "rgba(124,58,237,0.20)", borderTopColor: "#7c3aed" }}/></div>
+          <div className="flex justify-center py-12"><div className="h-7 w-7 animate-spin rounded-full border-4" style={{ borderColor: "rgba(124,58,237,0.20)", borderTopColor: "#7C3AED" }}/></div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-16" style={{ color: "#94a3b8" }}>
-            <BarChart2 className="h-12 w-12 mx-auto mb-3 opacity-30"/>
-            <p className="font-semibold">No campaigns yet</p>
-            <button onClick={() => navTo("create-campaign")} className="mt-4 text-sm font-bold cursor-pointer" style={{ color: "#7c3aed" }}>Create your first campaign →</button>
+          <div className="text-center py-12" style={{ color: "#94A3B8" }}>
+            <BarChart2 className="h-10 w-10 mx-auto mb-3 opacity-25"/>
+            <p className="font-semibold text-sm">No campaigns yet</p>
+            <button onClick={() => navTo("create-campaign")} className="mt-3 text-sm font-bold cursor-pointer" style={{ color: "#7C3AED", background: "none", border: "none", minHeight: "auto" }}>Create your first campaign →</button>
           </div>
         ) : (
           <div className="space-y-3">
             {filtered.map((cam:any) => (
-              <div key={cam.id} className="rounded-2xl overflow-hidden" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#fff", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-3">
+              <div key={cam.id} className="rounded-2xl overflow-hidden" style={card()}>
+                <div className="p-3.5">
+                  <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: statusColor(cam.status), background: statusBg(cam.status) }}>{cam.status}</span>
-                        <span className="text-[10px]" style={{ color: "#94a3b8" }}>{cam.filledSlots}/{cam.totalSlots} slots</span>
+                        <span className="text-[10px]" style={{ color: "#94A3B8" }}>{cam.filledSlots}/{cam.totalSlots} slots</span>
                       </div>
-                      <h3 className="font-bold text-sm" style={{ color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>{cam.title}</h3>
+                      <h3 className="font-bold text-sm leading-snug" style={{ color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>{cam.title}</h3>
                       <div className="mt-2 w-full rounded-full h-1.5" style={{ background: isDarkMode ? "rgba(255,255,255,0.08)" : "#F1F5F9" }}>
                         <div className="h-1.5 rounded-full" style={{ width: `${Math.min(100, (cam.filledSlots / cam.totalSlots) * 100)}%`, background: "#2563EB" }}/>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       {cam.status !== "Completed" && (
                         <button onClick={() => handleToggleCampaign(cam.id)}
                           className="rounded-xl p-2 cursor-pointer"
-                          style={{ background: cam.status === "Active" ? "rgba(245,158,11,0.10)" : "rgba(34,197,94,0.10)", color: cam.status === "Active" ? "#f59e0b" : "#22c55e" }}>
+                          style={{ background: cam.status === "Active" ? "rgba(245,158,11,0.10)" : "rgba(34,197,94,0.10)", color: cam.status === "Active" ? "#f59e0b" : "#22c55e", minHeight: "auto" }}>
                           {cam.status === "Active" ? <Pause className="h-4 w-4"/> : <Play className="h-4 w-4"/>}
                         </button>
                       )}
                       {cam.status !== "Completed" && (
-                        <button onClick={() => handleDeleteCampaign(cam.id)} className="rounded-xl p-2 cursor-pointer" style={{ background: "rgba(239,68,68,0.10)", color: "#ef4444" }}>
+                        <button onClick={() => handleDeleteCampaign(cam.id)} className="rounded-xl p-2 cursor-pointer" style={{ background: "rgba(239,68,68,0.10)", color: "#ef4444", minHeight: "auto" }}>
                           <Trash2 className="h-4 w-4"/>
                         </button>
                       )}
@@ -559,7 +573,7 @@ export default function UnifiedDashboard({
                         if (expandedCam === cam.id) { setExpandedCam(null); return; }
                         setExpandedCam(cam.id);
                         await loadCampaignSubs(cam.id);
-                      }} className="rounded-xl p-2 cursor-pointer" style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC", color: "#64748b" }}>
+                      }} className="rounded-xl p-2 cursor-pointer" style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC", color: "#64748B", minHeight: "auto" }}>
                         {expandedCam === cam.id ? <ChevronUp className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
                       </button>
                     </div>
@@ -568,25 +582,25 @@ export default function UnifiedDashboard({
                 {expandedCam === cam.id && (
                   <div style={{ borderTop: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #F1F5F9" }}>
                     <div className="p-3">
-                      <p className="text-xs font-bold uppercase mb-2" style={{ color: "#94a3b8" }}>Submissions</p>
+                      <p className="text-[10px] font-bold uppercase mb-2" style={{ color: "#94A3B8", letterSpacing: "0.06em" }}>Submissions</p>
                       {!camSubs[cam.id] ? (
                         <div className="text-center py-4"><div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-500 mx-auto"/></div>
                       ) : camSubs[cam.id].length === 0 ? (
-                        <p className="text-xs text-center py-4" style={{ color: "#94a3b8" }}>No submissions yet</p>
+                        <p className="text-xs text-center py-4" style={{ color: "#94A3B8" }}>No submissions yet</p>
                       ) : (
                         <div className="space-y-2 max-h-64 overflow-y-auto">
                           {camSubs[cam.id].map((sub:any) => (
-                            <div key={sub.id} className="rounded-xl p-3 flex items-center justify-between gap-3" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#F8FAFC" }}>
+                            <div key={sub.id} className="rounded-xl p-3 flex items-center gap-3" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#F8FAFC" }}>
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs font-semibold" style={{ color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>{sub.earnerName}</p>
-                                <p className="text-[10px] mt-0.5 line-clamp-1" style={{ color: "#94a3b8" }}>{sub.proofText}</p>
+                                <p className="text-xs font-semibold" style={{ color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>{sub.earnerName}</p>
+                                <p className="text-[10px] mt-0.5 truncate" style={{ color: "#94A3B8" }}>{sub.proofText}</p>
                               </div>
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 shrink-0">
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: statusColor(sub.status), background: statusBg(sub.status) }}>{sub.status}</span>
                                 {sub.status === "Pending" && (
                                   <>
-                                    <button onClick={() => handleReviewSub(sub.id, "approve", cam.id)} className="rounded-lg p-1 cursor-pointer" style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }} title="Approve"><Check className="h-3.5 w-3.5"/></button>
-                                    <button onClick={() => { const f = prompt("Rejection reason:"); if (f !== null) handleReviewSub(sub.id, "reject", cam.id, f); }} className="rounded-lg p-1 cursor-pointer" style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444" }} title="Reject"><X className="h-3.5 w-3.5"/></button>
+                                    <button onClick={() => handleReviewSub(sub.id, "approve", cam.id)} className="rounded-lg p-1 cursor-pointer" style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e", minHeight: "auto" }} title="Approve"><Check className="h-3.5 w-3.5"/></button>
+                                    <button onClick={() => { const f = prompt("Rejection reason:"); if (f !== null) handleReviewSub(sub.id, "reject", cam.id, f); }} className="rounded-lg p-1 cursor-pointer" style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444", minHeight: "auto" }} title="Reject"><X className="h-3.5 w-3.5"/></button>
                                   </>
                                 )}
                               </div>
@@ -612,126 +626,137 @@ export default function UnifiedDashboard({
       : txTab === "Withdrawals" ? transactions.filter((t:any) => t.type === "Withdrawal")
       : transactions.filter((t:any) => t.type === "Campaign Spend");
     return (
-      <div className="space-y-4">
-        <h2 className="text-lg font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>Wallet</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="rounded-2xl p-5" style={{ background: "linear-gradient(135deg,#2563EB,#1d4ed8)" }}>
-            <p className="text-xs font-bold text-blue-200 uppercase">Earnings Balance</p>
-            <p className="text-lg sm:text-2xl font-black text-white font-mono mt-1 break-all">{fmt(user.walletBalance)}</p>
-            <button onClick={() => navTo("withdraw")} className="mt-3 text-xs font-bold text-blue-200 flex items-center gap-1 cursor-pointer">
+      <div className="space-y-4 animate-fadeIn">
+        <h2 className="text-base font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>Wallet</h2>
+
+        {/* Balance cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.625rem" }}>
+          <div className="rounded-2xl p-4" style={{ background: "linear-gradient(135deg,#2563EB,#1D4ED8)", boxShadow: "0 6px 20px rgba(37,99,235,0.30)" }}>
+            <p className="text-[10px] font-bold text-blue-200 uppercase tracking-wider">Earnings</p>
+            <p className="text-base font-black text-white font-mono mt-1 break-all leading-tight">{fmt(user.walletBalance)}</p>
+            <button onClick={() => navTo("withdraw")} className="mt-3 text-[11px] font-bold text-blue-200 flex items-center gap-1 cursor-pointer" style={{ background: "none", border: "none", padding: 0, minHeight: "auto" }}>
               Withdraw <ArrowRight className="h-3 w-3"/>
             </button>
           </div>
-          <div className="rounded-2xl p-5" style={{ background: "linear-gradient(135deg,#7c3aed,#6d28d9)" }}>
-            <p className="text-xs font-bold text-purple-200 uppercase">Ad Balance</p>
-            <p className="text-lg sm:text-2xl font-black text-white font-mono mt-1 break-all">{fmt(adBal)}</p>
-            <button onClick={() => onOpenDeposit()} className="mt-3 text-xs font-bold text-purple-200 flex items-center gap-1 cursor-pointer">
-              Fund Wallet <ArrowRight className="h-3 w-3"/>
+          <div className="rounded-2xl p-4" style={{ background: "linear-gradient(135deg,#7C3AED,#6D28D9)", boxShadow: "0 6px 20px rgba(124,58,237,0.25)" }}>
+            <p className="text-[10px] font-bold text-purple-200 uppercase tracking-wider">Ad Balance</p>
+            <p className="text-base font-black text-white font-mono mt-1 break-all leading-tight">{fmt(adBal)}</p>
+            <button onClick={() => onOpenDeposit()} className="mt-3 text-[11px] font-bold text-purple-200 flex items-center gap-1 cursor-pointer" style={{ background: "none", border: "none", padding: 0, minHeight: "auto" }}>
+              Fund <ArrowRight className="h-3 w-3"/>
             </button>
           </div>
         </div>
 
-        <div>
-          <div className="flex gap-2 flex-wrap mb-3">
-            {(["All","Deposits","Earnings","Withdrawals","Spending"] as const).map(tab => (
-              <button key={tab} onClick={() => setTxTab(tab)}
-                className="rounded-full px-3 py-1 text-xs font-bold cursor-pointer"
-                style={txTab === tab ? { background: "#2563EB", color: "#fff" } : { background: isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC", color: "#64748b", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.10)" : "#E2E8F0") }}>
-                {tab}
-              </button>
-            ))}
-          </div>
-          {loading ? (
-            <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-4" style={{ borderColor: "rgba(37,99,235,0.20)", borderTopColor: "#2563EB" }}/></div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-12" style={{ color: "#94a3b8" }}>
-              <CreditCard className="h-10 w-10 mx-auto mb-2 opacity-30"/>
-              <p className="text-sm font-semibold">No transactions yet</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filtered.map((tx:any) => {
-                const isCredit = tx.type === "Task Earnings" || tx.type === "Referral Bonus" || tx.type === "Deposit";
-                return (
-                  <div key={tx.id} className="rounded-xl p-3 flex items-center justify-between" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#F8FAFC" }}>
-                    <div>
-                      <p className="text-xs font-semibold" style={{ color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>{tx.description || tx.type}</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: "#94a3b8" }}>{new Date(tx.createdAt).toLocaleDateString()}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-black font-mono" style={{ color: isCredit ? "#22c55e" : "#ef4444" }}>
-                        {isCredit ? "+" : "-"}{fmt(tx.amount)}
-                      </p>
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: statusColor(tx.status), background: statusBg(tx.status) }}>{tx.status}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+        {/* Filter tabs */}
+        <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap" }}>
+          {(["All","Deposits","Earnings","Withdrawals","Spending"] as const).map(tab => (
+            <button key={tab} onClick={() => setTxTab(tab)}
+              style={{
+                borderRadius: "9999px", padding: "0.25rem 0.625rem", fontSize: "0.7rem", fontWeight: 700,
+                cursor: "pointer", minHeight: "auto", border: "1px solid",
+                background: txTab === tab ? "#2563EB" : (isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC"),
+                color: txTab === tab ? "#fff" : "#64748B",
+                borderColor: txTab === tab ? "#2563EB" : (isDarkMode ? "rgba(255,255,255,0.10)" : "#E2E8F0"),
+              }}>
+              {tab}
+            </button>
+          ))}
         </div>
+
+        {loading ? (
+          <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-4" style={{ borderColor: "rgba(37,99,235,0.20)", borderTopColor: "#2563EB" }}/></div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-12" style={{ color: "#94A3B8" }}>
+            <CreditCard className="h-10 w-10 mx-auto mb-2 opacity-25"/>
+            <p className="text-sm font-semibold">No transactions yet</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filtered.map((tx:any) => {
+              const isCredit = tx.type === "Task Earnings" || tx.type === "Referral Bonus" || tx.type === "Deposit";
+              return (
+                <div key={tx.id} className="rounded-xl p-3 flex items-center gap-3" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#F8FAFC", border: isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1px solid #F1F5F9" }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold truncate" style={{ color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>{tx.description || tx.type}</p>
+                    <p className="text-[10px] mt-0.5" style={{ color: "#94A3B8" }}>{new Date(tx.createdAt).toLocaleDateString()}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs font-black font-mono" style={{ color: isCredit ? "#22c55e" : "#ef4444" }}>
+                      {isCredit ? "+" : "-"}{fmt(tx.amount)}
+                    </p>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: statusColor(tx.status), background: statusBg(tx.status) }}>{tx.status}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
 
   const renderWithdraw = () => (
-    <div className="space-y-4 max-w-lg">
+    <div className="space-y-4 animate-fadeIn" style={{ maxWidth: "520px" }}>
       <div>
-        <h2 className="text-lg font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>Withdraw Funds</h2>
-        <p className="text-xs mt-1" style={{ color: "#64748b" }}>Earnings balance: <span className="font-bold text-blue-500">{fmt(user.walletBalance)}</span> · Fee: ₦{settings.withdrawalFee} · Min: ₦{settings.minWithdrawal}</p>
+        <h2 className="text-base font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>Withdraw Funds</h2>
+        <p className="text-xs mt-1" style={{ color: "#64748B" }}>
+          Balance: <span className="font-bold" style={{ color: "#2563EB" }}>{fmt(user.walletBalance)}</span>
+          {" · "}Fee: ₦{settings.withdrawalFee}
+          {" · "}Min: ₦{settings.minWithdrawal}
+        </p>
       </div>
-      <form onSubmit={handleWithdraw} className="space-y-4 rounded-2xl p-5" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#fff", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
+      <form onSubmit={handleWithdraw} className="space-y-4 rounded-2xl p-4" style={card()}>
         <div>
-          <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b" }}>Amount (₦)</label>
-          <input type="number" min={settings.minWithdrawal} max={user.walletBalance} value={wd.amount} onChange={e => setWd(w => ({...w, amount: e.target.value}))} required placeholder={`Min ₦${settings.minWithdrawal}`}
-            className="w-full rounded-xl px-3 py-2.5 text-sm font-mono"
-            style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0f172a" }}/>
+          <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748B", letterSpacing: "0.06em" }}>Amount (₦)</label>
+          <input type="number" min={settings.minWithdrawal} max={user.walletBalance} value={wd.amount}
+            onChange={e => setWd(w => ({...w, amount: e.target.value}))} required
+            placeholder={`Min ₦${settings.minWithdrawal}`}
+            style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0F172A" }}/>
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b" }}>Bank</label>
+          <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748B", letterSpacing: "0.06em" }}>Bank</label>
           <select value={wd.bankName} onChange={e => { setWd(w => ({...w, bankName: e.target.value, accountName: "", bankCode: ""})); setWdVerified(false); }} required
-            className="w-full rounded-xl px-3 py-2.5 text-sm"
-            style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>
+            style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>
             <option value="">Select your bank</option>
             {BANKS.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b" }}>Account Number</label>
-          <div className="flex gap-2">
-            <input type="text" inputMode="numeric" maxLength={10} value={wd.accountNumber} onChange={e => { setWd(w => ({...w, accountNumber: e.target.value.replace(/\D/g,"")})); setWdVerified(false); }} required placeholder="10-digit account number"
-              className="flex-1 rounded-xl px-3 py-2.5 text-sm font-mono"
-              style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0f172a" }}/>
+          <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748B", letterSpacing: "0.06em" }}>Account Number</label>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <input type="text" inputMode="numeric" maxLength={10} value={wd.accountNumber}
+              onChange={e => { setWd(w => ({...w, accountNumber: e.target.value.replace(/\D/g,"")})); setWdVerified(false); }}
+              required placeholder="10-digit account"
+              style={{ flex: 1, background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0F172A" }}/>
             <button type="button" onClick={handleVerifyAccount} disabled={wdVerifying || wd.accountNumber.length !== 10}
-              className="rounded-xl px-3 py-2.5 text-xs font-bold cursor-pointer"
-              style={{ background: "rgba(37,99,235,0.10)", color: "#2563EB", border: "1px solid rgba(37,99,235,0.20)" }}>
-              {wdVerifying ? "..." : "Verify"}
+              className="rounded-xl px-3 py-2.5 text-xs font-bold cursor-pointer shrink-0"
+              style={{ background: "rgba(37,99,235,0.10)", color: "#2563EB", border: "1px solid rgba(37,99,235,0.20)", minHeight: "auto", width: "auto" }}>
+              {wdVerifying ? "…" : "Verify"}
             </button>
           </div>
         </div>
         {wdVerified && wd.accountName && (
           <div className="rounded-xl p-3 flex items-center gap-2" style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.20)" }}>
             <Check className="h-4 w-4 shrink-0" style={{ color: "#22c55e" }}/>
-            <p className="text-xs font-bold" style={{ color: "#22c55e" }}>Account verified: {wd.accountName}</p>
+            <p className="text-xs font-bold" style={{ color: "#22c55e" }}>Verified: {wd.accountName}</p>
           </div>
         )}
         <button type="submit" disabled={wdLoading || !wdVerified}
           className="w-full rounded-xl py-3 text-sm font-bold text-white cursor-pointer"
-          style={{ background: (!wdVerified || wdLoading) ? "#94a3b8" : "linear-gradient(135deg,#2563EB,#1d4ed8)", cursor: (!wdVerified || wdLoading) ? "not-allowed" : "pointer" }}>
-          {wdLoading ? "Submitting..." : `Withdraw ₦${parseFloat(wd.amount||"0").toLocaleString()}`}
+          style={{ background: (!wdVerified || wdLoading) ? "#94A3B8" : "linear-gradient(135deg,#2563EB,#1D4ED8)", cursor: (!wdVerified || wdLoading) ? "not-allowed" : "pointer" }}>
+          {wdLoading ? "Submitting…" : `Withdraw ₦${parseFloat(wd.amount||"0").toLocaleString()}`}
         </button>
       </form>
 
-      {/* Pending withdrawals */}
       {pendingWds.length > 0 && (
         <div>
-          <p className="text-sm font-bold mb-2" style={{ color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>Pending Withdrawals</p>
+          <p className="text-sm font-bold mb-2" style={{ color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>Pending Withdrawals</p>
           <div className="space-y-2">
             {pendingWds.map((tx:any) => (
               <div key={tx.id} className="rounded-xl p-3 flex items-center justify-between" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#FFF7ED", border: "1px solid rgba(245,158,11,0.20)" }}>
                 <div>
-                  <p className="text-xs font-semibold" style={{ color: isDarkMode ? "#e2e8f0" : "#92400e" }}>{tx.description}</p>
-                  <p className="text-[10px]" style={{ color: "#94a3b8" }}>{new Date(tx.createdAt).toLocaleDateString()}</p>
+                  <p className="text-xs font-semibold" style={{ color: isDarkMode ? "#e2e8f0" : "#92400E" }}>{tx.description}</p>
+                  <p className="text-[10px]" style={{ color: "#94A3B8" }}>{new Date(tx.createdAt).toLocaleDateString()}</p>
                 </div>
                 <p className="text-sm font-black font-mono" style={{ color: "#f59e0b" }}>{fmt(tx.amount)}</p>
               </div>
@@ -744,44 +769,47 @@ export default function UnifiedDashboard({
 
   const renderReferrals = () => {
     const code = user.referralCode || "";
-    const link = `${window.location.origin}/?ref=${code}`;
     return (
-      <div className="space-y-4 max-w-lg">
+      <div className="space-y-4 animate-fadeIn" style={{ maxWidth: "520px" }}>
         <div>
-          <h2 className="text-lg font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>Referral Program</h2>
-          <p className="text-xs mt-1" style={{ color: "#64748b" }}>Earn ₦{(settings.referralReward||200).toLocaleString()} for every friend who joins and completes their first task</p>
+          <h2 className="text-base font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>Referral Program</h2>
+          <p className="text-xs mt-1" style={{ color: "#64748B" }}>
+            Earn ₦{(settings.referralReward||200).toLocaleString()} per friend who joins & completes their first task
+          </p>
         </div>
 
-        <div className="rounded-2xl p-5 text-center" style={{ background: "linear-gradient(135deg,#2563EB,#1d4ed8)" }}>
-          <p className="text-xs font-bold text-blue-200 uppercase mb-2">Your Referral Code</p>
-          <p className="text-3xl font-black text-white tracking-[0.15em] font-mono">{code || "—"}</p>
-          <button onClick={handleCopyReferral} className="mt-4 flex items-center gap-2 mx-auto rounded-full px-4 py-2 text-xs font-bold cursor-pointer transition-all" style={{ background: "rgba(255,255,255,0.15)", color: "#fff" }}>
+        <div className="rounded-2xl p-5 text-center" style={{ background: "linear-gradient(135deg,#2563EB,#1D4ED8)", boxShadow: "0 6px 20px rgba(37,99,235,0.30)" }}>
+          <p className="text-[10px] font-bold text-blue-200 uppercase tracking-wider mb-2">Your Referral Code</p>
+          <p className="text-2xl font-black text-white tracking-widest font-mono">{code || "—"}</p>
+          <button onClick={handleCopyReferral}
+            className="mt-4 flex items-center gap-2 mx-auto rounded-full px-4 py-2 text-xs font-bold cursor-pointer"
+            style={{ background: "rgba(255,255,255,0.15)", color: "#fff", border: "none", minHeight: "auto" }}>
             {copied ? <><Check className="h-3.5 w-3.5"/> Copied!</> : <><Copy className="h-3.5 w-3.5"/> Copy Referral Link</>}
           </button>
         </div>
 
         {refStats && (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl p-4 text-center" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#fff", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.625rem" }}>
+            <div className="rounded-2xl p-4 text-center" style={card()}>
               <p className="text-2xl font-black" style={{ color: "#2563EB" }}>{refStats.totalReferrals || referrals.length}</p>
-              <p className="text-xs font-semibold mt-1" style={{ color: "#94a3b8" }}>Total Referrals</p>
+              <p className="text-xs font-semibold mt-1" style={{ color: "#94A3B8" }}>Total Referrals</p>
             </div>
-            <div className="rounded-2xl p-4 text-center" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#fff", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
-              <p className="text-2xl font-black" style={{ color: "#22c55e" }}>{fmt(refStats.totalEarned || 0)}</p>
-              <p className="text-xs font-semibold mt-1" style={{ color: "#94a3b8" }}>Total Earned</p>
+            <div className="rounded-2xl p-4 text-center" style={card()}>
+              <p className="text-base font-black font-mono break-all" style={{ color: "#22c55e" }}>{fmt(refStats.totalEarned || 0)}</p>
+              <p className="text-xs font-semibold mt-1" style={{ color: "#94A3B8" }}>Total Earned</p>
             </div>
           </div>
         )}
 
         {referrals.length > 0 && (
           <div>
-            <p className="text-sm font-bold mb-2" style={{ color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>Referred Users</p>
+            <p className="text-sm font-bold mb-2" style={{ color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>Referred Users</p>
             <div className="space-y-2">
               {referrals.map((r:any) => (
                 <div key={r.id} className="rounded-xl p-3 flex items-center justify-between" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#F8FAFC" }}>
                   <div>
-                    <p className="text-xs font-semibold" style={{ color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>{r.refereeName}</p>
-                    <p className="text-[10px]" style={{ color: "#94a3b8" }}>{new Date(r.createdAt).toLocaleDateString()}</p>
+                    <p className="text-xs font-semibold" style={{ color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>{r.refereeName}</p>
+                    <p className="text-[10px]" style={{ color: "#94A3B8" }}>{new Date(r.createdAt).toLocaleDateString()}</p>
                   </div>
                   <p className="text-sm font-black font-mono" style={{ color: "#22c55e" }}>+{fmt(r.rewardEarned)}</p>
                 </div>
@@ -794,32 +822,36 @@ export default function UnifiedDashboard({
   };
 
   const renderNotifications = () => (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fadeIn">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>Notifications</h2>
+        <h2 className="text-base font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>Notifications</h2>
         {unreadCount > 0 && (
-          <button onClick={onMarkAllNotificationsRead} className="text-xs font-bold cursor-pointer" style={{ color: "#2563EB" }}>
+          <button onClick={onMarkAllNotificationsRead} className="text-xs font-bold cursor-pointer" style={{ color: "#2563EB", background: "none", border: "none", padding: 0, minHeight: "auto" }}>
             Mark all read
           </button>
         )}
       </div>
       {earnerNotifications.length === 0 ? (
-        <div className="text-center py-16" style={{ color: "#94a3b8" }}>
-          <Bell className="h-12 w-12 mx-auto mb-3 opacity-30"/>
-          <p className="font-semibold">No notifications yet</p>
+        <div className="text-center py-12" style={{ color: "#94A3B8" }}>
+          <Bell className="h-10 w-10 mx-auto mb-3 opacity-25"/>
+          <p className="font-semibold text-sm">No notifications yet</p>
           <p className="text-xs mt-1">We'll notify you when new tasks are available</p>
         </div>
       ) : (
         <div className="space-y-2">
           {earnerNotifications.map(notif => (
-            <div key={notif.id} onClick={() => { if (!notif.read) onMarkNotificationRead(notif.id); }}
-              className="rounded-2xl p-4 cursor-pointer"
-              style={{ background: notif.read ? (isDarkMode ? "rgba(255,255,255,0.03)" : "#F8FAFC") : (isDarkMode ? "rgba(37,99,235,0.12)" : "rgba(219,234,254,0.60)"), border: notif.read ? (isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1px solid #E2E8F0") : "1px solid rgba(37,99,235,0.25)" }}>
+            <div key={notif.id}
+              onClick={() => { if (!notif.read) onMarkNotificationRead(notif.id); }}
+              className="rounded-2xl p-3.5 cursor-pointer"
+              style={{
+                background: notif.read ? (isDarkMode ? "rgba(255,255,255,0.03)" : "#F8FAFC") : (isDarkMode ? "rgba(37,99,235,0.12)" : "rgba(219,234,254,0.50)"),
+                border: notif.read ? (isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1px solid #E2E8F0") : "1px solid rgba(37,99,235,0.25)",
+              }}>
               <div className="flex items-start gap-3">
-                {!notif.read && <div className="h-2 w-2 rounded-full shrink-0 mt-1" style={{ background: "#2563EB" }}/>}
+                {!notif.read && <div className="h-2 w-2 rounded-full shrink-0 mt-1.5" style={{ background: "#2563EB" }}/>}
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold" style={{ color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>{notif.message}</p>
-                  <p className="text-[10px] mt-1" style={{ color: "#94a3b8" }}>{new Date(notif.createdAt).toLocaleString()}</p>
+                  <p className="text-xs font-semibold leading-relaxed" style={{ color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>{notif.message}</p>
+                  <p className="text-[10px] mt-1" style={{ color: "#94A3B8" }}>{new Date(notif.createdAt).toLocaleString()}</p>
                 </div>
                 <span className="text-xs font-black shrink-0" style={{ color: "#22c55e" }}>+₦{notif.reward}</span>
               </div>
@@ -831,66 +863,62 @@ export default function UnifiedDashboard({
   );
 
   const renderProfile = () => (
-    <div className="space-y-6 max-w-lg">
-      <h2 className="text-lg font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>Profile & Settings</h2>
+    <div className="space-y-4 animate-fadeIn" style={{ maxWidth: "520px" }}>
+      <h2 className="text-base font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>Profile & Settings</h2>
 
-      {/* Profile info */}
-      <div className="rounded-2xl p-5 space-y-4" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#fff", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
-        <div className="flex items-center gap-3 pb-4" style={{ borderBottom: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #F1F5F9" }}>
-          <div className="h-12 w-12 rounded-2xl flex items-center justify-center text-lg font-black text-white" style={{ background: "linear-gradient(135deg,#2563EB,#7c3aed)" }}>
+      <div className="rounded-2xl p-4 space-y-4" style={card()}>
+        <div className="flex items-center gap-3 pb-3" style={{ borderBottom: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #F1F5F9" }}>
+          <div className="h-12 w-12 rounded-2xl flex items-center justify-center text-lg font-black text-white shrink-0" style={{ background: "linear-gradient(135deg,#2563EB,#7C3AED)" }}>
             {user.name.charAt(0).toUpperCase()}
           </div>
-          <div>
-            <p className="font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>{user.name}</p>
-            <p className="text-xs" style={{ color: "#94a3b8" }}>{user.email}</p>
-            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(37,99,235,0.10)", color: "#2563EB" }}>
-              <Shield className="h-2.5 w-2.5 inline mr-1"/>Member
+          <div className="min-w-0">
+            <p className="font-bold leading-none" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>{user.name}</p>
+            <p className="text-xs mt-1 truncate" style={{ color: "#94A3B8" }}>{user.email}</p>
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full mt-1 inline-flex items-center gap-1" style={{ background: "rgba(37,99,235,0.10)", color: "#2563EB" }}>
+              <Shield className="h-2.5 w-2.5"/>Member
             </span>
           </div>
         </div>
         <form onSubmit={handleSaveProfile} className="space-y-3">
           {[
-            { label: "Full Name", key: "name", val: prof.name },
-            { label: "Username", key: "username", val: prof.username },
-            { label: "Phone", key: "phone", val: prof.phone },
-            { label: "Country", key: "country", val: prof.country },
-            { label: "Business Name", key: "business", val: prof.business },
+            { label: "Full Name",      key: "name",     val: prof.name },
+            { label: "Username",       key: "username", val: prof.username },
+            { label: "Phone",          key: "phone",    val: prof.phone },
+            { label: "Country",        key: "country",  val: prof.country },
+            { label: "Business Name",  key: "business", val: prof.business },
           ].map(f => (
             <div key={f.key}>
-              <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "#64748b" }}>{f.label}</label>
+              <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "#64748B", letterSpacing: "0.06em" }}>{f.label}</label>
               <input type="text" value={f.val} onChange={e => setProf(p => ({...p, [f.key]: e.target.value}))}
-                className="w-full rounded-xl px-3 py-2.5 text-sm"
-                style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0f172a" }}/>
+                style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0F172A" }}/>
             </div>
           ))}
           <button type="submit" disabled={profLoading}
             className="w-full rounded-xl py-2.5 text-sm font-bold text-white cursor-pointer"
-            style={{ background: "linear-gradient(135deg,#2563EB,#1d4ed8)" }}>
-            {profLoading ? "Saving..." : "Save Profile"}
+            style={{ background: "linear-gradient(135deg,#2563EB,#1D4ED8)" }}>
+            {profLoading ? "Saving…" : "Save Profile"}
           </button>
         </form>
       </div>
 
-      {/* Change password */}
-      <div className="rounded-2xl p-5 space-y-4" style={{ background: isDarkMode ? "rgba(255,255,255,0.04)" : "#fff", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
-        <h3 className="font-bold text-sm" style={{ color: isDarkMode ? "#e2e8f0" : "#0f172a" }}>Change Password</h3>
+      <div className="rounded-2xl p-4 space-y-3" style={card()}>
+        <h3 className="font-bold text-sm" style={{ color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>Change Password</h3>
         <form onSubmit={handleChangePassword} className="space-y-3">
           {[
-            { label: "Current Password", key: "old", val: pw.old },
-            { label: "New Password", key: "new", val: pw.new },
-            { label: "Confirm New Password", key: "confirm", val: pw.confirm },
+            { label: "Current Password",     key: "old",     val: pw.old },
+            { label: "New Password",          key: "new",     val: pw.new },
+            { label: "Confirm New Password",  key: "confirm", val: pw.confirm },
           ].map(f => (
             <div key={f.key}>
-              <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "#64748b" }}>{f.label}</label>
+              <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "#64748B", letterSpacing: "0.06em" }}>{f.label}</label>
               <input type="password" value={f.val} onChange={e => setPw(p => ({...p, [f.key]: e.target.value}))} required
-                className="w-full rounded-xl px-3 py-2.5 text-sm"
-                style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0f172a" }}/>
+                style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0F172A" }}/>
             </div>
           ))}
           <button type="submit" disabled={pwLoading}
             className="w-full rounded-xl py-2.5 text-sm font-bold text-white cursor-pointer"
             style={{ background: "linear-gradient(135deg,#ef4444,#dc2626)" }}>
-            {pwLoading ? "Changing..." : "Change Password"}
+            {pwLoading ? "Changing…" : "Change Password"}
           </button>
         </form>
       </div>
@@ -898,20 +926,19 @@ export default function UnifiedDashboard({
   );
 
   // ─── Content switch ────────────────────────────────────────────────────────
-
   const renderContent = () => {
     switch (section) {
-      case "overview": return renderOverview();
-      case "tasks": return renderTasks();
-      case "my-tasks": return renderMyTasks();
-      case "create-campaign": return renderCreateCampaign();
-      case "my-campaigns": return renderMyCampaigns();
-      case "wallet": return renderWallet();
-      case "withdraw": return renderWithdraw();
-      case "referrals": return renderReferrals();
-      case "notifications": return renderNotifications();
-      case "profile": return renderProfile();
-      default: return renderOverview();
+      case "overview":         return renderOverview();
+      case "tasks":            return renderTasks();
+      case "my-tasks":         return renderMyTasks();
+      case "create-campaign":  return renderCreateCampaign();
+      case "my-campaigns":     return renderMyCampaigns();
+      case "wallet":           return renderWallet();
+      case "withdraw":         return renderWithdraw();
+      case "referrals":        return renderReferrals();
+      case "notifications":    return renderNotifications();
+      case "profile":          return renderProfile();
+      default:                 return renderOverview();
     }
   };
 
@@ -1063,69 +1090,91 @@ export default function UnifiedDashboard({
   // ─── Sidebar ───────────────────────────────────────────────────────────────
 
   const SidebarContent = () => (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* User info */}
-      <div className="px-4 py-5 mb-2" style={{ borderBottom: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
+      <div className="px-4 py-4 shrink-0" style={{ borderBottom: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl flex items-center justify-center text-sm font-black text-white shrink-0" style={{ background: "linear-gradient(135deg,#2563EB,#7c3aed)" }}>
+          <div className="h-9 w-9 rounded-xl flex items-center justify-center text-sm font-black text-white shrink-0" style={{ background: "linear-gradient(135deg,#2563EB,#7C3AED)" }}>
             {user.name.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-bold truncate" style={{ color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>{user.name}</p>
-            <p className="text-[10px] font-semibold" style={{ color: "#94a3b8" }}>₦{(user.walletBalance||0).toLocaleString()} earnings</p>
+            <p className="text-sm font-bold truncate" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>{user.name}</p>
+            <p className="text-[10px] font-semibold truncate" style={{ color: "#94A3B8" }}>
+              ₦{(user.walletBalance||0).toLocaleString(undefined, { maximumFractionDigits: 0 })} earnings
+            </p>
           </div>
         </div>
       </div>
 
       {/* Nav items */}
-      <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 px-2.5 py-2 space-y-0.5 overflow-y-auto">
         {SIDEBAR_ITEMS.map(item => {
           const Icon = item.icon;
           const active = section === item.id;
           const badge = item.id === "notifications" ? unreadCount : 0;
           return (
             <button key={item.id} onClick={() => { navTo(item.id); setDrawerOpen(false); }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left cursor-pointer transition-all relative"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left cursor-pointer transition-all"
               style={active
-                ? { background: isDarkMode ? "rgba(37,99,235,0.20)" : "#DBEAFE", color: "#2563EB" }
-                : { color: isDarkMode ? "#94a3b8" : "#64748b" }}>
-              <Icon className="h-4.5 w-4.5 shrink-0" style={{ width: "18px", height: "18px" }}/>
-              <span className="text-xs font-semibold flex-1">{item.label}</span>
-              {badge > 0 && <span className="h-4 min-w-[16px] flex items-center justify-center rounded-full text-[8px] font-black text-white px-1" style={{ background: "#EF4444" }}>{badge}</span>}
+                ? { background: isDarkMode ? "rgba(37,99,235,0.18)" : "#EFF6FF", color: "#2563EB" }
+                : { color: isDarkMode ? "#94A3B8" : "#64748B", background: "transparent" }}>
+              <Icon style={{ width: "16px", height: "16px", flexShrink: 0 }}/>
+              <span className="text-xs font-semibold flex-1 text-left">{item.label}</span>
+              {badge > 0 && (
+                <span className="h-4 min-w-[16px] flex items-center justify-center rounded-full text-[8px] font-black text-white px-1" style={{ background: "#EF4444" }}>{badge}</span>
+              )}
             </button>
           );
         })}
       </nav>
 
       {/* Bottom actions */}
-      <div className="px-3 pb-4 pt-3 space-y-1" style={{ borderTop: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
-        <button onClick={onOpenDeposit} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer" style={{ background: "rgba(124,58,237,0.10)", color: "#7c3aed" }}>
-          <PiggyBank style={{ width: "18px", height: "18px" }}/>
-          <span className="text-xs font-semibold">Fund Ad Wallet</span>
-          <span className="ml-auto text-[10px] font-mono font-bold">{fmt(adBal).replace("₦","₦")}</span>
+      <div className="px-2.5 pb-4 pt-2 space-y-1 shrink-0" style={{ borderTop: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
+        <button onClick={() => onOpenDeposit()} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer" style={{ background: "rgba(124,58,237,0.10)", color: "#7C3AED", border: "none" }}>
+          <PiggyBank style={{ width: "16px", height: "16px", flexShrink: 0 }}/>
+          <span className="text-xs font-semibold flex-1 text-left">Fund Ad Wallet</span>
+          <span className="text-[10px] font-mono font-bold">{fmt(adBal)}</span>
         </button>
-        <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer" style={{ color: "#ef4444" }}>
-          <LogOut style={{ width: "18px", height: "18px" }}/>
+        <button onClick={onLogout} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer" style={{ color: "#ef4444", background: "transparent", border: "none" }}>
+          <LogOut style={{ width: "16px", height: "16px", flexShrink: 0 }}/>
           <span className="text-xs font-semibold">Logout</span>
         </button>
       </div>
     </div>
   );
 
+  // ─── Layout ─────────────────────────────────────────────────────────────────
+
   return (
-    <div className="flex gap-0 relative -mx-4 sm:-mx-6 lg:-mx-8 min-h-[calc(100vh-4rem)]">
+    <div
+      style={{
+        display: "flex",
+        minHeight: "calc(100vh - 56px)", // 56px = navbar height
+        background: isDarkMode ? "#050d1a" : "#F8FAFC",
+      }}
+    >
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-hidden"
-        style={{ width: "220px", background: isDarkMode ? "rgba(10,16,28,0.97)" : "#FFFFFF", borderRight: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
+      <aside
+        className="hidden md:flex flex-col shrink-0"
+        style={{
+          width: "220px",
+          position: "sticky",
+          top: "56px",
+          height: "calc(100vh - 56px)",
+          background: isDarkMode ? "rgba(10,16,28,0.98)" : "#FFFFFF",
+          borderRight: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0",
+          overflowY: "auto",
+        }}
+      >
         <SidebarContent/>
       </aside>
 
       {/* Mobile drawer overlay */}
       {drawerOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)}/>
-          <div className="relative w-72 h-full flex flex-col" style={{ background: isDarkMode ? "#0b1220" : "#FFFFFF", borderRight: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
-            <button onClick={() => setDrawerOpen(false)} className="absolute top-4 right-4 rounded-full p-1.5 cursor-pointer" style={{ background: isDarkMode ? "rgba(255,255,255,0.08)" : "#F1F5F9", color: "#94a3b8" }}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDrawerOpen(false)}/>
+          <div className="relative flex flex-col animate-slideInRight" style={{ width: "min(280px, 85vw)", background: isDarkMode ? "#0b1220" : "#FFFFFF", borderRight: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0", height: "100vh", overflowY: "auto" }}>
+            <button onClick={() => setDrawerOpen(false)} className="absolute top-4 right-3 rounded-full p-1.5 cursor-pointer z-10" style={{ background: isDarkMode ? "rgba(255,255,255,0.08)" : "#F1F5F9", color: "#94A3B8", border: "none", minHeight: "auto" }}>
               <X className="h-4 w-4"/>
             </button>
             <SidebarContent/>
@@ -1134,19 +1183,41 @@ export default function UnifiedDashboard({
       )}
 
       {/* Main content */}
-      <main className="flex-1 min-w-0 px-4 sm:px-6 py-6">
-        {/* Mobile header */}
-        <div className="flex items-center gap-3 mb-5 md:hidden">
-          <button onClick={() => setDrawerOpen(true)} className="rounded-xl p-2 cursor-pointer" style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0" }}>
-            <Menu className="h-5 w-5" style={{ color: "#64748b" }}/>
+      <main
+        className="flex-1 min-w-0"
+        style={{
+          padding: "1rem",
+          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 80px)", // clears mobile nav
+        }}
+      >
+        {/* Mobile header bar */}
+        <div
+          className="flex items-center gap-3 mb-4 md:hidden"
+          style={{ marginTop: "0" }}
+        >
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="rounded-xl p-2 cursor-pointer shrink-0"
+            style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#FFFFFF", border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0", color: "#64748B", minHeight: "auto" }}
+          >
+            <Menu className="h-4 w-4"/>
           </button>
-          <span className="font-bold text-sm" style={{ color: isDarkMode ? "#f1f5f9" : "#0f172a" }}>
+          <span className="font-bold text-sm flex-1 truncate" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>
             {SIDEBAR_ITEMS.find(i => i.id === section)?.label || "Dashboard"}
           </span>
           {unreadCount > 0 && section !== "notifications" && (
-            <span className="h-5 min-w-[20px] flex items-center justify-center rounded-full text-[9px] font-black text-white px-1.5 ml-auto" style={{ background: "#EF4444" }}>{unreadCount}</span>
+            <button
+              onClick={() => navTo("notifications")}
+              className="shrink-0"
+              style={{ background: "none", border: "none", minHeight: "auto", padding: 0 }}
+            >
+              <span className="h-6 min-w-[24px] flex items-center justify-center rounded-full text-[10px] font-black text-white px-1.5" style={{ background: "#EF4444" }}>{unreadCount}</span>
+            </button>
           )}
         </div>
+
+        {/* Desktop top padding */}
+        <div className="hidden md:block" style={{ height: "0.5rem" }}/>
 
         {renderContent()}
       </main>
