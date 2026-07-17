@@ -2064,50 +2064,6 @@ async function resolveBankAccount(accountNumber, bankName, bankCode) {
     return { success: false, error: "Bank verification service is unavailable. Please try again." };
   }
 }
-async function createPaystackRecipient(name, accountNumber, bankCode) {
-  const key = process.env.PAYSTACK_SECRET_KEY;
-  if (!key) return { success: false, error: "PAYSTACK_SECRET_KEY not configured" };
-  try {
-    const res = await fetch("https://api.paystack.co/transferrecipient", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "nuban", name, account_number: accountNumber, bank_code: bankCode, currency: "NGN" })
-    });
-    const data = await res.json();
-    if (data?.status && data?.data?.recipient_code) {
-      return { success: true, recipientCode: data.data.recipient_code };
-    }
-    return { success: false, error: data?.message || "Could not create transfer recipient" };
-  } catch (err) {
-    return { success: false, error: "Paystack recipient API unreachable" };
-  }
-}
-async function initiatePaystackTransfer(amountKobo, recipientCode, reference, reason) {
-  const key = process.env.PAYSTACK_SECRET_KEY;
-  if (!key) return { success: false, error: "PAYSTACK_SECRET_KEY not configured" };
-  try {
-    const res = await fetch("https://api.paystack.co/transfer", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ source: "balance", reason, amount: amountKobo, recipient: recipientCode, reference })
-    });
-    const data = await res.json();
-    if (data?.status && data?.data) {
-      const pStatus = data.data.status || "";
-      const accepted = ["success", "pending", "otp"].includes(pStatus);
-      return {
-        success: accepted,
-        transferCode: data.data.transfer_code,
-        transferRef: data.data.reference,
-        paystackStatus: pStatus,
-        error: accepted ? void 0 : data.message || `Transfer status: ${pStatus}`
-      };
-    }
-    return { success: false, error: data?.message || "Paystack transfer initiation failed" };
-  } catch (err) {
-    return { success: false, error: "Paystack transfer API unreachable" };
-  }
-}
 app.post("/api/verify-bank", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
@@ -3302,6 +3258,10 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
       }
       if (isReject) {
         await client.query(
+          "UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2",
+          [txSnapshot.amount, txSnapshot.userId]
+        );
+        await client.query(
           "UPDATE transactions SET status='Rejected', rejection_reason=$1 WHERE id=$2",
           [rejectionReason || null, txSnapshot.id]
         );
@@ -3309,22 +3269,6 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
         const updated = await pool.query("SELECT * FROM transactions WHERE id=$1", [txSnapshot.id]);
         return res.json({ success: true, transaction: mapTransaction(updated.rows[0]) });
       }
-      const earnerRes = await client.query(
-        "SELECT wallet_balance FROM users WHERE id=$1 FOR UPDATE",
-        [txSnapshot.userId]
-      );
-      if (earnerRes.rows.length === 0) {
-        await client.query("ROLLBACK");
-        return res.status(404).json({ error: "Earner account not found" });
-      }
-      const bal = parseFloat(earnerRes.rows[0].wallet_balance);
-      if (bal < txSnapshot.amount) {
-        await client.query("ROLLBACK");
-        return res.status(400).json({
-          error: `Insufficient balance. Available: \u20A6${bal.toLocaleString()}, requested: \u20A6${txSnapshot.amount.toLocaleString()}.`
-        });
-      }
-      await client.query("UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id=$2", [txSnapshot.amount, txSnapshot.userId]);
       await client.query("UPDATE transactions SET status='Approved' WHERE id=$1", [txSnapshot.id]);
       await client.query("COMMIT");
     } catch (txErr) {
@@ -3333,88 +3277,31 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
     } finally {
       client.release();
     }
-    const bankDetails = txSnapshot.bankDetails || {};
-    const bankCode = bankDetails.bankCode || NIGERIAN_BANK_LIST.find((b) => b.name === bankDetails.bankName)?.code;
-    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
-    let paystackOk = false;
-    let transferRef = "";
-    let failureNote = "";
-    if (!paystackKey) {
-      console.warn(`[Paystack] PAYSTACK_SECRET_KEY not set \u2014 marking withdrawal ${txSnapshot.id} as Success (manual payout).`);
-      paystackOk = true;
-      transferRef = "";
-    } else if (!bankCode) {
-      failureNote = `Cannot resolve bank code for "${bankDetails.bankName}". Please add it to the bank list.`;
-    } else {
-      const recipientRes = await createPaystackRecipient(
-        bankDetails.accountName || txSnapshot.userName,
-        String(bankDetails.accountNumber),
-        bankCode
-      );
-      if (!recipientRes.success) {
-        failureNote = `Recipient creation failed: ${recipientRes.error}`;
-      } else {
-        const amountKobo = Math.round(txSnapshot.amount * 100);
-        const transferRes = await initiatePaystackTransfer(
-          amountKobo,
-          recipientRes.recipientCode,
-          txSnapshot.reference,
-          `TasksEarn payout \u2014 ${txSnapshot.userName}`
-        );
-        if (transferRes.success) {
-          paystackOk = true;
-          transferRef = transferRes.transferCode || transferRes.transferRef || "";
-          console.log(`[Paystack] Transfer initiated for ${txSnapshot.id}: code=${transferRef} status=${transferRes.paystackStatus}`);
-        } else {
-          failureNote = `Transfer failed: ${transferRes.error}`;
-        }
-      }
-    }
-    let wdCommData = null;
-    if (paystackOk) {
-      await pool.query(
-        "UPDATE transactions SET status='Success', paystack_transfer_ref=$1 WHERE id=$2",
-        [transferRef || null, txSnapshot.id]
-      );
-      const settings = await getSettings();
-      const fee = settings?.withdrawalFee || 50;
-      if (fee > 0) {
-        wdCommData = { fee, txRef: txSnapshot.reference || txSnapshot.id, userName: txSnapshot.userName || "", userId: txSnapshot.userId };
-      }
-    } else {
-      console.error(`[Paystack] Failed for tx ${txSnapshot.id}: ${failureNote}`);
-      await pool.query(
-        "UPDATE transactions SET status='Failed', rejection_reason=$1 WHERE id=$2",
-        [`Paystack: ${failureNote}`, txSnapshot.id]
-      );
-      await pool.query(
-        "UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2",
-        [txSnapshot.amount, txSnapshot.userId]
-      );
-    }
-    if (wdCommData) {
-      await creditAdminCommission({
-        type: "withdrawal_fee",
-        amount: wdCommData.fee,
-        description: `Withdrawal processing fee \u2014 ${wdCommData.userName}`,
-        reference: "COMM-WD-" + wdCommData.txRef,
-        userId: wdCommData.userId,
-        userName: wdCommData.userName,
-        relatedRef: wdCommData.txRef
-      });
-    }
     const finalRow = await pool.query("SELECT * FROM transactions WHERE id=$1", [txSnapshot.id]);
-    const finalTx = mapTransaction(finalRow.rows[0]);
-    if (!paystackOk) {
-      return res.status(200).json({
-        success: false,
-        transaction: finalTx,
-        error: `Transfer failed \u2014 ${failureNote}. Wallet balance has been restored.`
-      });
-    }
-    res.json({ success: true, transaction: finalTx });
+    res.json({ success: true, transaction: mapTransaction(finalRow.rows[0]) });
   } catch (err) {
     console.error("[Review withdrawal] error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.post("/api/admin/withdrawals/:id/mark-paid", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedUser(req);
+    if (!admin || admin.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const txRes = await pool.query(
+      "SELECT * FROM transactions WHERE id=$1 AND type='Withdrawal'",
+      [req.params.id]
+    );
+    if (txRes.rows.length === 0) return res.status(404).json({ error: "Withdrawal not found" });
+    const tx = mapTransaction(txRes.rows[0]);
+    if (tx.status !== "Approved" /* APPROVED */) {
+      return res.status(400).json({ error: "Only Approved withdrawals can be marked as Paid" });
+    }
+    await pool.query("UPDATE transactions SET status='Paid' WHERE id=$1", [req.params.id]);
+    const updated = await pool.query("SELECT * FROM transactions WHERE id=$1", [req.params.id]);
+    res.json({ success: true, transaction: mapTransaction(updated.rows[0]) });
+  } catch (err) {
+    console.error("[Mark paid] error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
