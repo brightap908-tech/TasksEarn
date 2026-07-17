@@ -1,0 +1,23 @@
+User-agent: *
+Allow: /
+
+# Public pages - allow full indexing
+Allow: /about
+Allow: /faq
+Allow: /contact
+Allow: /how-it-works
+Allow: /terms
+Allow: /privacy
+Allow: /register
+Allow: /login
+
+# Block private/authenticated areas
+Disallow: /earner/
+Disallow: /advertiser/
+Disallow: /admin/
+Disallow: /api/
+Disallow: /verify-email
+Disallow: /forgot-password
+
+# Sitemap
+Sitemap: https://tasksearn.name.ng/sitemap.xml

@@ -1,13 +1,15 @@
 {
-  "name": "TasksEarn",
+  "name": "TasksEarn - Earn Money Online",
   "short_name": "TasksEarn",
-  "description": "Premium Microtask Platform — Earn money by completing social media tasks",
+  "description": "Complete simple online tasks and earn money securely. Nigeria's premier online task marketplace connecting advertisers and earners.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1e40af",
   "theme_color": "#2563eb",
   "orientation": "portrait-primary",
   "scope": "/",
+  "lang": "en-NG",
+  "categories": ["business", "finance", "productivity"],
   "icons": [
     {
       "src": "/icon-72.png",
@@ -27,5 +29,7 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "screenshots": [],
+  "related_applications": []
 }
