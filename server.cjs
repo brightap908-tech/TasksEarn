@@ -2132,7 +2132,7 @@ app.post("/api/earner/withdraw", async (req, res) => {
     if (String(accountNumber).length !== 10 || !/^\d+$/.test(String(accountNumber))) {
       return res.status(400).json({ error: "Account number must be exactly 10 digits" });
     }
-    const verification = await resolveBankAccount(String(accountNumber), bankName);
+    const verification = await resolveBankAccount(String(accountNumber), bankName, bankCode ? String(bankCode) : void 0);
     if ("error" in verification) {
       return res.status(400).json({ error: `Bank account verification failed: ${verification.error}` });
     }
@@ -2164,7 +2164,7 @@ app.post("/api/earner/withdraw", async (req, res) => {
     }
     const txId = "tx-" + Math.random().toString(36).substr(2, 9);
     const ref = "W-BANK-" + Math.floor(1e7 + Math.random() * 9e7);
-    const bankDetails = JSON.stringify({ bankName, bankCode: bankCode || void 0, accountNumber, accountName });
+    const bankDetails = JSON.stringify({ bankName, bankCode: bankCode ? String(bankCode) : null, accountNumber, accountName });
     await pool.query(`
       INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, bank_details, created_at)
       VALUES ($1,$2,$3,$4,$5,'Withdrawal','Pending',$6,$7,$8,$9)
