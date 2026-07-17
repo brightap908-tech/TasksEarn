@@ -1351,16 +1351,40 @@ export default function UnifiedDashboard({
               {/* Avatar + name + balance */}
               <div style={{ display: "flex", alignItems: "center", gap: "14px", paddingRight: "44px" }}>
                 <div style={{
-                  width: "54px", height: "54px", borderRadius: "16px",
-                  background: "rgba(255,255,255,0.20)",
-                  border: "2px solid rgba(255,255,255,0.35)",
+                  width: "54px", height: "54px", borderRadius: "50%",
+                  background: "rgba(255,255,255,0.18)",
+                  border: "2.5px solid rgba(255,255,255,0.40)",
                   backdropFilter: "blur(4px)",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "22px", fontWeight: 900, color: "#fff",
                   flexShrink: 0,
-                  letterSpacing: "-0.01em",
+                  padding: "6px",
+                  boxSizing: "border-box",
+                  overflow: "hidden",
                 }}>
-                  {user.name.charAt(0).toUpperCase()}
+                  <img
+                    src="/icon-mark.svg"
+                    alt="TasksEarn"
+                    width={42}
+                    height={42}
+                    style={{
+                      width: "42px", height: "42px",
+                      objectFit: "contain",
+                      display: "block",
+                      flexShrink: 0,
+                    }}
+                    onError={e => {
+                      // Fallback: hide image and show initial
+                      const el = e.currentTarget as HTMLImageElement;
+                      el.style.display = "none";
+                      const parent = el.parentElement;
+                      if (parent) {
+                        parent.style.fontSize = "22px";
+                        parent.style.fontWeight = "900";
+                        parent.style.color = "#fff";
+                        parent.textContent = user.name.charAt(0).toUpperCase();
+                      }
+                    }}
+                  />
                 </div>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <p style={{

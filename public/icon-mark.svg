@@ -1,0 +1,20 @@
+<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#5B9BFF"/>
+      <stop offset="55%"  stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#1835B0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect width="100" height="100" rx="22" fill="url(#bg)"/>
+
+  <!-- # symbol — two horizontal bars -->
+  <rect x="17" y="36" width="66" height="11" rx="5.5" fill="white"/>
+  <rect x="17" y="53" width="66" height="11" rx="5.5" fill="white"/>
+
+  <!-- # symbol — two vertical bars -->
+  <rect x="32" y="17" width="11" height="66" rx="5.5" fill="white"/>
+  <rect x="57" y="17" width="11" height="66" rx="5.5" fill="white"/>
+</svg>
