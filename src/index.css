@@ -882,3 +882,72 @@ pre { overflow-x: auto; }
 button:not([class*="rounded-full"]):not([class*="rounded-lg"]) {
   border-radius: 0.75rem;
 }
+
+/* ==========================================================================
+   HERO BALANCE CARD — FINTECH STYLE
+   ========================================================================== */
+.hero-balance-card {
+  background: linear-gradient(135deg, #1d4ed8 0%, #2563EB 45%, #3b82f6 100%);
+  border-radius: 1.25rem;
+  color: #ffffff;
+  box-shadow: 0 12px 40px rgba(37,99,235,0.38), 0 3px 10px rgba(29,78,216,0.22);
+  position: relative;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   MOBILE-FIRST DASHBOARD OVERRIDES (320px–480px)
+   ========================================================================== */
+@media (max-width: 480px) {
+  /* Ensure dashboard main area has no horizontal overflow */
+  [data-dashboard-main] {
+    padding: 0.875rem !important;
+    overflow-x: hidden;
+  }
+
+  /* Quick action grid — stay 4 cols on small screens, reduce padding */
+  .quick-actions-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 0.375rem !important;
+  }
+
+  /* Action buttons — full-width on very small screens */
+  .action-btn-pair {
+    gap: 0.625rem !important;
+  }
+
+  /* Card border radius — tighter on small screens */
+  .rounded-2xl { border-radius: 1rem !important; }
+}
+
+@media (max-width: 360px) {
+  /* Slightly reduce hero card text so ₦ doesn't overflow */
+  .hero-balance-amount { font-size: 1.75rem !important; }
+}
+
+/* ==========================================================================
+   TRANSACTION ROW HOVER
+   ========================================================================== */
+.tx-row {
+  transition: background 0.15s;
+}
+.tx-row:hover {
+  background: rgba(37,99,235,0.03) !important;
+}
+html.dark .tx-row:hover {
+  background: rgba(255,255,255,0.04) !important;
+}
+
+/* ==========================================================================
+   QUICK ACTION BUTTON
+   ========================================================================== */
+.quick-action-btn {
+  transition: transform 0.18s, box-shadow 0.18s;
+}
+.quick-action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(15,23,42,0.10) !important;
+}
+.quick-action-btn:active {
+  transform: translateY(0);
+}

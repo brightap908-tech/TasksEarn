@@ -193,26 +193,19 @@ export default function Navbar({
             {isDarkMode ? <Sun className="h-4 w-4" style={{ color: "#FBBF24" }} /> : <Moon className="h-4 w-4" style={{ color: "#94A3B8" }} />}
           </button>
 
-          {user && (
-            <div className="flex items-center gap-1 rounded-full px-2.5 py-1" style={{ background: "rgba(37,99,235,0.08)", border: "1px solid rgba(37,99,235,0.18)" }}>
-              <Wallet className="h-3 w-3 shrink-0" style={{ color: "#2563EB" }} />
-              <span className="font-mono text-xs font-bold" style={{ color: "#2563EB" }}>
-                ₦{(user.walletBalance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              </span>
-            </div>
-          )}
-
-          {user && isRegularUser(user.role) && earnerUnreadCount > 0 && (
+          {user && isRegularUser(user.role) && (
             <button
               onClick={() => onNavigate("dashboard-notifications")}
               className="relative rounded-full p-1.5 cursor-pointer"
               style={isDarkMode ? { background: "rgba(255,255,255,0.06)" } : { background: "#F8FAFC" }}
               aria-label="Notifications"
             >
-              <Bell className="h-4 w-4" style={{ color: "#2563EB" }} />
-              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[7px] font-black text-white" style={{ background: "#EF4444" }}>
-                {earnerUnreadCount > 9 ? "9+" : earnerUnreadCount}
-              </span>
+              <Bell className="h-4 w-4" style={{ color: earnerUnreadCount > 0 ? "#2563EB" : "#94A3B8" }} />
+              {earnerUnreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[7px] font-black text-white" style={{ background: "#EF4444" }}>
+                  {earnerUnreadCount > 9 ? "9+" : earnerUnreadCount}
+                </span>
+              )}
             </button>
           )}
 
