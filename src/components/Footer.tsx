@@ -1,6 +1,6 @@
 import React from "react";
 import { resolvePath } from "../lib/routes";
-import { Landmark, Mail, Phone, ShieldCheck, HelpCircle, FileText, Zap } from "lucide-react";
+import { Landmark, Mail, Phone, ShieldCheck, HelpCircle, FileText, Zap, BookOpen } from "lucide-react";
 
 interface FooterProps {
   onNavigate: (view: string) => void;
@@ -17,6 +17,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
   return (
     <footer
       id="app-footer"
+      aria-label="Site footer"
       style={{
         background: "linear-gradient(160deg, #0f2d6b 0%, #1040a0 60%, #1a52c4 100%)",
         borderTop: "1px solid rgba(255,255,255,0.12)"
@@ -31,6 +32,10 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
             <div
               className="flex items-center gap-3 cursor-pointer w-fit"
               onClick={() => onNavigate("home")}
+              role="link"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === "Enter" && onNavigate("home")}
+              aria-label="TasksEarn home"
             >
               {/* Logo mark */}
               <div
@@ -40,6 +45,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                   boxShadow: "0 0 18px rgba(147,197,253,0.25)",
                   border: "1px solid rgba(255,255,255,0.25)"
                 }}
+                aria-hidden="true"
               >
                 <span
                   className="font-bold text-white"
@@ -59,14 +65,14 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                   className="flex items-center gap-1 mt-1"
                   style={{ fontFamily: "var(--font-mono)", fontSize: "0.5rem", letterSpacing: "0.16em", color: "rgba(224,242,254,0.90)", textTransform: "uppercase", fontWeight: 700 }}
                 >
-                  <Zap style={{ width: "6px", height: "6px" }} />
-                  MICRO-EXCHANGE
+                  <Zap style={{ width: "6px", height: "6px" }} aria-hidden="true" />
+                  ONLINE TASK MARKETPLACE
                 </div>
               </div>
             </div>
 
             <p className="text-xs leading-relaxed font-medium" style={{ color: "rgba(224,242,254,0.92)", maxWidth: "240px" }}>
-              Nigeria's premier social media microtask exchange. Connecting advertisers with earners for organic, verified growth.
+              Nigeria's premier online task marketplace. Advertisers promote their businesses while earners complete simple tasks and receive secure payments.
             </p>
 
             {/* Security badge */}
@@ -74,24 +80,25 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
               className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
               style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.20)" }}
             >
-              <ShieldCheck className="h-3 w-3 text-blue-200" />
+              <ShieldCheck className="h-3 w-3 text-blue-200" aria-hidden="true" />
               <span className="text-[10px] font-semibold text-blue-100">SSL Secured Platform</span>
             </div>
           </div>
 
           {/* Platform links */}
-          <div className="space-y-4">
-            <h4
-              className="text-xs font-bold uppercase tracking-widest text-blue-100"
+          <nav aria-label="Platform navigation">
+            <h2
+              className="text-xs font-bold uppercase tracking-widest text-blue-100 mb-4"
               style={{ fontFamily: "var(--font-display)", letterSpacing: "0.1em" }}
             >
               Platform
-            </h4>
+            </h2>
             <ul className="space-y-2.5 text-xs">
               {[
                 { label: "Home", view: "home" },
                 { label: "About TasksEarn", view: "about" },
-                { label: "FAQ & Help", view: "faq", icon: <HelpCircle className="h-3.5 w-3.5 text-blue-300" /> },
+                { label: "How It Works", view: "how-it-works", icon: <BookOpen className="h-3.5 w-3.5 text-blue-300" aria-hidden="true" /> },
+                { label: "FAQ & Help", view: "faq", icon: <HelpCircle className="h-3.5 w-3.5 text-blue-300" aria-hidden="true" /> },
                 { label: "Contact Support", view: "contact" },
               ].map(item => (
                 <li key={item.view}>
@@ -109,16 +116,16 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                 </li>
               ))}
             </ul>
-          </div>
+          </nav>
 
           {/* Legal */}
-          <div className="space-y-4">
-            <h4
-              className="text-xs font-bold uppercase tracking-widest text-blue-100"
+          <nav aria-label="Legal pages">
+            <h2
+              className="text-xs font-bold uppercase tracking-widest text-blue-100 mb-4"
               style={{ fontFamily: "var(--font-display)", letterSpacing: "0.1em" }}
             >
               Legal
-            </h4>
+            </h2>
             <ul className="space-y-2.5 text-xs">
               <li>
                 <a
@@ -129,7 +136,7 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                   onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
                   onMouseLeave={e => (e.currentTarget.style.color = "rgba(224,242,254,0.96)")}
                 >
-                  <FileText className="h-3.5 w-3.5 text-yellow-300" />
+                  <FileText className="h-3.5 w-3.5 text-yellow-300" aria-hidden="true" />
                   Terms of Service
                 </a>
               </li>
@@ -142,87 +149,96 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
                   onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
                   onMouseLeave={e => (e.currentTarget.style.color = "rgba(224,242,254,0.96)")}
                 >
-                  <ShieldCheck className="h-3.5 w-3.5 text-blue-300" />
+                  <ShieldCheck className="h-3.5 w-3.5 text-blue-300" aria-hidden="true" />
                   Privacy Policy
                 </a>
               </li>
             </ul>
-          </div>
+          </nav>
 
           {/* Contact */}
           <div className="space-y-4">
-            <h4
+            <h2
               className="text-xs font-bold uppercase tracking-widest text-blue-100"
               style={{ fontFamily: "var(--font-display)", letterSpacing: "0.1em" }}
             >
               Support
-            </h4>
-            <ul className="space-y-3 text-xs">
-              <li className="flex items-center gap-2.5">
-                <div
-                  className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0"
-                  style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)" }}
-                >
-                  <Mail className="h-3.5 w-3.5 text-blue-200" />
-                </div>
-                <a
-                  href={`mailto:${settings.contactEmail}`}
-                  className="transition-colors font-semibold"
-                  style={{ color: "rgba(224,242,254,0.96)" }}
-                  onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
-                  onMouseLeave={e => (e.currentTarget.style.color = "rgba(224,242,254,0.96)")}
-                >
-                  {settings.contactEmail}
-                </a>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <div
-                  className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0"
-                  style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)" }}
-                >
-                  <Phone className="h-3.5 w-3.5 text-blue-200" />
-                </div>
-                <a
-                  href={`tel:${settings.contactPhone}`}
-                  className="transition-colors font-mono font-semibold"
-                  style={{ color: "rgba(224,242,254,0.96)" }}
-                  onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
-                  onMouseLeave={e => (e.currentTarget.style.color = "rgba(224,242,254,0.96)")}
-                >
-                  {settings.contactPhone}
-                </a>
-              </li>
-              {settings.whatsappGroup && (
+            </h2>
+            <address className="not-italic">
+              <ul className="space-y-3 text-xs">
                 <li className="flex items-center gap-2.5">
                   <div
                     className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0"
-                    style={{ background: "rgba(37,211,102,0.15)", border: "1px solid rgba(37,211,102,0.25)" }}
+                    style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)" }}
+                    aria-hidden="true"
                   >
-                    <span className="text-xs">💬</span>
+                    <Mail className="h-3.5 w-3.5 text-blue-200" />
                   </div>
                   <a
-                    href={settings.whatsappGroup}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-semibold transition-colors"
-                    style={{ color: "#86efac" }}
+                    href={`mailto:${settings.contactEmail}`}
+                    className="transition-colors font-semibold"
+                    style={{ color: "rgba(224,242,254,0.96)" }}
                     onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
-                    onMouseLeave={e => (e.currentTarget.style.color = "#86efac")}
+                    onMouseLeave={e => (e.currentTarget.style.color = "rgba(224,242,254,0.96)")}
                   >
-                    WhatsApp Chat Support
+                    {settings.contactEmail}
                   </a>
                 </li>
-              )}
-              <li className="flex items-start gap-2.5">
-                <div
-                  className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0 mt-0.5"
-                  style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)" }}
-                >
-                  <Landmark className="h-3.5 w-3.5 text-blue-200" />
-                </div>
-                <span className="font-medium" style={{ color: "rgba(224,242,254,0.90)" }}>12, Herbert Macaulay Way, Yaba, Lagos, Nigeria</span>
-              </li>
-            </ul>
+                <li className="flex items-center gap-2.5">
+                  <div
+                    className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0"
+                    style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)" }}
+                    aria-hidden="true"
+                  >
+                    <Phone className="h-3.5 w-3.5 text-blue-200" />
+                  </div>
+                  <a
+                    href={`tel:${settings.contactPhone}`}
+                    className="transition-colors font-mono font-semibold"
+                    style={{ color: "rgba(224,242,254,0.96)" }}
+                    onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
+                    onMouseLeave={e => (e.currentTarget.style.color = "rgba(224,242,254,0.96)")}
+                  >
+                    {settings.contactPhone}
+                  </a>
+                </li>
+                {settings.whatsappGroup && (
+                  <li className="flex items-center gap-2.5">
+                    <div
+                      className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0"
+                      style={{ background: "rgba(37,211,102,0.15)", border: "1px solid rgba(37,211,102,0.25)" }}
+                      aria-hidden="true"
+                    >
+                      <span className="text-xs">💬</span>
+                    </div>
+                    <a
+                      href={settings.whatsappGroup}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="font-semibold transition-colors"
+                      style={{ color: "#86efac" }}
+                      onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
+                      onMouseLeave={e => (e.currentTarget.style.color = "#86efac")}
+                      aria-label="WhatsApp Chat Support"
+                    >
+                      WhatsApp Chat Support
+                    </a>
+                  </li>
+                )}
+                <li className="flex items-start gap-2.5">
+                  <div
+                    className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0 mt-0.5"
+                    style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)" }}
+                    aria-hidden="true"
+                  >
+                    <Landmark className="h-3.5 w-3.5 text-blue-200" />
+                  </div>
+                  <span className="font-medium" style={{ color: "rgba(224,242,254,0.90)" }}>
+                    12, Herbert Macaulay Way, Yaba, Lagos, Nigeria
+                  </span>
+                </li>
+              </ul>
+            </address>
           </div>
         </div>
 
@@ -231,13 +247,18 @@ export default function Footer({ onNavigate, platformName, settings }: FooterPro
           className="mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs"
           style={{ borderTop: "1px solid rgba(255,255,255,0.12)", color: "rgba(224,242,254,0.88)" }}
         >
-          <p className="font-medium">© {new Date().getFullYear()} {platformName}. Built for Nigerian Earners &amp; Advertisers. All rights reserved.</p>
+          <p className="font-medium">
+            © {new Date().getFullYear()} {platformName}. Nigeria's Online Task Marketplace. All rights reserved.
+          </p>
           <div className="flex items-center gap-2">
             <span
               className="h-1.5 w-1.5 rounded-full inline-block"
               style={{ background: "#22c55e", boxShadow: "0 0 6px #22c55e", animation: "pulse 2s infinite" }}
+              aria-hidden="true"
             />
-            <span className="font-medium" style={{ color: "rgba(224,242,254,0.88)" }}>Secure Payouts via Paystack &amp; Flutterwave</span>
+            <span className="font-medium" style={{ color: "rgba(224,242,254,0.88)" }}>
+              Secure Payouts via Paystack &amp; Flutterwave
+            </span>
           </div>
         </div>
       </div>

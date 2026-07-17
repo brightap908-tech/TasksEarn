@@ -8,6 +8,7 @@ export const VIEW_TO_PATH: Record<string, string> = {
   "about": "/about",
   "faq": "/faq",
   "contact": "/contact",
+  "how-it-works": "/how-it-works",
   "terms": "/terms",
   "privacy": "/privacy",
   // Earner pages

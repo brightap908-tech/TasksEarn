@@ -106,9 +106,9 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
 
         {/* ── Desktop Nav Links ── */}
         <nav className="hidden md:flex items-center gap-5">
-          {(["home","about","faq","contact"] as const).map(v => (
+          {(["home","about","how-it-works","faq","contact"] as const).map(v => (
             <a key={v} href={resolvePath(v) ?? "/"} onClick={(e) => { e.preventDefault(); onNavigate(v); }} className={navLinkClass(v)}>
-              {v.charAt(0).toUpperCase() + v.slice(1)}
+              {v === "how-it-works" ? "How It Works" : v.charAt(0).toUpperCase() + v.slice(1)}
             </a>
           ))}
 
@@ -333,7 +333,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
             backdropFilter: "blur(20px)"
           }}
         >
-          {["home","about","faq","contact"].map(v => (
+          {["home","about","how-it-works","faq","contact"].map(v => (
             <a
               key={v}
               href={resolvePath(v) ?? "/"}
@@ -344,7 +344,7 @@ export default function Navbar({ user, currentView, onNavigate, onLogout, onOpen
                 : { color: isDarkMode ? "#e2e8f0" : "#475569" }
               }
             >
-              {v.charAt(0).toUpperCase() + v.slice(1)}
+              {v === "how-it-works" ? "How It Works" : v.charAt(0).toUpperCase() + v.slice(1)}
             </a>
           ))}
 

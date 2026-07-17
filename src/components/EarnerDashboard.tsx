@@ -1429,10 +1429,23 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                       : isFee   ? "bg-orange-100 text-orange-700 border-orange-200"
                       : null;
 
-                    const badgeLabel = isWithdrawal ? tx.status
+                    // Friendly badge label — never expose raw DB status values to earners
+                    const badgeLabel = isWithdrawal
+                      ? tx.status === "Pending"  ? "Pending"
+                      : tx.status === "Approved" ? "Awaiting Payment"
+                      : tx.status === "Paid"     ? "Successful"
+                      : tx.status === "Success"  ? "Successful"
+                      : tx.status === "Rejected" ? "Rejected"
+                      : tx.status === "Failed"   ? "Failed"
+                      : tx.status
                       : isRefund ? "Refunded"
                       : isFee    ? "Fee"
                       : null;
+
+                    // Withdrawals flow OUT of the wallet (to the bank) — display as negative even
+                    // though the DB stores the raw payout amount as a positive number.
+                    // Fees are already stored negative. Refunds/earnings are positive credits.
+                    const displayAmount = isWithdrawal ? -Math.abs(tx.amount) : tx.amount;
 
                     return (
                       <div key={idx} className="flex justify-between items-start py-3">
@@ -1448,8 +1461,8 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                             <p className="text-[10px] text-red-500 mt-0.5 italic">Reason: {tx.rejectionReason}</p>
                           )}
                         </div>
-                        <span className={`font-mono text-sm font-bold shrink-0 ${tx.amount > 0 ? "text-blue-600" : "text-red-500"}`}>
-                          {tx.amount > 0 ? "+" : ""}₦{Math.abs(tx.amount).toLocaleString()}
+                        <span className={`font-mono text-sm font-bold shrink-0 ${displayAmount >= 0 ? "text-blue-600" : "text-red-500"}`}>
+                          {displayAmount > 0 ? "+" : ""}₦{Math.abs(displayAmount).toLocaleString()}
                         </span>
                       </div>
                     );

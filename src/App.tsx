@@ -19,6 +19,7 @@ import MobileBottomNav from "./components/MobileBottomNav";
 import RouteProgressBar from "./components/RouteProgressBar";
 import LoginPopupModal from "./components/LoginPopupModal";
 import PublicPages from "./components/PublicPages";
+import SEO from "./components/SEO";
 import EarnerDashboard from "./components/EarnerDashboard";
 import EarnerTaskSubmitPage from "./components/EarnerTaskSubmitPage";
 import EarnerRejectedTasksPage from "./components/EarnerRejectedTasksPage";
@@ -763,6 +764,20 @@ export default function App() {
         {/* PUBLIC HOME LANDING VIEW */}
         <Route path="/" element={
           <div className="space-y-16 pb-16">
+            <SEO
+              title="TasksEarn - Earn Money Online by Completing Simple Tasks"
+              description="TasksEarn is a platform where advertisers promote their businesses and earners complete simple online tasks to earn money securely."
+              path="/"
+              jsonLd={{
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "@id": "https://tasksearn.name.ng/#webpage",
+                "url": "https://tasksearn.name.ng/",
+                "name": "TasksEarn - Earn Money Online by Completing Simple Tasks",
+                "description": "TasksEarn is a platform where advertisers promote their businesses and earners complete simple online tasks to earn money securely.",
+                "isPartOf": { "@id": "https://tasksearn.name.ng/#website" }
+              }}
+            />
             
             {/* Hero Section */}
             <section className="relative overflow-hidden hero-grid" style={{ background: isDarkMode ? "linear-gradient(180deg,#0b1220 0%,#0d1626 100%)" : "linear-gradient(180deg,#FFFFFF 0%,#e8f0ff 100%)", borderBottom: isDarkMode ? "1px solid rgba(255,255,255,0.06)" : "1.5px solid #E2E8F0", paddingTop: "5rem", paddingBottom: "6rem" }}>
@@ -1458,11 +1473,12 @@ export default function App() {
         } />
 
         {/* CMS STATIC AND REGULATORY PAGES */}
-        <Route path="/about" element={<><BackButton fallback="/" /><PublicPages view="about" pagesContent={pagesContent} settings={settings} /></>} />
-        <Route path="/faq" element={<><BackButton fallback="/" /><PublicPages view="faq" pagesContent={pagesContent} settings={settings} /></>} />
-        <Route path="/contact" element={<><BackButton fallback="/" /><PublicPages view="contact" pagesContent={pagesContent} settings={settings} /></>} />
-        <Route path="/terms" element={<><BackButton fallback="/" /><PublicPages view="terms" pagesContent={pagesContent} settings={settings} /></>} />
-        <Route path="/privacy" element={<><BackButton fallback="/" /><PublicPages view="privacy" pagesContent={pagesContent} settings={settings} /></>} />
+        <Route path="/about" element={<><BackButton fallback="/" /><PublicPages view="about" pagesContent={pagesContent} settings={settings} onNavigate={setCurrentView} /></>} />
+        <Route path="/faq" element={<><BackButton fallback="/" /><PublicPages view="faq" pagesContent={pagesContent} settings={settings} onNavigate={setCurrentView} /></>} />
+        <Route path="/contact" element={<><BackButton fallback="/" /><PublicPages view="contact" pagesContent={pagesContent} settings={settings} onNavigate={setCurrentView} /></>} />
+        <Route path="/how-it-works" element={<><BackButton fallback="/" /><PublicPages view="how-it-works" pagesContent={pagesContent} settings={settings} onNavigate={setCurrentView} /></>} />
+        <Route path="/terms" element={<><BackButton fallback="/" /><PublicPages view="terms" pagesContent={pagesContent} settings={settings} onNavigate={setCurrentView} /></>} />
+        <Route path="/privacy" element={<><BackButton fallback="/" /><PublicPages view="privacy" pagesContent={pagesContent} settings={settings} onNavigate={setCurrentView} /></>} />
 
         {/* ROLE PROTECTED: EARNER FIX & RESUBMIT PAGE (must be before /earner/:section) */}
         <Route path="/earner/rejected/:submissionId" element={
