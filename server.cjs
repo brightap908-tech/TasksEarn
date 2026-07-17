@@ -2345,8 +2345,8 @@ app.post("/api/advertiser/tasks", async (req, res) => {
       return res.status(400).json({ error: "All campaign fields are required" });
     }
     const slots = parseInt(totalSlots);
-    if (isNaN(slots) || slots <= 0) {
-      return res.status(400).json({ error: "Invalid slot count" });
+    if (isNaN(slots) || slots < 1 || slots > 1e5) {
+      return res.status(400).json({ error: "Slot count must be between 1 and 100,000" });
     }
     const activePlatformsRes = await pool.query(
       "SELECT * FROM social_platforms WHERE status = 'Active' ORDER BY LENGTH(name) DESC"
