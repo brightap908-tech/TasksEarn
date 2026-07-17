@@ -1402,9 +1402,9 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                     const isRefund    = tx.type === "Refund";
                     const wdLabel = isWithdrawal
                       ? tx.status === "Pending"  ? "Withdrawal Request - Pending"
-                      : tx.status === "Approved" ? "Withdrawal Approved - Processing"
+                      : tx.status === "Approved" ? "Approved - Awaiting Payment"
+                      : tx.status === "Paid"     ? "Withdrawal Successful"
                       : tx.status === "Success"  ? "Withdrawal Successful"
-                      : tx.status === "Paid"     ? "Withdrawal Paid"
                       : tx.status === "Rejected" ? "Withdrawal Rejected"
                       : tx.status === "Failed"   ? "Withdrawal Failed"
                       : tx.description
@@ -1419,9 +1419,9 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
 
                     const wdBadgeColor = isWithdrawal
                       ? tx.status === "Pending"  ? "bg-amber-100 text-amber-700 border-amber-200"
-                      : tx.status === "Approved" ? "bg-blue-100 text-blue-700 border-blue-200"
+                      : tx.status === "Approved" ? "bg-orange-100 text-orange-700 border-orange-200"
+                      : tx.status === "Paid"     ? "bg-green-100 text-green-700 border-green-200"
                       : tx.status === "Success"  ? "bg-green-100 text-green-700 border-green-200"
-                      : tx.status === "Paid"     ? "bg-green-200 text-green-800 border-green-300"
                       : tx.status === "Rejected" ? "bg-red-100 text-red-600 border-red-200"
                       : tx.status === "Failed"   ? "bg-red-100 text-red-600 border-red-200"
                       : "bg-gray-100 text-gray-500 border-gray-200"

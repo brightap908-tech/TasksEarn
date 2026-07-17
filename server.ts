@@ -796,6 +796,9 @@ async function bootstrapTables() {
     // 32. Track when a withdrawal is actually completed (Paystack confirms success).
     await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ NULL`);
 
+    // 33. Track which admin manually marked a withdrawal as Paid.
+    await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS marked_by_admin_id VARCHAR(50) NULL`);
+
     // 29. Admin action audit log — records every ban, unban, and delete action
     await client.query(`
       CREATE TABLE IF NOT EXISTS admin_action_logs (
@@ -3772,9 +3775,10 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
         return res.status(404).json({ error: "Withdrawal transaction not found" });
       }
       txSnapshot = mapTransaction(txRes.rows[0]);
-      // Allow approve/reject on Pending OR Failed (admin can retry a failed Paystack transfer).
-      // All other statuses (Approved, Success, Paid, Rejected) are terminal — block action.
-      const actionableStatuses = [TransactionStatus.PENDING, TransactionStatus.FAILED];
+      // Pending  → admin can approve (triggers Paystack) or reject (full refund).
+      // Approved → Paystack previously failed; admin can retry, mark-paid manually, or reject & refund.
+      // All other statuses (Paid, Rejected, Success, Failed) are terminal — block further action.
+      const actionableStatuses = [TransactionStatus.PENDING, TransactionStatus.APPROVED];
       if (!actionableStatuses.includes(txSnapshot.status)) {
         await client.query("ROLLBACK");
         return res.status(400).json({ error: "This withdrawal has already been processed and cannot be modified" });
@@ -3893,16 +3897,17 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
 
     // ── Update transaction with Paystack outcome ───────────────────────────────
     if (paystackOk) {
+      // Paystack succeeded — mark as Paid, stamp completion time, save transfer ref.
       await pool.query(
-        "UPDATE transactions SET status='Success', paystack_transfer_ref=$1, completed_at=NOW() WHERE id=$2",
+        "UPDATE transactions SET status='Paid', paystack_transfer_ref=$1, completed_at=NOW(), rejection_reason=NULL WHERE id=$2",
         [transferRef || null, txSnapshot.id]
       );
     } else {
-      // Paystack failed — mark as Failed. Wallet was already deducted; admin can
-      // retry (approve again) or reject (which refunds only the withdrawal amount — the fee is retained by the platform).
+      // Paystack failed — keep status as Approved (awaiting payment).
+      // Wallet remains deducted. Admin can: retry Paystack, mark paid manually, or reject & refund.
       console.error(`[Paystack] Transfer failed for tx ${txSnapshot.id}: ${failureNote}`);
       await pool.query(
-        "UPDATE transactions SET status='Failed', rejection_reason=$1 WHERE id=$2",
+        "UPDATE transactions SET status='Approved', rejection_reason=$1 WHERE id=$2",
         [failureNote, txSnapshot.id]
       );
     }
@@ -3914,7 +3919,7 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
       return res.status(200).json({
         success: false,
         transaction: finalTx,
-        error: `Paystack transfer failed: ${failureNote}. Withdrawal is marked Failed — retry or reject to refund the earner.`
+        error: `Paystack transfer failed: ${failureNote}. Withdrawal moved to "Approved — Awaiting Payment". Retry, mark paid manually, or reject & refund the earner.`
       });
     }
 
@@ -3925,7 +3930,7 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
   }
 });
 
-// Mark an approved withdrawal as Paid after manual bank transfer
+// Mark an approved withdrawal as Paid after a manual bank transfer (no Paystack call).
 app.post("/api/admin/withdrawals/:id/mark-paid", async (req, res) => {
   try {
     const admin = await getAuthenticatedUser(req);
@@ -3939,11 +3944,16 @@ app.post("/api/admin/withdrawals/:id/mark-paid", async (req, res) => {
 
     const tx = mapTransaction(txRes.rows[0]);
     if (tx.status !== TransactionStatus.APPROVED) {
-      return res.status(400).json({ error: "Only Approved withdrawals can be marked as Paid" });
+      return res.status(400).json({ error: "Only withdrawals in Approved (Awaiting Payment) status can be marked as Paid" });
     }
 
-    await pool.query("UPDATE transactions SET status='Paid' WHERE id=$1", [req.params.id]);
+    // Stamp completion time and record which admin confirmed the manual payment.
+    await pool.query(
+      "UPDATE transactions SET status='Paid', completed_at=NOW(), marked_by_admin_id=$1, rejection_reason=NULL WHERE id=$2",
+      [admin.id, req.params.id]
+    );
 
+    console.log(`[Mark Paid] Withdrawal ${req.params.id} manually marked Paid by admin ${admin.name} (${admin.id})`);
     const updated = await pool.query("SELECT * FROM transactions WHERE id=$1", [req.params.id]);
     res.json({ success: true, transaction: mapTransaction(updated.rows[0]) });
   } catch (err) {
