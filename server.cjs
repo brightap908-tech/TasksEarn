@@ -2148,29 +2148,52 @@ app.post("/api/earner/withdraw", async (req, res) => {
     }
     const settings = await getSettings();
     const withdrawAmount = parseFloat(amount);
+    const fee = typeof settings?.withdrawalFee === "number" ? settings.withdrawalFee : 50;
+    const totalDeduction = withdrawAmount + fee;
     if (isNaN(withdrawAmount) || withdrawAmount < (settings?.minWithdrawal || 200)) {
       return res.status(400).json({ error: `Minimum withdrawal amount is \u20A6${settings?.minWithdrawal || 200}` });
     }
-    const pendingRes = await pool.query(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE user_id = $1 AND type = 'Withdrawal' AND status = 'Pending'",
-      [user.id]
-    );
-    const pendingTotal = parseFloat(pendingRes.rows[0].total) || 0;
-    const available = user.walletBalance - pendingTotal;
-    if (available < withdrawAmount) {
-      return res.status(400).json({
-        error: `Insufficient available balance. Balance: \u20A6${user.walletBalance.toLocaleString()}, locked in pending: \u20A6${pendingTotal.toLocaleString()}, available: \u20A6${available.toLocaleString()}`
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const lockedRow = await client.query(
+        "SELECT wallet_balance FROM users WHERE id = $1 FOR UPDATE",
+        [user.id]
+      );
+      const currentBalance = parseFloat(lockedRow.rows[0].wallet_balance) || 0;
+      if (currentBalance < totalDeduction) {
+        await client.query("ROLLBACK");
+        const shortfall = totalDeduction - currentBalance;
+        return res.status(400).json({
+          error: `Insufficient balance. You need \u20A6${totalDeduction.toLocaleString()} (\u20A6${withdrawAmount.toLocaleString()} + \u20A6${fee.toLocaleString()} fee) but only have \u20A6${currentBalance.toLocaleString()}. Shortfall: \u20A6${shortfall.toLocaleString()}`
+        });
+      }
+      await client.query(
+        "UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2",
+        [totalDeduction, user.id]
+      );
+      const txId = "tx-" + Math.random().toString(36).substr(2, 9);
+      const ref = "W-BANK-" + Math.floor(1e7 + Math.random() * 9e7);
+      const bankDetails = JSON.stringify({ bankName, bankCode: bankCode ? String(bankCode) : null, accountNumber, accountName });
+      await client.query(`
+        INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, bank_details, created_at)
+        VALUES ($1,$2,$3,$4,$5,'Withdrawal','Pending',$6,$7,$8,$9)
+      `, [txId, user.id, user.name, user.role, withdrawAmount, `Withdrawal to ${bankName} (${accountNumber})`, ref, bankDetails, /* @__PURE__ */ new Date()]);
+      await client.query("COMMIT");
+      const newBalance = currentBalance - totalDeduction;
+      notifyAdmin({ type: "withdrawal", message: `New withdrawal request of \u20A6${withdrawAmount.toLocaleString()} from ${user.name}`, referenceId: txId });
+      res.json({
+        success: true,
+        transaction: { id: txId, amount: withdrawAmount, status: "Pending", reference: ref },
+        walletBalance: newBalance,
+        fee
       });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
     }
-    const txId = "tx-" + Math.random().toString(36).substr(2, 9);
-    const ref = "W-BANK-" + Math.floor(1e7 + Math.random() * 9e7);
-    const bankDetails = JSON.stringify({ bankName, bankCode: bankCode ? String(bankCode) : null, accountNumber, accountName });
-    await pool.query(`
-      INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, bank_details, created_at)
-      VALUES ($1,$2,$3,$4,$5,'Withdrawal','Pending',$6,$7,$8,$9)
-    `, [txId, user.id, user.name, user.role, withdrawAmount, `Withdrawal to ${bankName} (${accountNumber})`, ref, bankDetails, /* @__PURE__ */ new Date()]);
-    notifyAdmin({ type: "withdrawal", message: `New withdrawal request of \u20A6${withdrawAmount.toLocaleString()} from ${user.name}`, referenceId: txId });
-    res.json({ success: true, transaction: { id: txId, amount: withdrawAmount, status: "Pending", reference: ref }, walletBalance: user.walletBalance, availableBalance: available - withdrawAmount });
   } catch (err) {
     console.error("Withdraw error:", err);
     res.status(500).json({ error: "Server error" });
