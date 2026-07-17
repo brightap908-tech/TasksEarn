@@ -224,11 +224,17 @@ export default function UnifiedDashboard({
             >
               ₦{(user.walletBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
-            {(adBal) > 0 && (
-              <p className="text-xs mt-2 font-semibold" style={{ color: "rgba(219,234,254,0.80)" }}>
-                Ad Wallet: <span className="text-white font-mono font-bold">₦{adBal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+            {/* ── Ad Wallet sub-section ── */}
+            <div style={{ marginTop: "clamp(1rem,4vw,1.375rem)", paddingTop: "clamp(0.875rem,3.5vw,1.125rem)", borderTop: "1px solid rgba(255,255,255,0.18)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+                <Wallet style={{ width: "0.8125rem", height: "0.8125rem", color: "rgba(219,234,254,0.80)", flexShrink: 0 }}/>
+                <span style={{ fontSize: "0.6875rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(219,234,254,0.80)" }}>Ad Wallet</span>
+              </div>
+              <p className="font-black font-mono text-white leading-none" style={{ fontSize: "clamp(1.25rem,5.5vw,1.75rem)", marginTop: "0.3125rem", letterSpacing: "-0.015em" }}>
+                ₦{adBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
-            )}
+            </div>
+
             <div className="flex items-center gap-1.5 mt-4">
               <span className="h-2 w-2 rounded-full" style={{ background: "#4ade80", boxShadow: "0 0 6px rgba(74,222,128,0.60)" }}/>
               <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(219,234,254,0.70)", letterSpacing: "0.10em" }}>Live Balance</span>
