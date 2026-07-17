@@ -3322,18 +3322,51 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
         return res.status(400).json({ error: "This withdrawal has already been processed and cannot be modified" });
       }
       if (isReject) {
-        const refundAmount = txSnapshot.amount;
         const storedFee = txSnapshot.withdrawalFee != null ? txSnapshot.withdrawalFee : 0;
+        const totalRefund = txSnapshot.amount + storedFee;
         await client.query(
           "UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2",
-          [refundAmount, txSnapshot.userId]
+          [totalRefund, txSnapshot.userId]
         );
         await client.query(
           "UPDATE transactions SET status='Rejected', rejection_reason=$1 WHERE id=$2",
           [rejectionReason || null, txSnapshot.id]
         );
+        if (storedFee > 0) {
+          const feeCommRes = await client.query(
+            "SELECT reference FROM admin_commissions WHERE related_transaction_ref=$1 AND type='withdrawal_fee'",
+            [txSnapshot.reference]
+          );
+          if (feeCommRes.rows.length > 0) {
+            const feeRef = feeCommRes.rows[0].reference;
+            await client.query(
+              "DELETE FROM admin_commissions WHERE related_transaction_ref=$1 AND type='withdrawal_fee'",
+              [txSnapshot.reference]
+            );
+            await client.query(
+              "DELETE FROM transactions WHERE reference=$1 AND type='Fee'",
+              [feeRef]
+            );
+          }
+        }
+        const refundTxId = "tx-ref-" + Math.random().toString(36).substr(2, 9);
+        const refundRef = "REF-" + Math.floor(1e7 + Math.random() * 9e7);
+        await client.query(`
+          INSERT INTO transactions
+            (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
+          VALUES ($1,$2,$3,$4,$5,'Refund','Success',$6,$7,$8)
+        `, [
+          refundTxId,
+          txSnapshot.userId,
+          txSnapshot.userName,
+          txSnapshot.userRole,
+          totalRefund,
+          `Withdrawal Refund${rejectionReason ? ` \u2014 ${rejectionReason}` : ""}`,
+          refundRef,
+          /* @__PURE__ */ new Date()
+        ]);
         await client.query("COMMIT");
-        console.log(`[Review] Withdrawal ${txSnapshot.id} rejected \u2014 \u20A6${refundAmount} refunded to ${txSnapshot.userName} (fee \u20A6${storedFee} retained by platform)`);
+        console.log(`[Review] Withdrawal ${txSnapshot.id} rejected \u2014 full refund \u20A6${totalRefund} (\u20A6${txSnapshot.amount} + \u20A6${storedFee} fee) returned to ${txSnapshot.userName}; platform wallet fee credit reversed`);
         const updated = await pool.query("SELECT * FROM transactions WHERE id=$1", [txSnapshot.id]);
         return res.json({ success: true, transaction: mapTransaction(updated.rows[0]) });
       }
