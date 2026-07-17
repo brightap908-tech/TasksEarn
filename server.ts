@@ -167,6 +167,7 @@ function mapTransaction(row: any) {
     bankDetails: bankDetails || undefined,
     paystackTransferRef: row.paystack_transfer_ref || undefined,
     rejectionReason: row.rejection_reason || undefined,
+    withdrawalFee: row.withdrawal_fee != null ? parseFloat(row.withdrawal_fee) : undefined,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
   };
 }
@@ -786,6 +787,10 @@ async function bootstrapTables() {
     // 30. Paystack transfer reference and rejection reason on withdrawal transactions
     await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS paystack_transfer_ref VARCHAR(150) NULL`);
     await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS rejection_reason TEXT NULL`);
+
+    // 31. Store the processing fee per withdrawal so rejection refunds are accurate
+    //     even if the fee setting changes after the request was submitted.
+    await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS withdrawal_fee DECIMAL(10,2) NULL`);
 
     // 29. Admin action audit log — records every ban, unban, and delete action
     await client.query(`
@@ -2446,9 +2451,9 @@ app.post("/api/earner/withdraw", async (req, res) => {
       const bankDetails = JSON.stringify({ bankName, bankCode: bankCode ? String(bankCode) : null, accountNumber, accountName });
 
       await client.query(`
-        INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, bank_details, created_at)
-        VALUES ($1,$2,$3,$4,$5,'Withdrawal','Pending',$6,$7,$8,$9)
-      `, [txId, user.id, user.name, user.role, withdrawAmount, `Withdrawal to ${bankName} (${accountNumber})`, ref, bankDetails, new Date()]);
+        INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, bank_details, withdrawal_fee, created_at)
+        VALUES ($1,$2,$3,$4,$5,'Withdrawal','Pending',$6,$7,$8,$9,$10)
+      `, [txId, user.id, user.name, user.role, withdrawAmount, `Withdrawal to ${bankName} (${accountNumber})`, ref, bankDetails, fee, new Date()]);
 
       await client.query("COMMIT");
 
@@ -3742,10 +3747,14 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
       }
 
       if (isReject) {
-        // Reject — refund the earner's wallet (balance was deducted immediately at request time)
+        // Reject — refund the full deducted amount (withdrawal amount + processing fee).
+        // The fee is stored on the transaction itself so refunds remain correct even if
+        // the admin changes the fee setting between request submission and rejection.
+        const storedFee = txSnapshot.withdrawalFee != null ? txSnapshot.withdrawalFee : 0;
+        const totalRefund = txSnapshot.amount + storedFee;
         await client.query(
           "UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2",
-          [txSnapshot.amount, txSnapshot.userId]
+          [totalRefund, txSnapshot.userId]
         );
         await client.query(
           "UPDATE transactions SET status='Rejected', rejection_reason=$1 WHERE id=$2",

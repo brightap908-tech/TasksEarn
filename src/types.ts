@@ -160,6 +160,7 @@ export interface Transaction {
   };
   paystackTransferRef?: string;
   rejectionReason?: string;
+  withdrawalFee?: number;
   createdAt: string;
 }
 
