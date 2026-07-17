@@ -1,7 +1,6 @@
 export const VIEW_TO_PATH: Record<string, string> = {
   "home": "/",
   "login": "/login",
-  "advertiser-login": "/advertiser-login",
   "forgot-password": "/forgot-password",
   "register": "/register",
   "verify-email": "/verify-email",
@@ -11,34 +10,19 @@ export const VIEW_TO_PATH: Record<string, string> = {
   "how-it-works": "/how-it-works",
   "terms": "/terms",
   "privacy": "/privacy",
-  // Earner pages
-  "earner-dashboard": "/earner/overview",
-  "earner-tasks": "/earner/tasks",
-  "earner-pending": "/earner/pending",
-  "earner-completed": "/earner/completed",
-  "earner-wallet": "/earner/wallet",
-  "earner-submissions": "/earner/history",
-  "earner-referrals": "/earner/referrals",
-  "earner-notifications": "/earner/notifications",
-  "earner-withdraw": "/earner/withdraw",
-  "earner-profile": "/earner/profile",
-  "earner-settings": "/earner/settings",
-  "earner-rejected": "/earner/rejected",
-  // Advertiser pages
-  "advertiser-dashboard": "/advertiser/overview",
-  "advertiser-create": "/advertiser/create",
-  "advertiser-campaigns": "/advertiser/manage",
-  "advertiser-wallet": "/advertiser/wallet",
-  "advertiser-fund": "/advertiser/fund",
-  "advertiser-pending-submissions": "/advertiser/pending-submissions",
-  "advertiser-approved": "/advertiser/approved",
-  "advertiser-rejected": "/advertiser/rejected",
-  "advertiser-tasks": "/advertiser/manage",
-  "advertiser-submissions": "/advertiser/audit",
-  "advertiser-notifications": "/advertiser/notifications",
-  "advertiser-profile": "/advertiser/profile",
-  "advertiser-settings": "/advertiser/settings",
-  // Admin pages
+  // Unified user dashboard pages
+  "dashboard": "/dashboard/overview",
+  "dashboard-overview": "/dashboard/overview",
+  "dashboard-tasks": "/dashboard/tasks",
+  "dashboard-my-tasks": "/dashboard/my-tasks",
+  "dashboard-create-campaign": "/dashboard/create-campaign",
+  "dashboard-my-campaigns": "/dashboard/my-campaigns",
+  "dashboard-wallet": "/dashboard/wallet",
+  "dashboard-withdraw": "/dashboard/withdraw",
+  "dashboard-referrals": "/dashboard/referrals",
+  "dashboard-notifications": "/dashboard/notifications",
+  "dashboard-profile": "/dashboard/profile",
+  // Admin pages (kept separate)
   "admin-dashboard": "/admin/stats",
   "admin-users": "/admin/users",
   "admin-advertisers": "/admin/advertisers",
@@ -62,31 +46,17 @@ export function resolvePath(view: string): string | null {
 
 export function pathToView(pathname: string): string {
   if (!pathname || pathname === "/") return "home";
-  // Earner
-  if (pathname === "/earner/tasks") return "earner-tasks";
-  if (pathname === "/earner/pending") return "earner-pending";
-  if (pathname === "/earner/completed") return "earner-completed";
-  if (pathname === "/earner/wallet") return "earner-wallet";
-  if (pathname === "/earner/history") return "earner-submissions";
-  if (pathname === "/earner/referrals") return "earner-referrals";
-  if (pathname === "/earner/notifications") return "earner-notifications";
-  if (pathname === "/earner/withdraw") return "earner-withdraw";
-  if (pathname === "/earner/profile") return "earner-profile";
-  if (pathname === "/earner/settings") return "earner-settings";
-  if (pathname === "/earner/rejected") return "earner-rejected";
-  if (pathname.startsWith("/earner/")) return "earner-dashboard";
-  // Advertiser
-  if (pathname === "/advertiser/manage") return "advertiser-tasks";
-  if (pathname === "/advertiser/audit") return "advertiser-submissions";
-  if (pathname === "/advertiser/wallet") return "advertiser-wallet";
-  if (pathname === "/advertiser/fund") return "advertiser-fund";
-  if (pathname === "/advertiser/pending-submissions") return "advertiser-pending-submissions";
-  if (pathname === "/advertiser/approved") return "advertiser-approved";
-  if (pathname === "/advertiser/rejected") return "advertiser-rejected";
-  if (pathname === "/advertiser/notifications") return "advertiser-notifications";
-  if (pathname === "/advertiser/profile") return "advertiser-profile";
-  if (pathname === "/advertiser/settings") return "advertiser-settings";
-  if (pathname.startsWith("/advertiser/")) return "advertiser-dashboard";
+  // Dashboard
+  if (pathname === "/dashboard/tasks") return "dashboard-tasks";
+  if (pathname === "/dashboard/my-tasks") return "dashboard-my-tasks";
+  if (pathname === "/dashboard/create-campaign") return "dashboard-create-campaign";
+  if (pathname === "/dashboard/my-campaigns") return "dashboard-my-campaigns";
+  if (pathname === "/dashboard/wallet") return "dashboard-wallet";
+  if (pathname === "/dashboard/withdraw") return "dashboard-withdraw";
+  if (pathname === "/dashboard/referrals") return "dashboard-referrals";
+  if (pathname === "/dashboard/notifications") return "dashboard-notifications";
+  if (pathname === "/dashboard/profile") return "dashboard-profile";
+  if (pathname.startsWith("/dashboard/")) return "dashboard-overview";
   // Admin
   if (pathname === "/admin/advertisers") return "admin-advertisers";
   if (pathname === "/admin/notifications") return "admin-notifications";

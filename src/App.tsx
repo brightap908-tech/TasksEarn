@@ -20,12 +20,10 @@ import RouteProgressBar from "./components/RouteProgressBar";
 import LoginPopupModal from "./components/LoginPopupModal";
 import PublicPages from "./components/PublicPages";
 import SEO from "./components/SEO";
-import EarnerDashboard from "./components/EarnerDashboard";
+import UnifiedDashboard from "./components/UnifiedDashboard";
 import EarnerTaskSubmitPage from "./components/EarnerTaskSubmitPage";
-import EarnerRejectedTasksPage from "./components/EarnerRejectedTasksPage";
 import EarnerRejectedTaskResubmitPage from "./components/EarnerRejectedTaskResubmitPage";
-import AdvertiserDashboard from "./components/AdvertiserDashboard";
-import AdvertiserSubmissionReviewPage from "./components/AdvertiserSubmissionReviewPage";
+import { isRegularUser } from "./types";
 import AdminDashboard from "./components/AdminDashboard";
 import { simulateApiFetch } from "./mockDb";
 import { 
@@ -93,7 +91,6 @@ export default function App() {
   });
 
   // Auth Forms State
-  const [authRole, setAuthRole] = React.useState<UserRole>(UserRole.EARNER);
   const [loginEmail, setLoginEmail] = React.useState("");
   const [loginPassword, setLoginPassword] = React.useState("");
   const [regName, setRegName] = React.useState("");
@@ -221,10 +218,9 @@ export default function App() {
       const data = await apiFetch("/api/auth/me");
       if (data && data.user) {
         setUser(data.user);
-        // Automatically route to their respective dashboard on startup
-        if (data.user.role === UserRole.EARNER) setCurrentView("earner-dashboard");
-        if (data.user.role === UserRole.ADVERTISER) setCurrentView("advertiser-dashboard");
+        // Automatically route to the appropriate dashboard on startup
         if (data.user.role === UserRole.ADMIN) setCurrentView("admin-dashboard");
+        else setCurrentView("dashboard-overview");
       } else {
         localStorage.removeItem("tasksearn_uid");
       }
@@ -308,7 +304,7 @@ export default function App() {
           window.history.replaceState({}, document.title, cleanUrl);
           
           await refreshUserSession();
-          setCurrentView("advertiser-dashboard");
+          setCurrentView("dashboard-wallet");
           
           setTimeout(() => {
             setVerifyingPayment(false);
@@ -328,7 +324,7 @@ export default function App() {
     }
   };
 
-  // Fetch unread earner notification count from API
+  // Fetch unread notification count from API
   const fetchEarnerUnreadCount = async () => {
     try {
       const data = await apiFetch("/api/earner/notifications");
@@ -348,9 +344,9 @@ export default function App() {
     } catch (e) {}
   };
 
-  // Set up WebSocket for earner real-time notifications
+  // Set up WebSocket for real-time notifications (all non-admin users)
   React.useEffect(() => {
-    if (!user || user.role !== UserRole.EARNER) return;
+    if (!user || user.role === UserRole.ADMIN) return;
 
     // Fetch current notifications and rejected tasks count on mount / login
     fetchEarnerUnreadCount();
@@ -364,9 +360,10 @@ export default function App() {
         navigator.serviceWorker.addEventListener("message", (e) => {
           if (e.data?.type === "navigate" && e.data?.url) {
             const url: string = e.data.url;
-            if (url.includes("/earner/")) {
-              const section = url.split("/earner/")[1] || "notifications";
-              setCurrentView("earner-" + section);
+            if (url.includes("/dashboard/")) {
+              setCurrentView("dashboard-notifications");
+            } else if (url.includes("/earner/")) {
+              setCurrentView("dashboard-notifications");
             }
           }
         });
@@ -464,32 +461,15 @@ export default function App() {
           setAuthError(data.error);
         }
       } else if (data && data.user) {
-        const isAdvertiserView = currentView === "advertiser-login";
-        const userRole = data.user.role;
-
-        if (isAdvertiserView && userRole !== UserRole.ADVERTISER) {
-          setAuthError("This account is not registered as an Advertiser. Please use the Earner login page.");
-          setAuthLoading(false);
-          return;
-        }
-
-        if (!isAdvertiserView && userRole === UserRole.ADVERTISER) {
-          setAuthError("This account is registered as an Advertiser. Please use the Advertiser login page.");
-          setAuthLoading(false);
-          return;
-        }
-
         localStorage.setItem("tasksearn_uid", data.user.id);
         setUser(data.user);
         maybeShowLoginPopup(data.user);
         
         // Navigation depending on role
-        if (data.user.role === UserRole.EARNER) {
-          setCurrentView("earner-dashboard");
-        } else if (data.user.role === UserRole.ADVERTISER) {
-          setCurrentView("advertiser-dashboard");
-        } else if (data.user.role === UserRole.ADMIN) {
+        if (data.user.role === UserRole.ADMIN) {
           setCurrentView("admin-dashboard");
+        } else {
+          setCurrentView("dashboard-overview");
         }
         
         // Reset forms
@@ -556,12 +536,10 @@ export default function App() {
         maybeShowLoginPopup(data.user);
         showToast("Email address successfully verified!", "success");
 
-        if (data.user.role === UserRole.EARNER) {
-          setCurrentView("earner-dashboard");
-        } else if (data.user.role === UserRole.ADVERTISER) {
-          setCurrentView("advertiser-dashboard");
-        } else {
+        if (data.user.role === UserRole.ADMIN) {
           setCurrentView("admin-dashboard");
+        } else {
+          setCurrentView("dashboard-overview");
         }
         
         setVerificationEmail("");
@@ -611,7 +589,6 @@ export default function App() {
           name: regName,
           email: regEmail,
           password: regPassword,
-          role: authRole,
           referralCode: regReferral
         })
       });
@@ -823,7 +800,7 @@ export default function App() {
                       Sign Up &amp; Start Earning
                     </button>
                     <button
-                      onClick={() => { setAuthRole(UserRole.ADVERTISER); setCurrentView("register"); }}
+                      onClick={() => { setCurrentView("register"); }}
                       className="rounded-full px-7 py-3.5 text-sm font-bold text-center cursor-pointer transition-all"
                       style={{
                         background: isDarkMode ? "rgba(255,255,255,0.04)" : "rgba(0,102,255,0.06)",
@@ -1180,98 +1157,14 @@ export default function App() {
                     Create one now
                   </button>
                 </div>
-                <div style={{ color: "#64748b" }}>
-                  Are you an Advertiser?{" "}
-                  <button onClick={() => { setAuthError(""); setCurrentView("advertiser-login"); }} className="font-bold cursor-pointer" style={{ color: "#2563EB" }}>
-                    Go to Advertiser Portal
-                  </button>
-                </div>
               </div>
 
             </div>
           </div>
         } />
 
-        {/* AUTHENTICATION SECURE VIEW (ADVERTISER LOGIN) */}
-        <Route path="/advertiser-login" element={
-          <div className="mx-auto max-w-md px-4 py-16 sm:py-24 animate-fadeIn">
-            <BackButton fallback="/" />
-            <div className="rounded-2xl p-6 sm:p-8 space-y-6" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", boxShadow: "0 12px 40px rgba(37,99,235,0.10)" }}>
-              
-              <div className="text-center">
-                <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase" style={{ background: "rgba(99,102,241,0.10)", border: "1px solid rgba(99,102,241,0.20)", color: "#818cf8" }}>
-                  Advertiser Portal
-                </span>
-                <h2 className="font-bold text-slate-900 mt-2" style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem" }}>Welcome Back, Advertiser!</h2>
-                <p className="text-xs mt-1" style={{ color: "#64748b" }}>Sign in to manage your campaigns, track submissions, and check your ad budget.</p>
-              </div>
-
-              {authError && <p className="rounded-xl p-3 text-xs font-bold text-center" style={{ background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.20)", color: "#fb7185" }}>{authError}</p>}
-
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Advertiser Email Address</label>
-                  <input 
-                    type="email"
-                    required
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="e.g. advertiser@company.com"
-                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-xs font-semibold text-slate-500 uppercase">Password</label>
-                    <button 
-                      type="button" 
-                      onClick={() => {
-                        setAuthError("");
-                        setCurrentView("forgot-password");
-                      }}
-                      className="text-xs text-blue-500 hover:text-blue-600 hover:underline font-semibold"
-                    >
-                      Forgot Password?
-                    </button>
-                  </div>
-                  <input 
-                    type="password"
-                    required
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full rounded-full border border-slate-200 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                  />
-                </div>
-
-                <button 
-                  type="submit"
-                  disabled={authLoading}
-                  className="w-full rounded-full bg-blue-500 hover:bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm transition-all cursor-pointer"
-                >
-                  {authLoading ? "Decrypting Session..." : "Secure Sign In to Portal"}
-                </button>
-              </form>
-
-              <div className="flex flex-col gap-2 text-center text-xs pt-4" style={{ borderTop: "1px solid #E2E8F0" }}>
-                <div style={{ color: "#64748b" }}>
-                  Not registered as an Advertiser?{" "}
-                  <button onClick={() => { setAuthRole(UserRole.ADVERTISER); setCurrentView("register"); }} className="font-bold cursor-pointer" style={{ color: "#2563EB" }}>
-                    Register here
-                  </button>
-                </div>
-                <div style={{ color: "#64748b" }}>
-                  Are you an Earner?{" "}
-                  <button onClick={() => { setAuthError(""); setCurrentView("login"); }} className="font-bold cursor-pointer" style={{ color: "#2563EB" }}>
-                    Go to Earner Sign In
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        } />
+        {/* Redirect old advertiser-login URL to unified login */}
+        <Route path="/advertiser-login" element={<Navigate to="/login" replace />} />
 
         {/* AUTHENTICATION SECURE VIEW (FORGOT PASSWORD) */}
         <Route path="/forgot-password" element={
@@ -1343,22 +1236,9 @@ export default function App() {
                 <p className="text-xs mt-1" style={{ color: "#64748b" }}>Get certified, perform tasks, promote brand awareness.</p>
               </div>
 
-              {/* Role Toggle */}
-              <div className="grid grid-cols-2 gap-1.5 rounded-xl p-1" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-                <button type="button" onClick={() => setAuthRole(UserRole.EARNER)}
-                  className="py-2 text-xs font-bold rounded-lg cursor-pointer transition-all"
-                  style={authRole === UserRole.EARNER
-                    ? { background: "linear-gradient(135deg,#2563EB,#2563eb)", color: "#fff", boxShadow: "0 2px 8px rgba(37,99,235,0.30)" }
-                    : { color: "#64748b" }}>
-                  Register as Earner
-                </button>
-                <button type="button" onClick={() => setAuthRole(UserRole.ADVERTISER)}
-                  className="py-2 text-xs font-bold rounded-lg cursor-pointer transition-all"
-                  style={authRole === UserRole.ADVERTISER
-                    ? { background: "linear-gradient(135deg,#2563EB,#2563eb)", color: "#fff", boxShadow: "0 2px 8px rgba(37,99,235,0.30)" }
-                    : { color: "#64748b" }}>
-                  Register as Advertiser
-                </button>
+              <div className="rounded-xl p-3 text-xs flex items-center gap-2" style={{ background: "rgba(37,99,235,0.06)", border: "1px solid rgba(37,99,235,0.15)" }}>
+                <span className="text-blue-500 font-bold">🎯</span>
+                <p style={{ color: "#2563EB" }}>One account to earn from tasks <strong>and</strong> run campaigns — all in one dashboard.</p>
               </div>
 
               {authError && <p className="rounded-xl p-3 text-xs font-bold text-center" style={{ background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.20)", color: "#fb7185" }}>{authError}</p>}
@@ -1378,15 +1258,13 @@ export default function App() {
                   </div>
                 ))}
 
-                {authRole === UserRole.EARNER && (
-                  <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b", letterSpacing: "0.06em" }}>Referral Code (Optional)</label>
-                    <input type="text" value={regReferral} onChange={e => setRegReferral(e.target.value)} placeholder="e.g. TUNDE887"
-                      className="w-full rounded-xl px-4 py-2.5 text-sm font-mono text-center uppercase tracking-wider"
-                      style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
-                    />
-                  </div>
-                )}
+                <div>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b", letterSpacing: "0.06em" }}>Referral Code (Optional)</label>
+                  <input type="text" value={regReferral} onChange={e => setRegReferral(e.target.value)} placeholder="e.g. TUNDE887"
+                    className="w-full rounded-xl px-4 py-2.5 text-sm font-mono text-center uppercase tracking-wider"
+                    style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
+                  />
+                </div>
 
                 <button type="submit" disabled={authLoading}
                   className="w-full rounded-xl py-3 text-sm font-bold text-white cursor-pointer transition-all"
@@ -1480,79 +1358,55 @@ export default function App() {
         <Route path="/terms" element={<><BackButton fallback="/" /><PublicPages view="terms" pagesContent={pagesContent} settings={settings} onNavigate={setCurrentView} /></>} />
         <Route path="/privacy" element={<><BackButton fallback="/" /><PublicPages view="privacy" pagesContent={pagesContent} settings={settings} onNavigate={setCurrentView} /></>} />
 
-        {/* ROLE PROTECTED: EARNER FIX & RESUBMIT PAGE (must be before /earner/:section) */}
-        <Route path="/earner/rejected/:submissionId" element={
-          user && user.role === UserRole.EARNER ? (
-            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-              <EarnerRejectedTaskResubmitPage apiFetch={apiFetch} showToast={showToast} />
-            </div>
-          ) : (<Navigate to="/login" replace />)
-        } />
-        {/* NOTE: /earner/rejected (list) is intentionally NOT a separate route.
-            It falls through to /earner/:section below so EarnerDashboard renders
-            the "rejected" tab within the dashboard layout (sidebar + nav intact).
-            The standalone EarnerRejectedTasksPage is kept as a component but is
-            no longer routed — all rejected-list UI lives inside the dashboard. */}
+        {/* Legacy earner/advertiser URL redirects */}
+        <Route path="/earner/*" element={<Navigate to="/dashboard/overview" replace />} />
+        <Route path="/advertiser/*" element={<Navigate to="/dashboard/overview" replace />} />
+        <Route path="/advertiser-login" element={<Navigate to="/login" replace />} />
 
-        {/* ROLE PROTECTED: EARNER TASK SUBMISSION PAGE (must be before /earner/:section) */}
-        <Route path="/earner/tasks/:taskId/submit" element={
-          user && user.role === UserRole.EARNER ? (
+        {/* ROLE PROTECTED: TASK SUBMISSION PAGE (must be before /dashboard/:section) */}
+        <Route path="/dashboard/tasks/:taskId/submit" element={
+          user && isRegularUser(user.role) ? (
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
               <EarnerTaskSubmitPage apiFetch={apiFetch} showToast={showToast} />
             </div>
           ) : (<Navigate to="/login" replace />)
         } />
 
-        {/* ROLE PROTECTED: EARNER DASHBOARD PANELS */}
-        <Route path="/earner/:section" element={
-          user && user.role === UserRole.EARNER ? (
+        {/* ROLE PROTECTED: RESUBMIT PAGE (must be before /dashboard/:section) */}
+        <Route path="/dashboard/my-tasks/:submissionId/resubmit" element={
+          user && isRegularUser(user.role) ? (
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-              <EarnerDashboard 
-                user={user} 
-                onRefreshUser={refreshUserSession}
-                onNavigate={(view) => setCurrentView(view)}
-                apiFetch={apiFetch}
-                showToast={showToast}
-                earnerNotifications={earnerNotifications}
-                onMarkNotificationRead={(id) => {
-                  apiFetch(`/api/earner/notifications/${id}/read`, { method: "POST" }).catch(() => {});
-                  setEarnerNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-                }}
-                onMarkAllNotificationsRead={() => {
-                  apiFetch("/api/earner/notifications/read-all", { method: "POST" }).catch(() => {});
-                  setEarnerNotifications(prev => prev.map(n => ({ ...n, read: true })));
-                }}
-              />
+              <EarnerRejectedTaskResubmitPage apiFetch={apiFetch} showToast={showToast} />
             </div>
           ) : (<Navigate to="/login" replace />)
         } />
-        <Route path="/earner" element={<Navigate to="/earner/overview" replace />} />
 
-        {/* ROLE PROTECTED: ADVERTISER SUBMISSION REVIEW PAGE (must be before /advertiser/:section) */}
-        <Route path="/advertiser/audit/:submissionId" element={
-          user && user.role === UserRole.ADVERTISER ? (
-            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-              <AdvertiserSubmissionReviewPage apiFetch={apiFetch} showToast={showToast} />
-            </div>
-          ) : (<Navigate to="/advertiser-login" replace />)
+        {/* ROLE PROTECTED: UNIFIED DASHBOARD */}
+        <Route path="/dashboard/:section" element={
+          user && isRegularUser(user.role) ? (
+            <UnifiedDashboard
+              user={user}
+              onRefreshUser={refreshUserSession}
+              onNavigate={(view) => setCurrentView(view)}
+              onLogout={handleLogout}
+              apiFetch={apiFetch}
+              showToast={showToast}
+              settings={settings}
+              earnerNotifications={earnerNotifications}
+              onMarkNotificationRead={(id) => {
+                apiFetch(`/api/earner/notifications/${id}/read`, { method: "POST" }).catch(() => {});
+                setEarnerNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+              }}
+              onMarkAllNotificationsRead={() => {
+                apiFetch("/api/earner/notifications/read-all", { method: "POST" }).catch(() => {});
+                setEarnerNotifications(prev => prev.map(n => ({ ...n, read: true })));
+              }}
+              onOpenDeposit={openDeposit}
+              isDarkMode={isDarkMode}
+            />
+          ) : user && user.role === UserRole.ADMIN ? (<Navigate to="/admin/stats" replace />) : (<Navigate to="/login" replace />)
         } />
-
-        {/* ROLE PROTECTED: ADVERTISER DASHBOARD PANELS */}
-        <Route path="/advertiser/:section" element={
-          user && user.role === UserRole.ADVERTISER ? (
-            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-              <AdvertiserDashboard 
-                user={user} 
-                onRefreshUser={refreshUserSession}
-                onNavigate={(view) => setCurrentView(view)}
-                onOpenDeposit={openDeposit}
-                apiFetch={apiFetch}
-                settings={settings}
-              />
-            </div>
-          ) : (<Navigate to="/advertiser-login" replace />)
-        } />
-        <Route path="/advertiser" element={<Navigate to="/advertiser/overview" replace />} />
+        <Route path="/dashboard" element={<Navigate to="/dashboard/overview" replace />} />
 
         {/* ROLE PROTECTED: ADMIN PANEL */}
         <Route path="/admin/:section" element={

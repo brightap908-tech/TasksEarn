@@ -1,1 +1,2 @@
 - [TasksEarn dynamic platforms](tasksearn-dynamic-platforms.md) — how social media platforms are DB-driven end-to-end; backend was already built, only the frontend needed wiring.
+- [TasksEarn unified account migration](tasksearn-unified-account.md) — full migration from dual Earner/Advertiser roles to a single User role with two wallets; key decisions and guards.

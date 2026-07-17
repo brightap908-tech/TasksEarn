@@ -1,7 +1,7 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LayoutGrid, Briefcase, Wallet, Bell, UserCircle, CreditCard, Users, XCircle } from "lucide-react";
-import { User, UserRole } from "../types";
+import { LayoutGrid, Briefcase, Wallet, Bell, UserCircle, CreditCard, Users, CheckSquare, Megaphone } from "lucide-react";
+import { User, UserRole, isRegularUser } from "../types";
 
 interface NavItem {
   path: string;
@@ -17,11 +17,6 @@ interface MobileBottomNavProps {
   rejectedTasksCount?: number;
 }
 
-/**
- * Fixed bottom navigation bar shown on mobile screens only, for logged-in
- * users. Gives each role quick access to their most important pages without
- * scrolling to sections — every tap navigates to a real routed page.
- */
 export default function MobileBottomNav({ user, isDarkMode, earnerUnreadCount = 0, rejectedTasksCount = 0 }: MobileBottomNavProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -29,24 +24,15 @@ export default function MobileBottomNav({ user, isDarkMode, earnerUnreadCount = 
   if (!user) return null;
 
   const iconCls = "h-[22px] w-[22px]";
-
   let items: NavItem[] = [];
 
-  if (user.role === UserRole.EARNER) {
+  if (isRegularUser(user.role)) {
     items = [
-      { path: "/earner/overview", label: "Dashboard", icon: <LayoutGrid className={iconCls} />, badge: rejectedTasksCount },
-      { path: "/earner/tasks", label: "Tasks", icon: <Briefcase className={iconCls} /> },
-      { path: "/earner/wallet", label: "Wallet", icon: <Wallet className={iconCls} /> },
-      { path: "/earner/notifications", label: "Alerts", icon: <Bell className={iconCls} />, badge: earnerUnreadCount },
-      { path: "/earner/rejected", label: "Rejected", icon: <XCircle className={iconCls} />, badge: rejectedTasksCount },
-    ];
-  } else if (user.role === UserRole.ADVERTISER) {
-    items = [
-      { path: "/advertiser/overview", label: "Dashboard", icon: <LayoutGrid className={iconCls} /> },
-      { path: "/advertiser/manage", label: "Campaigns", icon: <Briefcase className={iconCls} /> },
-      { path: "/advertiser/wallet", label: "Wallet", icon: <Wallet className={iconCls} /> },
-      { path: "/advertiser/notifications", label: "Alerts", icon: <Bell className={iconCls} /> },
-      { path: "/advertiser/profile", label: "Profile", icon: <UserCircle className={iconCls} /> },
+      { path: "/dashboard/overview", label: "Home", icon: <LayoutGrid className={iconCls} /> },
+      { path: "/dashboard/tasks", label: "Tasks", icon: <Briefcase className={iconCls} /> },
+      { path: "/dashboard/my-campaigns", label: "Campaigns", icon: <Megaphone className={iconCls} /> },
+      { path: "/dashboard/wallet", label: "Wallet", icon: <Wallet className={iconCls} /> },
+      { path: "/dashboard/notifications", label: "Alerts", icon: <Bell className={iconCls} />, badge: earnerUnreadCount },
     ];
   } else if (user.role === UserRole.ADMIN) {
     items = [
@@ -60,7 +46,7 @@ export default function MobileBottomNav({ user, isDarkMode, earnerUnreadCount = 
     return null;
   }
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + "/");
 
   return (
     <nav
@@ -87,32 +73,16 @@ export default function MobileBottomNav({ user, isDarkMode, earnerUnreadCount = 
             className="relative flex flex-col items-center justify-center gap-1 py-2 cursor-pointer transition-colors"
             style={{ minHeight: "56px" }}
           >
-            <span
-              className="relative flex items-center justify-center"
-              style={{ color: active ? "#2563EB" : isDarkMode ? "#94a3b8" : "#94a3b8" }}
-            >
+            <span className="relative flex items-center justify-center" style={{ color: active ? "#2563EB" : isDarkMode ? "#94a3b8" : "#94a3b8" }}>
               {item.icon}
               {item.badge != null && item.badge > 0 && (
-                <span
-                  className="absolute -top-1.5 -right-2 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[8px] font-black text-white"
-                  style={{ background: "#EF4444" }}
-                >
+                <span className="absolute -top-1.5 -right-2 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[8px] font-black text-white" style={{ background: "#EF4444" }}>
                   {item.badge > 99 ? "99+" : item.badge}
                 </span>
               )}
             </span>
-            <span
-              className="text-[10px] font-bold leading-none"
-              style={{ color: active ? "#2563EB" : isDarkMode ? "#94a3b8" : "#94a3b8" }}
-            >
-              {item.label}
-            </span>
-            {active && (
-              <span
-                className="absolute top-0 h-0.5 w-8 rounded-full"
-                style={{ background: "#2563EB" }}
-              />
-            )}
+            <span className="text-[10px] font-bold leading-none" style={{ color: active ? "#2563EB" : isDarkMode ? "#94a3b8" : "#94a3b8" }}>{item.label}</span>
+            {active && <span className="absolute top-0 h-0.5 w-8 rounded-full" style={{ background: "#2563EB" }} />}
           </button>
         );
       })}

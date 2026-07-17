@@ -4,8 +4,9 @@
  */
 
 export enum UserRole {
-  EARNER = "Earner",
-  ADVERTISER = "Advertiser",
+  USER = "User",
+  EARNER = "Earner",     // legacy — kept for DB backward-compat
+  ADVERTISER = "Advertiser", // legacy — kept for DB backward-compat
   ADMIN = "Admin"
 }
 
@@ -54,7 +55,7 @@ export enum TaskStatus {
   ACTIVE = "Active",
   PAUSED = "Paused",
   COMPLETED = "Completed",
-  PENDING_APPROVAL = "Pending Approval" // for tasks created by advertiser that admin might need to review (optional, but we support auto-active as configured)
+  PENDING_APPROVAL = "Pending Approval"
 }
 
 export enum SubmissionStatus {
@@ -81,14 +82,20 @@ export enum TransactionStatus {
   PAID = "Paid"
 }
 
+/** Helper: returns true for any regular (non-admin) user role */
+export function isRegularUser(role: string): boolean {
+  return role === UserRole.USER || role === UserRole.EARNER || role === UserRole.ADVERTISER;
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
   isVerified: boolean;
-  isActivated?: boolean; // Activation fees have been removed — all users (Earners, Advertisers, Admins) are activated by default
-  walletBalance: number;
+  isActivated?: boolean;
+  walletBalance: number;  // earnings balance
+  adBalance?: number;     // advertising balance
   referralCode?: string;
   referredBy?: string;
   createdAt: string;
@@ -122,8 +129,8 @@ export interface Task {
   advertiserName: string;
   createdAt: string;
   // Per-earner submission state — populated by GET /api/earner/tasks
-  submissionStatus?: string | null;   // null | 'Rejected' (Pending/Approved tasks are filtered out)
-  submissionFeedback?: string | null; // Rejection reason shown to earner so they can correct & resubmit
+  submissionStatus?: string | null;
+  submissionFeedback?: string | null;
 }
 
 export interface TaskSubmission {
@@ -134,7 +141,7 @@ export interface TaskSubmission {
   earnerId: string;
   earnerName: string;
   proofText: string;
-  proofScreenshot: string; // URL or Base64 string
+  proofScreenshot: string;
   status: SubmissionStatus;
   feedback?: string;
   reward: number;
@@ -203,10 +210,10 @@ export interface PageContent {
 
 export interface WebsiteSettings {
   platformName: string;
-  referralReward: number; // Naira reward per active referral
-  withdrawalFee: number; // Percentage or flat fee in Naira
-  minWithdrawal: number; // Naira
-  minDeposit: number; // Naira
+  referralReward: number;
+  withdrawalFee: number;
+  minWithdrawal: number;
+  minDeposit: number;
   contactEmail: string;
   contactPhone: string;
   telegramChannel?: string;
@@ -257,27 +264,21 @@ export enum Platform {
 export interface TaskPricing {
   id: string;
   platform: Platform;
-  costPerSlot: number; // What the advertiser pays
-  earningPerSlot: number; // What the earner receives
+  costPerSlot: number;
+  earningPerSlot: number;
 }
 
-// Dynamic, admin-managed social media platform (replaces the hardcoded
-// Platform enum as the source of truth across the app). Stored in the
-// `social_platforms` table and served via /api/platforms & /api/admin/platforms.
 export interface SocialPlatform {
   id: string;
   name: string;
-  icon: string; // free-text hint (e.g. matching name) used for icon lookup fallback
-  logoUrl?: string | null; // optional uploaded logo (data URL) or external image URL
+  icon: string;
+  logoUrl?: string | null;
   description?: string | null;
   status: "Active" | "Inactive";
   sortOrder: number;
   createdAt?: string;
 }
 
-// Generic actions an earner can perform on a social media platform. Combined
-// with a dynamic platform name (e.g. "Instagram" + "Follow") to build a
-// task's category string, so new platforms never require code changes.
 export const TASK_ACTIONS = [
   "Like",
   "Follow",
@@ -339,4 +340,3 @@ export function getPlatformForCategory(category: TaskCategory): Platform {
       return Platform.CUSTOM;
   }
 }
-
