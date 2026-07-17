@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: tasksearn
+    runtime: node
+    plan: free
+    buildCommand: npm install --omit=optional && npm run build
+    startCommand: node dist/server.cjs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
