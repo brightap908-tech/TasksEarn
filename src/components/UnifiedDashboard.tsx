@@ -72,6 +72,7 @@ export default function UnifiedDashboard({
 
   const [loading, setLoading] = React.useState(false);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [drawerClosing, setDrawerClosing] = React.useState(false);
 
   const [dashData, setDashData]         = React.useState<any>(null);
   const [tasks, setTasks]               = React.useState<any[]>([]);
@@ -142,6 +143,11 @@ export default function UnifiedDashboard({
   }, [section, loadSection]);
 
   const navTo = (s: string) => navigate(`/dashboard/${s}`);
+
+  const closeDrawer = React.useCallback(() => {
+    setDrawerClosing(true);
+    setTimeout(() => { setDrawerOpen(false); setDrawerClosing(false); }, 280);
+  }, []);
 
   const pricingForPlatform = campaignPricing.find(p => p.platform === cp.platform);
   const costPerSlot = pricingForPlatform?.costPerSlot || 0;
@@ -1289,13 +1295,193 @@ export default function UnifiedDashboard({
 
       {/* Mobile drawer overlay */}
       {drawerOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDrawerOpen(false)}/>
-          <div className="relative flex flex-col animate-slideInRight" style={{ width: "min(280px, 85vw)", background: isDarkMode ? "#0b1220" : "#FFFFFF", borderRight: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #E2E8F0", height: "100vh", overflowY: "auto" }}>
-            <button onClick={() => setDrawerOpen(false)} className="absolute top-4 right-3 rounded-full p-1.5 cursor-pointer z-10" style={{ background: isDarkMode ? "rgba(255,255,255,0.08)" : "#F1F5F9", color: "#94A3B8", border: "none", minHeight: "auto" }}>
-              <X className="h-4 w-4"/>
-            </button>
-            <SidebarContent/>
+        <div className="md:hidden" style={{ position: "fixed", inset: 0, zIndex: 50, isolation: "isolate" }}>
+          {/* Backdrop */}
+          <div
+            onClick={closeDrawer}
+            className={drawerClosing ? "animate-backdrop-fade-out" : "animate-backdrop-fade-in"}
+            style={{ position: "absolute", inset: 0, background: "rgba(2,6,23,0.60)", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }}
+          />
+
+          {/* Drawer panel */}
+          <div
+            className={drawerClosing ? "animate-drawer-slide-out" : "animate-drawer-slide-in"}
+            style={{
+              position: "absolute", top: 0, left: 0, bottom: 0,
+              width: "min(82vw, 340px)",
+              background: isDarkMode ? "#0d1526" : "#FFFFFF",
+              borderTopRightRadius: "22px",
+              borderBottomRightRadius: "22px",
+              boxShadow: "8px 0 48px rgba(2,6,23,0.24), 2px 0 14px rgba(2,6,23,0.12)",
+              display: "flex", flexDirection: "column",
+              overflow: "hidden",
+              willChange: "transform",
+            }}
+          >
+            {/* ── Header ── */}
+            <div style={{
+              padding: "24px 20px 20px",
+              background: "linear-gradient(140deg, #1e3a8a 0%, #2563EB 55%, #3b82f6 100%)",
+              flexShrink: 0,
+              position: "relative",
+            }}>
+              {/* Close button */}
+              <button
+                onClick={closeDrawer}
+                style={{
+                  position: "absolute", top: "16px", right: "16px",
+                  background: "rgba(255,255,255,0.18)",
+                  border: "1.5px solid rgba(255,255,255,0.25)",
+                  borderRadius: "10px",
+                  width: "34px", height: "34px",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  cursor: "pointer", color: "#fff",
+                  backdropFilter: "blur(4px)",
+                  flexShrink: 0,
+                  minHeight: "auto",
+                }}
+              >
+                <X style={{ width: "16px", height: "16px" }} />
+              </button>
+
+              {/* Avatar + name + balance */}
+              <div style={{ display: "flex", alignItems: "center", gap: "14px", paddingRight: "44px" }}>
+                <div style={{
+                  width: "54px", height: "54px", borderRadius: "16px",
+                  background: "rgba(255,255,255,0.20)",
+                  border: "2px solid rgba(255,255,255,0.35)",
+                  backdropFilter: "blur(4px)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "22px", fontWeight: 900, color: "#fff",
+                  flexShrink: 0,
+                  letterSpacing: "-0.01em",
+                }}>
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p style={{
+                    color: "#fff", fontWeight: 800, fontSize: "16px", margin: 0,
+                    lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    letterSpacing: "-0.015em",
+                  }}>{user.name}</p>
+                  <p style={{
+                    color: "rgba(255,255,255,0.90)", fontSize: "15px", fontWeight: 700,
+                    margin: "5px 0 2px", lineHeight: 1.2, fontVariantNumeric: "tabular-nums",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    ₦{(user.walletBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p style={{ color: "rgba(255,255,255,0.55)", fontSize: "11px", fontWeight: 500, margin: 0 }}>
+                    Available Balance
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Main nav ── */}
+            <nav style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "14px 14px 6px" }}>
+              {SIDEBAR_ITEMS.filter(item => item.id !== "profile").map((item, idx, arr) => {
+                const Icon = item.icon;
+                const active = section === item.id;
+                const badge = item.id === "notifications" ? unreadCount : 0;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => { navTo(item.id); closeDrawer(); }}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", gap: "14px",
+                      padding: "13px 16px",
+                      marginBottom: idx < arr.length - 1 ? "3px" : 0,
+                      borderRadius: "14px", border: "none", cursor: "pointer", textAlign: "left",
+                      transition: "background 0.15s",
+                      background: active ? (isDarkMode ? "rgba(37,99,235,0.20)" : "#EFF6FF") : "transparent",
+                      color: active ? "#2563EB" : (isDarkMode ? "#94A3B8" : "#64748B"),
+                    }}
+                  >
+                    <Icon style={{
+                      width: "20px", height: "20px", flexShrink: 0,
+                      color: active ? "#2563EB" : (isDarkMode ? "#64748B" : "#94A3B8"),
+                      strokeWidth: active ? 2.2 : 1.7,
+                    }}/>
+                    <span style={{
+                      fontSize: "14px", fontWeight: active ? 700 : 500,
+                      flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      letterSpacing: active ? "-0.01em" : "0",
+                    }}>{item.label}</span>
+                    {badge > 0 && (
+                      <span style={{
+                        background: "#EF4444", color: "#fff", borderRadius: "999px",
+                        fontSize: "10px", fontWeight: 800, padding: "1px 6px", lineHeight: "16px", flexShrink: 0,
+                      }}>{badge > 99 ? "99+" : badge}</span>
+                    )}
+                    {active && !badge && (
+                      <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#2563EB", flexShrink: 0 }}/>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* ── Divider ── */}
+            <div style={{
+              height: "1px", margin: "4px 16px 0",
+              background: isDarkMode ? "rgba(255,255,255,0.08)" : "#E2E8F0",
+              flexShrink: 0,
+            }}/>
+
+            {/* ── Bottom section ── */}
+            <div style={{ padding: "14px 14px 20px", flexShrink: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
+              {/* Fund Wallet — full width CTA */}
+              <button
+                onClick={() => { onOpenDeposit(); closeDrawer(); }}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
+                  padding: "14px 20px", marginBottom: "8px",
+                  borderRadius: "14px", border: "none", cursor: "pointer",
+                  background: "linear-gradient(135deg, #2563EB 0%, #1d4ed8 100%)",
+                  color: "#fff", fontSize: "14px", fontWeight: 700,
+                  letterSpacing: "-0.01em",
+                  boxShadow: "0 4px 16px rgba(37,99,235,0.35)",
+                }}
+              >
+                <PiggyBank style={{ width: "18px", height: "18px" }} />
+                Fund Wallet
+              </button>
+
+              {/* Profile & Settings */}
+              <button
+                onClick={() => { navTo("profile"); closeDrawer(); }}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: "14px",
+                  padding: "12px 16px", borderRadius: "14px", border: "none", cursor: "pointer", textAlign: "left",
+                  background: section === "profile" ? (isDarkMode ? "rgba(37,99,235,0.20)" : "#EFF6FF") : "transparent",
+                  color: section === "profile" ? "#2563EB" : (isDarkMode ? "#94A3B8" : "#64748B"),
+                }}
+              >
+                <Settings style={{
+                  width: "20px", height: "20px", flexShrink: 0,
+                  color: section === "profile" ? "#2563EB" : (isDarkMode ? "#64748B" : "#94A3B8"),
+                  strokeWidth: section === "profile" ? 2.2 : 1.7,
+                }}/>
+                <span style={{ fontSize: "14px", fontWeight: section === "profile" ? 700 : 500, flex: 1 }}>
+                  Profile & Settings
+                </span>
+              </button>
+
+              {/* Logout */}
+              <button
+                onClick={onLogout}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: "14px",
+                  padding: "12px 16px", borderRadius: "14px", border: "none", cursor: "pointer", textAlign: "left",
+                  background: "transparent",
+                  color: isDarkMode ? "#f87171" : "#EF4444",
+                }}
+              >
+                <LogOut style={{ width: "20px", height: "20px", flexShrink: 0, color: isDarkMode ? "#f87171" : "#EF4444", strokeWidth: 1.7 }}/>
+                <span style={{ fontSize: "14px", fontWeight: 600 }}>Logout</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
