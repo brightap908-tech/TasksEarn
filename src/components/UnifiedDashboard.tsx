@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { User, EarnerNotification, WebsiteSettings } from "../types";
 import { usePlatforms } from "../lib/platformsStore";
+import { PlatformIcon, getPlatformFromCategory } from "../lib/platformIcons";
 
 interface Props {
   user: User;
@@ -426,7 +427,10 @@ export default function UnifiedDashboard({
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(37,99,235,0.10)", color: "#2563EB" }}>{task.category}</span>
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: isDarkMode ? "rgba(37,99,235,0.15)" : "rgba(37,99,235,0.08)", color: "#2563EB", lineHeight: 1 }}>
+                          <PlatformIcon platform={getPlatformFromCategory(task.category)} size={14} monochrome={false} />
+                          {task.category}
+                        </span>
                         {task.filledSlots >= task.totalSlots && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.10)", color: "#ef4444" }}>Full</span>}
                       </div>
                       <h3 className="font-bold text-sm leading-snug" style={{ color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>{task.title}</h3>
