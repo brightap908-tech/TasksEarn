@@ -1609,7 +1609,7 @@ export default function App() {
 
       {/* Toast Notification popup */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 max-w-sm rounded-2xl bg-slate-900 text-white p-4 shadow-2xl border border-slate-800 flex items-center gap-3 animate-fadeIn">
+        <div className="fixed bottom-20 left-4 right-4 sm:bottom-6 sm:left-auto sm:right-6 sm:w-auto z-50 max-w-sm sm:max-w-sm rounded-2xl bg-slate-900 text-white p-4 shadow-2xl border border-slate-800 flex items-center gap-3 animate-fadeIn">
           <div className={`rounded-full p-1.5 ${toast.type === "success" ? "bg-blue-500/20 text-blue-400" : "bg-rose-500/20 text-rose-400"}`}>
             {toast.type === "success" ? (
               <CheckCircle className="h-5 w-5" />

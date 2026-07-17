@@ -422,7 +422,7 @@ export default function UnifiedDashboard({
         )}
 
         <form onSubmit={handleCreateCampaign} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748b" }}>Platform *</label>
               <select value={cp.platform} onChange={e => setCp(p => ({...p, platform: e.target.value}))} required
@@ -617,14 +617,14 @@ export default function UnifiedDashboard({
         <div className="grid grid-cols-2 gap-4">
           <div className="rounded-2xl p-5" style={{ background: "linear-gradient(135deg,#2563EB,#1d4ed8)" }}>
             <p className="text-xs font-bold text-blue-200 uppercase">Earnings Balance</p>
-            <p className="text-2xl font-black text-white font-mono mt-1">{fmt(user.walletBalance)}</p>
+            <p className="text-lg sm:text-2xl font-black text-white font-mono mt-1 break-all">{fmt(user.walletBalance)}</p>
             <button onClick={() => navTo("withdraw")} className="mt-3 text-xs font-bold text-blue-200 flex items-center gap-1 cursor-pointer">
               Withdraw <ArrowRight className="h-3 w-3"/>
             </button>
           </div>
           <div className="rounded-2xl p-5" style={{ background: "linear-gradient(135deg,#7c3aed,#6d28d9)" }}>
             <p className="text-xs font-bold text-purple-200 uppercase">Ad Balance</p>
-            <p className="text-2xl font-black text-white font-mono mt-1">{fmt(adBal)}</p>
+            <p className="text-lg sm:text-2xl font-black text-white font-mono mt-1 break-all">{fmt(adBal)}</p>
             <button onClick={() => onOpenDeposit()} className="mt-3 text-xs font-bold text-purple-200 flex items-center gap-1 cursor-pointer">
               Fund Wallet <ArrowRight className="h-3 w-3"/>
             </button>

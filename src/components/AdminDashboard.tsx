@@ -1280,7 +1280,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
       {activeToast && (
         <div 
           onClick={() => handleNotificationClick(activeToast)}
-          className="fixed top-4 right-4 z-50 max-w-sm w-full bg-white rounded-2xl border-l-4 border-blue-500 shadow-2xl p-4 flex gap-3.5 items-start animate-bounce hover:shadow-blue-100/50 transition-all cursor-pointer"
+          className="fixed top-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-80 z-50 max-w-sm bg-white rounded-2xl border-l-4 border-blue-500 shadow-2xl p-4 flex gap-3.5 items-start animate-bounce hover:shadow-blue-100/50 transition-all cursor-pointer"
         >
           <div className="rounded-full bg-blue-50 p-2 text-blue-600 shrink-0">
             {activeToast.type === "submission" ? <ShieldAlert className="h-5 w-5" /> : <CreditCard className="h-5 w-5" />}
@@ -1342,7 +1342,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
 
           {/* Notifications Dropdown Card */}
           {showNotifDropdown && (
-            <div className="absolute right-0 mt-3 z-50 w-80 rounded-2xl border border-slate-100 bg-white p-4 shadow-2xl space-y-3 animate-fadeIn">
+            <div className="absolute right-0 mt-3 z-50 w-72 sm:w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-100 bg-white p-4 shadow-2xl space-y-3 animate-fadeIn">
               <div className="flex justify-between items-center border-b border-slate-50 pb-2.5">
                 <div>
                   <h4 className="font-display text-xs font-extrabold text-slate-900">Notifications ({unreadCount})</h4>
@@ -1447,23 +1447,23 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Earners Count</span>
-                <span className="block font-mono text-2xl font-black text-gray-800 mt-1">{stats.earnersCount}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-gray-800 mt-1">{stats.earnersCount}</span>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Advertisers Count</span>
-                <span className="block font-mono text-2xl font-black text-gray-800 mt-1">{stats.advertisersCount}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-gray-800 mt-1">{stats.advertisersCount}</span>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Platform Campaigns</span>
-                <span className="block font-mono text-2xl font-black text-gray-800 mt-1">{stats.tasksCount}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-gray-800 mt-1">{stats.tasksCount}</span>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Earner Earnings</span>
-                <span className="block font-mono text-2xl font-black text-blue-600 mt-1">₦{stats.totalEarned.toLocaleString()}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-blue-600 mt-1">₦{stats.totalEarned.toLocaleString()}</span>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Pending Withdrawals Queue</span>
-                <span className="block font-mono text-2xl font-black text-amber-500 mt-1">₦{stats.pendingWithdrawals.toLocaleString()}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-amber-500 mt-1">₦{stats.pendingWithdrawals.toLocaleString()}</span>
               </div>
               <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-5 shadow-sm">
                 <div className="flex items-center justify-between mb-2">
@@ -1481,7 +1481,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                     {resettingDepositStat ? "Resetting…" : "Reset"}
                   </button>
                 </div>
-                <span className="block font-mono text-2xl font-black text-indigo-700">
+                <span className="block font-mono text-xl sm:text-2xl font-black text-indigo-700">
                   ₦{stats.totalDeposited.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
                 <span className="block text-[10px] text-indigo-400 mt-1">All-time successful deposits</span>
@@ -1494,7 +1494,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                   <span className="block text-[10px] font-bold text-blue-600 uppercase flex items-center gap-1">
                     <Coins className="h-3.5 w-3.5" /> Available Platform Earnings
                   </span>
-                  <span className="block font-mono text-2xl font-black text-blue-600 mt-1">₦{platformStats.availableBalance.toLocaleString()}</span>
+                  <span className="block font-mono text-xl sm:text-2xl font-black text-blue-600 mt-1">₦{platformStats.availableBalance.toLocaleString()}</span>
                 </div>
                 <span className="text-[10px] text-blue-600 font-bold hover:underline mt-2 block">Withdraw Wallet ➔</span>
               </div>
@@ -3090,22 +3090,22 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Available Balance</span>
-                <span className="block font-mono text-2xl font-black text-blue-600 mt-1">₦{platformStats.availableBalance.toLocaleString()}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-blue-600 mt-1">₦{platformStats.availableBalance.toLocaleString()}</span>
                 <p className="text-[10px] text-gray-400 mt-1">Ready for withdrawal</p>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Platform Revenue</span>
-                <span className="block font-mono text-2xl font-black text-gray-800 mt-1">₦{platformStats.totalPlatformRevenue.toLocaleString()}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-gray-800 mt-1">₦{platformStats.totalPlatformRevenue.toLocaleString()}</span>
                 <p className="text-[10px] text-gray-400 mt-1">All commission + service fees</p>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Withdrawn</span>
-                <span className="block font-mono text-2xl font-black text-blue-600 mt-1">₦{platformStats.totalWithdrawn.toLocaleString()}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-blue-600 mt-1">₦{platformStats.totalWithdrawn.toLocaleString()}</span>
                 <p className="text-[10px] text-gray-400 mt-1">Disbursed to bank accounts</p>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Pending Withdrawals</span>
-                <span className="block font-mono text-2xl font-black text-amber-500 mt-1">₦{platformStats.pendingWithdrawalAmount.toLocaleString()}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-amber-500 mt-1">₦{platformStats.pendingWithdrawalAmount.toLocaleString()}</span>
                 <p className="text-[10px] text-gray-400 mt-1">Awaiting bank settlement</p>
               </div>
             </div>
@@ -3370,36 +3370,36 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Earned (Lifetime)</span>
-                <span className="block font-mono text-2xl font-black text-blue-600 mt-1">₦{platformStats.lifetimeRevenue.toLocaleString()}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-blue-600 mt-1">₦{platformStats.lifetimeRevenue.toLocaleString()}</span>
               </div>
               <div className="rounded-2xl border border-emerald-100 bg-emerald-50/20 p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-emerald-600 uppercase">Available Balance</span>
-                <span className="block font-mono text-2xl font-black text-emerald-600 mt-1">₦{platformStats.availableBalance.toLocaleString()}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-emerald-600 mt-1">₦{platformStats.availableBalance.toLocaleString()}</span>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Total Withdrawn</span>
-                <span className="block font-mono text-2xl font-black text-slate-700 mt-1">₦{platformStats.totalWithdrawn.toLocaleString()}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-slate-700 mt-1">₦{platformStats.totalWithdrawn.toLocaleString()}</span>
               </div>
               <div className="rounded-2xl border border-orange-100 bg-orange-50/20 p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-orange-600 uppercase">Activation Fees</span>
-                <span className="block font-mono text-2xl font-black text-orange-600 mt-1">₦{platformStats.totalActivationFees.toLocaleString()}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-orange-600 mt-1">₦{platformStats.totalActivationFees.toLocaleString()}</span>
                 <span className="block text-[10px] text-orange-400 mt-0.5">{platformStats.activatedEarnersCount} earners activated</span>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Task Commissions</span>
-                <span className="block font-mono text-2xl font-black text-indigo-600 mt-1">₦{(platformStats.totalCommission || 0).toLocaleString()}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-indigo-600 mt-1">₦{(platformStats.totalCommission || 0).toLocaleString()}</span>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Withdrawal Fees</span>
-                <span className="block font-mono text-2xl font-black text-purple-600 mt-1">₦{(platformStats.totalWithdrawalFees || 0).toLocaleString()}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-purple-600 mt-1">₦{(platformStats.totalWithdrawalFees || 0).toLocaleString()}</span>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">Today's Earnings</span>
-                <span className="block font-mono text-2xl font-black text-slate-700 mt-1">₦{platformStats.todayRevenue.toLocaleString()}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-slate-700 mt-1">₦{platformStats.todayRevenue.toLocaleString()}</span>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase">This Month</span>
-                <span className="block font-mono text-2xl font-black text-slate-700 mt-1">₦{platformStats.thisMonthRevenue.toLocaleString()}</span>
+                <span className="block font-mono text-xl sm:text-2xl font-black text-slate-700 mt-1">₦{platformStats.thisMonthRevenue.toLocaleString()}</span>
               </div>
             </div>
 
