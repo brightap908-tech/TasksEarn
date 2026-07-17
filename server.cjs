@@ -2183,6 +2183,22 @@ app.post("/api/earner/withdraw", async (req, res) => {
         INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, bank_details, withdrawal_fee, created_at)
         VALUES ($1,$2,$3,$4,$5,'Withdrawal','Pending',$6,$7,$8,$9,$10)
       `, [txId, user.id, user.name, user.role, withdrawAmount, `Withdrawal to ${bankName} (${accountNumber})`, ref, bankDetails, fee, /* @__PURE__ */ new Date()]);
+      if (fee > 0) {
+        const feeCommId = "ac-wf-" + Math.random().toString(36).substr(2, 9);
+        const feeRef = "WF-" + Math.floor(1e7 + Math.random() * 9e7);
+        await client.query(`
+          INSERT INTO admin_commissions
+            (id, type, amount, description, reference, user_id, user_name, related_transaction_ref, created_at)
+          VALUES ($1,'withdrawal_fee',$2,$3,$4,$5,$6,$7,$8)
+        `, [feeCommId, fee, `Withdrawal Fee Credit \u2014 ${user.name}`, feeRef, user.id, user.name, ref, /* @__PURE__ */ new Date()]);
+        const feeTxId = "tx-fee-" + Math.random().toString(36).substr(2, 9);
+        await client.query(`
+          INSERT INTO transactions
+            (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
+          VALUES ($1,$2,$3,$4,$5,'Fee','Success',$6,$7,$8)
+        `, [feeTxId, user.id, user.name, user.role, -fee, `Withdrawal Processing Fee`, feeRef, /* @__PURE__ */ new Date()]);
+        console.log(`[Withdraw] Fee \u20A6${fee} credited to platform wallet for tx ${txId} (earner: ${user.name})`);
+      }
       await client.query("COMMIT");
       const newBalance = currentBalance - totalDeduction;
       notifyAdmin({ type: "withdrawal", message: `New withdrawal request of \u20A6${withdrawAmount.toLocaleString()} from ${user.name}`, referenceId: txId });
@@ -3306,17 +3322,18 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
         return res.status(400).json({ error: "This withdrawal has already been processed and cannot be modified" });
       }
       if (isReject) {
+        const refundAmount = txSnapshot.amount;
         const storedFee = txSnapshot.withdrawalFee != null ? txSnapshot.withdrawalFee : 0;
-        const totalRefund = txSnapshot.amount + storedFee;
         await client.query(
           "UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2",
-          [totalRefund, txSnapshot.userId]
+          [refundAmount, txSnapshot.userId]
         );
         await client.query(
           "UPDATE transactions SET status='Rejected', rejection_reason=$1 WHERE id=$2",
           [rejectionReason || null, txSnapshot.id]
         );
         await client.query("COMMIT");
+        console.log(`[Review] Withdrawal ${txSnapshot.id} rejected \u2014 \u20A6${refundAmount} refunded to ${txSnapshot.userName} (fee \u20A6${storedFee} retained by platform)`);
         const updated = await pool.query("SELECT * FROM transactions WHERE id=$1", [txSnapshot.id]);
         return res.json({ success: true, transaction: mapTransaction(updated.rows[0]) });
       }
