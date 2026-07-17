@@ -1398,6 +1398,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                 <div className="divide-y divide-gray-50">
                   {transactions.map((tx: any, idx: number) => {
                     const isWithdrawal = tx.type === "Withdrawal";
+                    const isFee       = tx.type === "Fee";
                     const wdLabel = isWithdrawal
                       ? tx.status === "Pending"  ? "Withdrawal Request - Pending"
                       : tx.status === "Approved" ? "Withdrawal Approved - Processing"

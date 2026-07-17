@@ -2459,6 +2459,33 @@ app.post("/api/earner/withdraw", async (req, res) => {
         VALUES ($1,$2,$3,$4,$5,'Withdrawal','Pending',$6,$7,$8,$9,$10)
       `, [txId, user.id, user.name, user.role, withdrawAmount, `Withdrawal to ${bankName} (${accountNumber})`, ref, bankDetails, fee, new Date()]);
 
+      // 3. Credit the fee to the Platform Wallet immediately.
+      //    Inserting into admin_commissions is the authoritative source for the
+      //    platform wallet balance — the dashboard sums this table in real time.
+      //    This must happen inside the same DB transaction so the fee is never
+      //    credited without the corresponding wallet deduction (and vice versa).
+      if (fee > 0) {
+        const feeCommId = "ac-wf-" + Math.random().toString(36).substr(2, 9);
+        const feeRef    = "WF-" + Math.floor(10000000 + Math.random() * 90000000);
+        await client.query(`
+          INSERT INTO admin_commissions
+            (id, type, amount, description, reference, user_id, user_name, related_transaction_ref, created_at)
+          VALUES ($1,'withdrawal_fee',$2,$3,$4,$5,$6,$7,$8)
+        `, [feeCommId, fee, `Withdrawal Fee Credit — ${user.name}`, feeRef, user.id, user.name, ref, new Date()]);
+
+        // 4. Record the fee as a visible transaction so it appears in the earner's
+        //    history and admin recent-transactions list. Amount is negative so the
+        //    earner sees it as a deduction (not a mystery positive credit).
+        const feeTxId = "tx-fee-" + Math.random().toString(36).substr(2, 9);
+        await client.query(`
+          INSERT INTO transactions
+            (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
+          VALUES ($1,$2,$3,$4,$5,'Fee','Success',$6,$7,$8)
+        `, [feeTxId, user.id, user.name, user.role, -fee, `Withdrawal Processing Fee`, feeRef, new Date()]);
+
+        console.log(`[Withdraw] Fee ₦${fee} credited to platform wallet for tx ${txId} (earner: ${user.name})`);
+      }
+
       await client.query("COMMIT");
 
       const newBalance = currentBalance - totalDeduction;
@@ -3754,20 +3781,24 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
       }
 
       if (isReject) {
-        // Reject — refund the full deducted amount (withdrawal amount + processing fee).
-        // The fee is stored on the transaction itself so refunds remain correct even if
-        // the admin changes the fee setting between request submission and rejection.
-        const storedFee = txSnapshot.withdrawalFee != null ? txSnapshot.withdrawalFee : 0;
-        const totalRefund = txSnapshot.amount + storedFee;
+        // Reject — refund the withdrawal amount only.
+        // Platform policy: the processing fee is non-refundable once deducted —
+        // it was already credited to the Platform Wallet at request submission time
+        // (admin_commissions row + Fee transaction). Only the payout amount is
+        // returned so the earner is made whole for the funds they wanted to withdraw,
+        // while the platform retains the fee for the work done on the request.
+        const refundAmount = txSnapshot.amount;
+        const storedFee    = txSnapshot.withdrawalFee != null ? txSnapshot.withdrawalFee : 0;
         await client.query(
           "UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2",
-          [totalRefund, txSnapshot.userId]
+          [refundAmount, txSnapshot.userId]
         );
         await client.query(
           "UPDATE transactions SET status='Rejected', rejection_reason=$1 WHERE id=$2",
           [rejectionReason || null, txSnapshot.id]
         );
         await client.query("COMMIT");
+        console.log(`[Review] Withdrawal ${txSnapshot.id} rejected — ₦${refundAmount} refunded to ${txSnapshot.userName} (fee ₦${storedFee} retained by platform)`);
         const updated = await pool.query("SELECT * FROM transactions WHERE id=$1", [txSnapshot.id]);
         return res.json({ success: true, transaction: mapTransaction(updated.rows[0]) });
       }
@@ -3826,7 +3857,7 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
       );
     } else {
       // Paystack failed — mark as Failed. Wallet was already deducted; admin can
-      // retry (approve again) or reject (which refunds the full amount + fee).
+      // retry (approve again) or reject (which refunds only the withdrawal amount — the fee is retained by the platform).
       console.error(`[Paystack] Transfer failed for tx ${txSnapshot.id}: ${failureNote}`);
       await pool.query(
         "UPDATE transactions SET status='Failed', rejection_reason=$1 WHERE id=$2",
