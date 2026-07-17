@@ -2666,8 +2666,8 @@ app.post("/api/advertiser/tasks", async (req, res) => {
     }
 
     const slots = parseInt(totalSlots);
-    if (isNaN(slots) || slots < 1 || slots > 100000) {
-      return res.status(400).json({ error: "Slot count must be between 1 and 100,000" });
+    if (isNaN(slots) || slots < 1 || slots > 1000000) {
+      return res.status(400).json({ error: "Slot count must be between 1 and 1,000,000" });
     }
 
     // Pricing is ALWAYS sourced from the admin-controlled task_pricing table.

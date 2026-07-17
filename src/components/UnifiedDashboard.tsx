@@ -625,23 +625,66 @@ export default function UnifiedDashboard({
 
           <div>
             <label className="block text-xs font-semibold uppercase mb-2" style={{ color: "#64748B", letterSpacing: "0.06em" }}>
-              Slots: <span style={{ color: "#2563EB" }}>{cp.slots.toLocaleString()}</span>
+              Number of Slots
             </label>
-            <input type="range" min={1} max={100000} step={100} value={cp.slots}
-              onChange={e => setCp(p => ({...p, slots: Math.max(1, Math.min(100000, parseInt(e.target.value) || 1))}))}
-              style={{ width: "100%", border: "none", padding: 0 }}/>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.625rem" }}>
-              <label className="text-[11px] font-semibold shrink-0" style={{ color: "#64748B" }}>Or type:</label>
+
+            {/* ── Stepper row ── */}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              {([-100, -1] as const).map(delta => (
+                <button key={delta} type="button"
+                  onClick={() => setCp(p => ({...p, slots: Math.max(1, p.slots + delta)}))}
+                  className="shrink-0 font-black cursor-pointer select-none"
+                  style={{ width: "2.5rem", height: "2.5rem", borderRadius: "0.625rem", fontSize: "1.125rem", lineHeight: 1,
+                    background: isDarkMode ? "rgba(255,255,255,0.08)" : "#F1F5F9",
+                    border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.14)" : "#E2E8F0"),
+                    color: isDarkMode ? "#e2e8f0" : "#334155", minHeight: "auto" }}>
+                  {delta === -1 ? "−" : "−−"}
+                </button>
+              ))}
               <input
-                type="number" min={1} max={100000} value={cp.slots}
+                type="number" min={1} max={1000000} value={cp.slots}
                 onChange={e => {
                   const v = parseInt(e.target.value);
-                  setCp(p => ({...p, slots: isNaN(v) ? 1 : Math.max(1, Math.min(100000, v))}));
+                  setCp(p => ({...p, slots: isNaN(v) ? 1 : Math.max(1, Math.min(1000000, v))}));
                 }}
-                style={{ flex: 1, background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0F172A" }}
+                style={{ flex: 1, textAlign: "center", fontWeight: 700, fontSize: "1rem",
+                  background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff",
+                  border: "1.5px solid #2563EB", borderRadius: "0.625rem",
+                  color: isDarkMode ? "#e2e8f0" : "#0F172A", padding: "0.5rem 0.25rem" }}
               />
+              {([1, 100] as const).map(delta => (
+                <button key={delta} type="button"
+                  onClick={() => setCp(p => ({...p, slots: Math.min(1000000, p.slots + delta)}))}
+                  className="shrink-0 font-black cursor-pointer select-none"
+                  style={{ width: "2.5rem", height: "2.5rem", borderRadius: "0.625rem", fontSize: "1.125rem", lineHeight: 1,
+                    background: isDarkMode ? "rgba(255,255,255,0.08)" : "#F1F5F9",
+                    border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.14)" : "#E2E8F0"),
+                    color: isDarkMode ? "#e2e8f0" : "#334155", minHeight: "auto" }}>
+                  {delta === 1 ? "+" : "++"}
+                </button>
+              ))}
             </div>
-            <p className="text-[10px] mt-1" style={{ color: "#94A3B8" }}>Min 1 · Max 100,000</p>
+
+            {/* ── Quick-select chips ── */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.375rem", marginTop: "0.625rem" }}>
+              {[100, 500, 1000, 5000, 10000, 50000, 100000].map(n => {
+                const active = cp.slots === n;
+                return (
+                  <button key={n} type="button"
+                    onClick={() => setCp(p => ({...p, slots: n}))}
+                    className="cursor-pointer font-bold"
+                    style={{ borderRadius: "9999px", padding: "0.25rem 0.625rem", fontSize: "0.7rem",
+                      minHeight: "auto", border: "1.5px solid",
+                      background: active ? "#2563EB" : (isDarkMode ? "rgba(255,255,255,0.06)" : "#F8FAFC"),
+                      borderColor: active ? "#2563EB" : (isDarkMode ? "rgba(255,255,255,0.14)" : "#E2E8F0"),
+                      color: active ? "#fff" : (isDarkMode ? "#94A3B8" : "#64748B"),
+                      transition: "all 0.15s" }}>
+                    {n.toLocaleString()}
+                  </button>
+                );
+              })}
+            </div>
+            <p style={{ fontSize: "0.625rem", color: "#94A3B8", marginTop: "0.375rem" }}>Min 1 · Max 1,000,000</p>
           </div>
 
           {cp.platform && (
@@ -652,7 +695,7 @@ export default function UnifiedDashboard({
                   <p className="font-black text-base" style={{ color: "#7C3AED" }}>₦{costPerSlot}</p>
                 </div>
                 <div>
-                  <p className="text-xs" style={{ color: "#94A3B8" }}>Total ({cp.slots.toLocaleString()} slots)</p>
+                  <p className="text-xs" style={{ color: "#94A3B8" }}>Total ({cp.slots.toLocaleString()} slot{cp.slots !== 1 ? "s" : ""})</p>
                   <p className="font-black text-base" style={{ color: "#7C3AED" }}>₦{totalCost.toLocaleString()}</p>
                 </div>
               </div>
