@@ -1399,6 +1399,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                   {transactions.map((tx: any, idx: number) => {
                     const isWithdrawal = tx.type === "Withdrawal";
                     const isFee       = tx.type === "Fee";
+                    const isRefund    = tx.type === "Refund";
                     const wdLabel = isWithdrawal
                       ? tx.status === "Pending"  ? "Withdrawal Request - Pending"
                       : tx.status === "Approved" ? "Withdrawal Approved - Processing"
@@ -1408,7 +1409,14 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                       : tx.status === "Failed"   ? "Withdrawal Failed"
                       : tx.description
                       : null;
-                    const displayLabel = isWithdrawal ? wdLabel : tx.description;
+                    const displayLabel = isWithdrawal
+                      ? wdLabel
+                      : isRefund
+                        ? tx.description || "Withdrawal Refund"
+                        : isFee
+                          ? tx.description || "Withdrawal Processing Fee"
+                          : tx.description;
+
                     const wdBadgeColor = isWithdrawal
                       ? tx.status === "Pending"  ? "bg-amber-100 text-amber-700 border-amber-200"
                       : tx.status === "Approved" ? "bg-blue-100 text-blue-700 border-blue-200"
@@ -1417,15 +1425,23 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                       : tx.status === "Rejected" ? "bg-red-100 text-red-600 border-red-200"
                       : tx.status === "Failed"   ? "bg-red-100 text-red-600 border-red-200"
                       : "bg-gray-100 text-gray-500 border-gray-200"
+                      : isRefund ? "bg-green-100 text-green-700 border-green-200"
+                      : isFee   ? "bg-orange-100 text-orange-700 border-orange-200"
                       : null;
+
+                    const badgeLabel = isWithdrawal ? tx.status
+                      : isRefund ? "Refunded"
+                      : isFee    ? "Fee"
+                      : null;
+
                     return (
                       <div key={idx} className="flex justify-between items-start py-3">
                         <div className="flex-1 min-w-0 mr-3">
                           <p className="text-xs font-semibold text-gray-800">{displayLabel}</p>
                           <p className="text-[10px] text-gray-400 mt-0.5">{new Date(tx.createdAt).toLocaleDateString()} · {tx.type}</p>
-                          {isWithdrawal && wdBadgeColor && (
+                          {wdBadgeColor && badgeLabel && (
                             <span className={`inline-block mt-1 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${wdBadgeColor}`}>
-                              {tx.status}
+                              {badgeLabel}
                             </span>
                           )}
                           {isWithdrawal && tx.status === "Rejected" && tx.rejectionReason && (

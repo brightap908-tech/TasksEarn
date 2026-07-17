@@ -3781,24 +3781,66 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
       }
 
       if (isReject) {
-        // Reject — refund the withdrawal amount only.
-        // Platform policy: the processing fee is non-refundable once deducted —
-        // it was already credited to the Platform Wallet at request submission time
-        // (admin_commissions row + Fee transaction). Only the payout amount is
-        // returned so the earner is made whole for the funds they wanted to withdraw,
-        // while the platform retains the fee for the work done on the request.
-        const refundAmount = txSnapshot.amount;
-        const storedFee    = txSnapshot.withdrawalFee != null ? txSnapshot.withdrawalFee : 0;
+        // Reject — full refund: return withdrawal amount + fee to the earner and
+        // reverse the platform wallet credit that was posted at submission time.
+        // Everything runs in the open BEGIN transaction so no partial state can occur.
+        const storedFee   = txSnapshot.withdrawalFee != null ? txSnapshot.withdrawalFee : 0;
+        const totalRefund = txSnapshot.amount + storedFee;
+
+        // 1. Restore the full deducted amount to the earner's wallet.
         await client.query(
           "UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2",
-          [refundAmount, txSnapshot.userId]
+          [totalRefund, txSnapshot.userId]
         );
+
+        // 2. Mark the withdrawal as Rejected.
         await client.query(
           "UPDATE transactions SET status='Rejected', rejection_reason=$1 WHERE id=$2",
           [rejectionReason || null, txSnapshot.id]
         );
+
+        // 3. Reverse the platform wallet fee credit that was posted at submission.
+        //    Find the admin_commissions row via its related_transaction_ref, grab its
+        //    reference (which links to the Fee transaction row), then delete both.
+        if (storedFee > 0) {
+          const feeCommRes = await client.query(
+            "SELECT reference FROM admin_commissions WHERE related_transaction_ref=$1 AND type='withdrawal_fee'",
+            [txSnapshot.reference]
+          );
+          if (feeCommRes.rows.length > 0) {
+            const feeRef = feeCommRes.rows[0].reference;
+            await client.query(
+              "DELETE FROM admin_commissions WHERE related_transaction_ref=$1 AND type='withdrawal_fee'",
+              [txSnapshot.reference]
+            );
+            await client.query(
+              "DELETE FROM transactions WHERE reference=$1 AND type='Fee'",
+              [feeRef]
+            );
+          }
+        }
+
+        // 4. Create a visible Refund transaction so the earner can see the credit
+        //    appear in their wallet history immediately.
+        const refundTxId = "tx-ref-" + Math.random().toString(36).substr(2, 9);
+        const refundRef  = "REF-" + Math.floor(10000000 + Math.random() * 90000000);
+        await client.query(`
+          INSERT INTO transactions
+            (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
+          VALUES ($1,$2,$3,$4,$5,'Refund','Success',$6,$7,$8)
+        `, [
+          refundTxId,
+          txSnapshot.userId,
+          txSnapshot.userName,
+          txSnapshot.userRole,
+          totalRefund,
+          `Withdrawal Refund${rejectionReason ? ` — ${rejectionReason}` : ""}`,
+          refundRef,
+          new Date()
+        ]);
+
         await client.query("COMMIT");
-        console.log(`[Review] Withdrawal ${txSnapshot.id} rejected — ₦${refundAmount} refunded to ${txSnapshot.userName} (fee ₦${storedFee} retained by platform)`);
+        console.log(`[Review] Withdrawal ${txSnapshot.id} rejected — full refund ₦${totalRefund} (₦${txSnapshot.amount} + ₦${storedFee} fee) returned to ${txSnapshot.userName}; platform wallet fee credit reversed`);
         const updated = await pool.query("SELECT * FROM transactions WHERE id=$1", [txSnapshot.id]);
         return res.json({ success: true, transaction: mapTransaction(updated.rows[0]) });
       }
