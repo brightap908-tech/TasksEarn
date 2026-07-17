@@ -168,6 +168,7 @@ function mapTransaction(row: any) {
     paystackTransferRef: row.paystack_transfer_ref || undefined,
     rejectionReason: row.rejection_reason || undefined,
     withdrawalFee: row.withdrawal_fee != null ? parseFloat(row.withdrawal_fee) : undefined,
+    completedAt: row.completed_at ? (row.completed_at instanceof Date ? row.completed_at.toISOString() : row.completed_at) : undefined,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
   };
 }
@@ -791,6 +792,9 @@ async function bootstrapTables() {
     // 31. Store the processing fee per withdrawal so rejection refunds are accurate
     //     even if the fee setting changes after the request was submitted.
     await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS withdrawal_fee DECIMAL(10,2) NULL`);
+
+    // 32. Track when a withdrawal is actually completed (Paystack confirms success).
+    await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ NULL`);
 
     // 29. Admin action audit log — records every ban, unban, and delete action
     await client.query(`
@@ -3741,9 +3745,12 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
         return res.status(404).json({ error: "Withdrawal transaction not found" });
       }
       txSnapshot = mapTransaction(txRes.rows[0]);
-      if (txSnapshot.status !== TransactionStatus.PENDING) {
+      // Allow approve/reject on Pending OR Failed (admin can retry a failed Paystack transfer).
+      // All other statuses (Approved, Success, Paid, Rejected) are terminal — block action.
+      const actionableStatuses = [TransactionStatus.PENDING, TransactionStatus.FAILED];
+      if (!actionableStatuses.includes(txSnapshot.status)) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ error: "This withdrawal has already been reviewed" });
+        return res.status(400).json({ error: "This withdrawal has already been processed and cannot be modified" });
       }
 
       if (isReject) {
@@ -3765,8 +3772,8 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
         return res.json({ success: true, transaction: mapTransaction(updated.rows[0]) });
       }
 
-      // ── Approve: balance was already deducted at request time — just mark as Approved ──
-      await client.query("UPDATE transactions SET status='Approved' WHERE id=$1", [txSnapshot.id]);
+      // ── Approve: balance was already deducted at request time — mark as Approved then call Paystack ──
+      await client.query("UPDATE transactions SET status='Approved', rejection_reason=NULL WHERE id=$1", [txSnapshot.id]);
       await client.query("COMMIT");
     } catch (txErr) {
       await client.query("ROLLBACK");
@@ -3775,8 +3782,70 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
       client.release();
     }
 
+    // ── Call Paystack Transfer API (outside DB transaction) ────────────────────
+    const bankDetails: any = txSnapshot.bankDetails || {};
+    const resolvedBankCode = bankDetails.bankCode || NIGERIAN_BANK_LIST.find((b: any) => b.name === bankDetails.bankName)?.code;
+
+    let paystackOk = false;
+    let transferRef = "";
+    let failureNote = "";
+
+    if (!resolvedBankCode) {
+      failureNote = `Cannot resolve bank code for "${bankDetails.bankName}". Add it to the bank list.`;
+    } else {
+      const recipientRes = await createPaystackRecipient(
+        bankDetails.accountName || txSnapshot.userName,
+        String(bankDetails.accountNumber),
+        resolvedBankCode
+      );
+      if (!recipientRes.success) {
+        failureNote = `Recipient creation failed: ${recipientRes.error}`;
+      } else {
+        const amountKobo = Math.round(txSnapshot.amount * 100);
+        const transferRes = await initiatePaystackTransfer(
+          amountKobo,
+          recipientRes.recipientCode!,
+          txSnapshot.reference,
+          `TasksEarn payout — ${txSnapshot.userName}`
+        );
+        if (transferRes.success) {
+          paystackOk = true;
+          transferRef = transferRes.transferCode || transferRes.transferRef || "";
+          console.log(`[Paystack] Transfer initiated for ${txSnapshot.id}: code=${transferRef} status=${transferRes.paystackStatus}`);
+        } else {
+          failureNote = `Transfer failed: ${transferRes.error}`;
+        }
+      }
+    }
+
+    // ── Update transaction with Paystack outcome ───────────────────────────────
+    if (paystackOk) {
+      await pool.query(
+        "UPDATE transactions SET status='Success', paystack_transfer_ref=$1, completed_at=NOW() WHERE id=$2",
+        [transferRef || null, txSnapshot.id]
+      );
+    } else {
+      // Paystack failed — mark as Failed. Wallet was already deducted; admin can
+      // retry (approve again) or reject (which refunds the full amount + fee).
+      console.error(`[Paystack] Transfer failed for tx ${txSnapshot.id}: ${failureNote}`);
+      await pool.query(
+        "UPDATE transactions SET status='Failed', rejection_reason=$1 WHERE id=$2",
+        [failureNote, txSnapshot.id]
+      );
+    }
+
     const finalRow = await pool.query("SELECT * FROM transactions WHERE id=$1", [txSnapshot.id]);
-    res.json({ success: true, transaction: mapTransaction(finalRow.rows[0]) });
+    const finalTx = mapTransaction(finalRow.rows[0]);
+
+    if (!paystackOk) {
+      return res.status(200).json({
+        success: false,
+        transaction: finalTx,
+        error: `Paystack transfer failed: ${failureNote}. Withdrawal is marked Failed — retry or reject to refund the earner.`
+      });
+    }
+
+    res.json({ success: true, transaction: finalTx });
   } catch (err) {
     console.error("[Review withdrawal] error:", err);
     res.status(500).json({ error: "Server error" });

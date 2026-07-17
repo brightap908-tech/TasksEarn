@@ -736,7 +736,11 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   };
 
   const handleApproveWithdrawal = async (tx: Transaction) => {
-    if (!window.confirm(`Approve withdrawal request of ₦${tx.amount.toLocaleString()} for ${tx.bankDetails?.accountName || tx.userName}?\n\nBank: ${tx.bankDetails?.bankName}\nAccount: ${tx.bankDetails?.accountNumber}\n\nStatus will change to Approved. Use "Mark as Paid" after you send the funds manually.`)) return;
+    const isRetry = tx.status === TransactionStatus.FAILED;
+    const label = tx.bankDetails?.accountName || tx.userName;
+    if (!window.confirm(
+      `${isRetry ? "Retry Paystack transfer" : "Approve & send"} ₦${tx.amount.toLocaleString()} to ${label} via Paystack?\n\nBank: ${tx.bankDetails?.bankName}\nAccount: ${tx.bankDetails?.accountNumber}\n\nThis will initiate a real bank transfer. Only confirm after verifying the details.`
+    )) return;
 
     setWithdrawalActionLoading(tx.id);
     try {
@@ -746,9 +750,10 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         body: JSON.stringify({ action: "approve" })
       });
       if (res?.success) {
-        showWdMsg("success", `✓ Withdrawal approved for ${tx.bankDetails?.accountName || tx.userName}. Send the funds manually, then click "Mark as Paid".`);
+        const ref = res.transaction?.paystackTransferRef;
+        showWdMsg("success", `✓ Transfer to ${label} initiated successfully.${ref ? ` Paystack ref: ${ref}` : ""}`);
       } else {
-        showWdMsg("error", res?.error || "Approval failed. Please try again.");
+        showWdMsg("error", res?.error || "Paystack transfer failed. The withdrawal is now marked Failed — retry or reject to refund.");
       }
       fetchWithdrawals();
       fetchStats();
@@ -2100,7 +2105,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
 
         {/* TAB 4: WITHDRAWAL AUDITS */}
         {activeTab === "withdrawals" && (() => {
-          const pending = withdrawalsList.filter(w => w.status === TransactionStatus.PENDING);
+          const pending = withdrawalsList.filter(w => w.status === TransactionStatus.PENDING || w.status === TransactionStatus.FAILED);
 
           const statusBadge = (tx: Transaction) => {
             const map: Record<string, string> = {
@@ -2119,7 +2124,11 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
           };
 
           const approved = withdrawalsList.filter(w => w.status === TransactionStatus.APPROVED);
-          const history = withdrawalsList.filter(w => w.status !== TransactionStatus.PENDING && w.status !== TransactionStatus.APPROVED);
+          const history = withdrawalsList.filter(w =>
+            w.status !== TransactionStatus.PENDING &&
+            w.status !== TransactionStatus.FAILED &&
+            w.status !== TransactionStatus.APPROVED
+          );
 
           return (
             <div className="space-y-5">
@@ -2186,6 +2195,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                       <span className="ml-2 rounded-full bg-amber-500 text-white text-[9px] font-black px-2 py-0.5">{pending.length}</span>
                     )}
                   </h3>
+                  <p className="text-[10px] text-gray-400">Approve sends funds via Paystack instantly. Reject refunds the earner's wallet in full.</p>
                 </div>
 
                 {pending.length === 0 ? (
@@ -2195,15 +2205,25 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                     {pending.map((tx, idx) => {
                       const isLoading = withdrawalActionLoading === tx.id;
                       return (
-                        <div key={idx} className="rounded-xl border border-amber-100 bg-amber-50/30 p-4 text-xs space-y-3">
+                        <div key={idx} className={`rounded-xl border p-4 text-xs space-y-3 ${tx.status === TransactionStatus.FAILED ? "border-red-200 bg-red-50/20" : "border-amber-100 bg-amber-50/30"}`}>
                           {/* Header row */}
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div>
-                              <p className="font-bold text-gray-900 text-sm">{tx.userName}</p>
-                              <p className="text-gray-400 text-[10px] mt-0.5">Requested {new Date(tx.createdAt).toLocaleString()}</p>
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <p className="font-bold text-gray-900 text-sm">{tx.userName}</p>
+                                {statusBadge(tx)}
+                              </div>
+                              <p className="text-gray-400 text-[10px]">Requested {new Date(tx.createdAt).toLocaleString()}</p>
                             </div>
                             <span className="font-mono font-black text-xl text-gray-900">₦{tx.amount.toLocaleString()}</span>
                           </div>
+
+                          {/* Paystack failure reason */}
+                          {tx.status === TransactionStatus.FAILED && tx.rejectionReason && (
+                            <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-[10px] text-red-700">
+                              <span className="font-bold">Paystack error: </span>{tx.rejectionReason}
+                            </div>
+                          )}
 
                           {/* Bank details grid */}
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -2227,14 +2247,19 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                               className="flex-1 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2.5 flex items-center justify-center gap-1.5 disabled:opacity-60"
                             >
                               <Check className="h-3.5 w-3.5" />
-                              {isLoading ? "Approving…" : "Approve Request"}
+                              {isLoading
+                                ? "Sending via Paystack…"
+                                : tx.status === TransactionStatus.FAILED
+                                  ? "Retry Paystack Transfer"
+                                  : "Approve & Send via Paystack"}
                             </button>
                             <button
                               onClick={() => { setRejectingWithdrawal(tx); setRejectionReason(""); }}
                               disabled={isLoading}
                               className="flex-1 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold py-2.5 flex items-center justify-center gap-1.5 disabled:opacity-60 border border-red-100"
                             >
-                              <X className="h-3.5 w-3.5" /> Reject Request
+                              <X className="h-3.5 w-3.5" />
+                              {tx.status === TransactionStatus.FAILED ? "Reject & Refund" : "Reject Request"}
                             </button>
                           </div>
                         </div>

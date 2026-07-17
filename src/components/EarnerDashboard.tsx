@@ -1399,19 +1399,22 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
                   {transactions.map((tx: any, idx: number) => {
                     const isWithdrawal = tx.type === "Withdrawal";
                     const wdLabel = isWithdrawal
-                      ? tx.status === "Pending" ? "Withdrawal Request - Pending"
-                      : tx.status === "Approved" ? "Withdrawal Approved - Awaiting Payment"
-                      : tx.status === "Paid" ? "Withdrawal Paid"
+                      ? tx.status === "Pending"  ? "Withdrawal Request - Pending"
+                      : tx.status === "Approved" ? "Withdrawal Approved - Processing"
+                      : tx.status === "Success"  ? "Withdrawal Successful"
+                      : tx.status === "Paid"     ? "Withdrawal Paid"
                       : tx.status === "Rejected" ? "Withdrawal Rejected"
-                      : tx.status === "Success" ? "Withdrawal Successful"
+                      : tx.status === "Failed"   ? "Withdrawal Failed"
                       : tx.description
                       : null;
                     const displayLabel = isWithdrawal ? wdLabel : tx.description;
                     const wdBadgeColor = isWithdrawal
-                      ? tx.status === "Pending" ? "bg-amber-100 text-amber-700 border-amber-200"
+                      ? tx.status === "Pending"  ? "bg-amber-100 text-amber-700 border-amber-200"
                       : tx.status === "Approved" ? "bg-blue-100 text-blue-700 border-blue-200"
-                      : tx.status === "Paid" ? "bg-green-100 text-green-700 border-green-200"
+                      : tx.status === "Success"  ? "bg-green-100 text-green-700 border-green-200"
+                      : tx.status === "Paid"     ? "bg-green-200 text-green-800 border-green-300"
                       : tx.status === "Rejected" ? "bg-red-100 text-red-600 border-red-200"
+                      : tx.status === "Failed"   ? "bg-red-100 text-red-600 border-red-200"
                       : "bg-gray-100 text-gray-500 border-gray-200"
                       : null;
                     return (
