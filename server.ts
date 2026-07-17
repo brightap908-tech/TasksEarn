@@ -2405,36 +2405,71 @@ app.post("/api/earner/withdraw", async (req, res) => {
 
     const settings = await getSettings();
     const withdrawAmount = parseFloat(amount);
+    const fee = typeof settings?.withdrawalFee === "number" ? settings.withdrawalFee : 50;
+    const totalDeduction = withdrawAmount + fee;
+
     if (isNaN(withdrawAmount) || withdrawAmount < (settings?.minWithdrawal || 200)) {
       return res.status(400).json({ error: `Minimum withdrawal amount is ₦${settings?.minWithdrawal || 200}` });
     }
 
-    const pendingRes = await pool.query(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE user_id = $1 AND type = 'Withdrawal' AND status = 'Pending'",
-      [user.id]
-    );
-    const pendingTotal = parseFloat(pendingRes.rows[0].total) || 0;
-    const available = user.walletBalance - pendingTotal;
+    // All balance checks and writes happen inside a single DB transaction so
+    // they either both succeed or both fail — no partial states possible.
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
 
-    if (available < withdrawAmount) {
-      return res.status(400).json({
-        error: `Insufficient available balance. Balance: ₦${user.walletBalance.toLocaleString()}, locked in pending: ₦${pendingTotal.toLocaleString()}, available: ₦${available.toLocaleString()}`
+      // Lock the user row to prevent concurrent withdrawals racing past the balance check.
+      const lockedRow = await client.query(
+        "SELECT wallet_balance FROM users WHERE id = $1 FOR UPDATE",
+        [user.id]
+      );
+      const currentBalance = parseFloat(lockedRow.rows[0].wallet_balance) || 0;
+
+      if (currentBalance < totalDeduction) {
+        await client.query("ROLLBACK");
+        const shortfall = totalDeduction - currentBalance;
+        return res.status(400).json({
+          error: `Insufficient balance. You need ₦${totalDeduction.toLocaleString()} (₦${withdrawAmount.toLocaleString()} + ₦${fee.toLocaleString()} fee) but only have ₦${currentBalance.toLocaleString()}. Shortfall: ₦${shortfall.toLocaleString()}`
+        });
+      }
+
+      // 1. Deduct amount + fee from wallet immediately.
+      await client.query(
+        "UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2",
+        [totalDeduction, user.id]
+      );
+
+      // 2. Create the payout request record — only reached if deduction succeeded.
+      const txId = "tx-" + Math.random().toString(36).substr(2, 9);
+      const ref = "W-BANK-" + Math.floor(10000000 + Math.random() * 90000000);
+      // Always persist bankCode — admin approval uses it to create the Paystack recipient.
+      const bankDetails = JSON.stringify({ bankName, bankCode: bankCode ? String(bankCode) : null, accountNumber, accountName });
+
+      await client.query(`
+        INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, bank_details, created_at)
+        VALUES ($1,$2,$3,$4,$5,'Withdrawal','Pending',$6,$7,$8,$9)
+      `, [txId, user.id, user.name, user.role, withdrawAmount, `Withdrawal to ${bankName} (${accountNumber})`, ref, bankDetails, new Date()]);
+
+      await client.query("COMMIT");
+
+      const newBalance = currentBalance - totalDeduction;
+
+      notifyAdmin({ type: "withdrawal", message: `New withdrawal request of ₦${withdrawAmount.toLocaleString()} from ${user.name}`, referenceId: txId });
+
+      // Return the authoritative post-deduction balance so the frontend can
+      // update immediately without waiting for a separate refresh round-trip.
+      res.json({
+        success: true,
+        transaction: { id: txId, amount: withdrawAmount, status: "Pending", reference: ref },
+        walletBalance: newBalance,
+        fee
       });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
     }
-
-    const txId = "tx-" + Math.random().toString(36).substr(2, 9);
-    const ref = "W-BANK-" + Math.floor(10000000 + Math.random() * 90000000);
-    // Always persist bankCode — admin approval uses it to create the Paystack recipient.
-    const bankDetails = JSON.stringify({ bankName, bankCode: bankCode ? String(bankCode) : null, accountNumber, accountName });
-
-    await pool.query(`
-      INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, bank_details, created_at)
-      VALUES ($1,$2,$3,$4,$5,'Withdrawal','Pending',$6,$7,$8,$9)
-    `, [txId, user.id, user.name, user.role, withdrawAmount, `Withdrawal to ${bankName} (${accountNumber})`, ref, bankDetails, new Date()]);
-
-    notifyAdmin({ type: "withdrawal", message: `New withdrawal request of ₦${withdrawAmount.toLocaleString()} from ${user.name}`, referenceId: txId });
-
-    res.json({ success: true, transaction: { id: txId, amount: withdrawAmount, status: "Pending", reference: ref }, walletBalance: user.walletBalance, availableBalance: available - withdrawAmount });
   } catch (err) {
     console.error("Withdraw error:", err);
     res.status(500).json({ error: "Server error" });

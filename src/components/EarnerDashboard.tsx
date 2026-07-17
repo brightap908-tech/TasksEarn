@@ -358,8 +358,12 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
       return;
     }
 
-    if (amount > user.walletBalance) {
-      setWithdrawError("Insufficient wallet balance for this withdrawal.");
+    if (amount + withdrawFee > user.walletBalance) {
+      setWithdrawError(
+        `Insufficient balance. You need ₦${(amount + withdrawFee).toLocaleString()} ` +
+        `(₦${amount.toLocaleString()} + ₦${withdrawFee.toLocaleString()} fee) ` +
+        `but only have ₦${user.walletBalance.toLocaleString()}.`
+      );
       return;
     }
 
@@ -390,6 +394,13 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
       } else {
         setWithdrawSuccess(true);
         setWithdrawAmount("");
+        // Immediately apply the authoritative post-deduction balance returned by
+        // the server — no cached value, no extra round-trip before the UI updates.
+        if (typeof res.walletBalance === "number") {
+          setMetrics(m => ({ ...m, walletBalance: res.walletBalance }));
+        }
+        // Also re-fetch the parent user object so user.walletBalance (shown in
+        // the withdraw form's "Available balance" hint) refreshes too.
         onRefreshUser();
       }
     } catch (err) {
