@@ -39,12 +39,31 @@ const SIDEBAR_ITEMS = [
   { id: "profile",          label: "Profile & Settings", icon: Settings },
 ];
 
-const BANKS = [
-  "Access Bank","First Bank of Nigeria","Guaranty Trust Bank (GTB)","United Bank for Africa (UBA)",
-  "Zenith Bank","Fidelity Bank","Stanbic IBTC Bank","Union Bank","Sterling Bank","Wema Bank",
-  "Polaris Bank","Heritage Bank","First City Monument Bank (FCMB)","Ecobank Nigeria",
-  "OPay (OPay Microfinance Bank)","PalmPay","Kuda Bank","Moniepoint",
-  "Carbon (One Finance)","VFD Microfinance Bank","Providus Bank","Keystone Bank",
+// Each entry carries both the display label and the Paystack bank code so the
+// server never has to guess the code from an ambiguous name string.
+const BANKS: { label: string; code: string }[] = [
+  { label: "Access Bank",                     code: "044"    },
+  { label: "First Bank of Nigeria",            code: "011"    },
+  { label: "Guaranty Trust Bank (GTB)",        code: "058"    },
+  { label: "United Bank for Africa (UBA)",     code: "033"    },
+  { label: "Zenith Bank",                      code: "057"    },
+  { label: "Fidelity Bank",                    code: "070"    },
+  { label: "Stanbic IBTC Bank",               code: "221"    },
+  { label: "Union Bank",                       code: "032"    },
+  { label: "Sterling Bank",                    code: "232"    },
+  { label: "Wema Bank",                        code: "035"    },
+  { label: "Polaris Bank",                     code: "076"    },
+  { label: "Heritage Bank",                    code: "030"    },
+  { label: "First City Monument Bank (FCMB)", code: "214"    },
+  { label: "Ecobank Nigeria",                  code: "050"    },
+  { label: "OPay (OPay Microfinance Bank)",   code: "999992" },
+  { label: "PalmPay",                          code: "999991" },
+  { label: "Kuda Bank",                        code: "50211"  },
+  { label: "Moniepoint",                       code: "50515"  },
+  { label: "Carbon (One Finance)",             code: "565"    },
+  { label: "VFD Microfinance Bank",            code: "566"    },
+  { label: "Providus Bank",                    code: "101"    },
+  { label: "Keystone Bank",                    code: "082"    },
 ];
 
 const ACTIONS = ["Like","Follow","Share","Comment","Subscribe","Watch","Join","Visit","Download","Custom Task"];
@@ -843,10 +862,14 @@ export default function UnifiedDashboard({
         </div>
         <div>
           <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "#64748B", letterSpacing: "0.06em" }}>Bank</label>
-          <select value={wd.bankName} onChange={e => { setWd(w => ({...w, bankName: e.target.value, accountName: "", bankCode: ""})); setWdVerified(false); }} required
+          <select value={wd.bankName} onChange={e => {
+              const selected = BANKS.find(b => b.label === e.target.value);
+              setWd(w => ({ ...w, bankName: e.target.value, bankCode: selected?.code ?? "", accountName: "" }));
+              setWdVerified(false);
+            }} required
             style={{ background: isDarkMode ? "rgba(255,255,255,0.06)" : "#fff", border: "1px solid " + (isDarkMode ? "rgba(255,255,255,0.12)" : "#E2E8F0"), color: isDarkMode ? "#e2e8f0" : "#0F172A" }}>
             <option value="">Select your bank</option>
-            {BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+            {BANKS.map(b => <option key={b.label} value={b.label}>{b.label}</option>)}
           </select>
         </div>
         <div>
@@ -1157,11 +1180,15 @@ export default function UnifiedDashboard({
   }
 
   async function handleVerifyAccount() {
+    if (!wd.bankCode) {
+      showToast("Please select a valid bank from the list.", "error");
+      return;
+    }
     setWdVerifying(true);
     try {
       const res = await apiFetch("/api/earner/verify-account", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountNumber: wd.accountNumber, bankName: wd.bankName })
+        body: JSON.stringify({ accountNumber: wd.accountNumber, bankName: wd.bankName, bankCode: wd.bankCode })
       });
       if (res?.accountName) {
         setWd(w => ({ ...w, accountName: res.accountName, bankCode: res.bankCode || "" }));
