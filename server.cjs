@@ -732,6 +732,7 @@ async function bootstrapTables() {
     await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS rejection_reason TEXT NULL`);
     await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS withdrawal_fee DECIMAL(10,2) NULL`);
     await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ NULL`);
+    await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS marked_by_admin_id VARCHAR(50) NULL`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS admin_action_logs (
         id VARCHAR(50) PRIMARY KEY,
@@ -3316,7 +3317,7 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
         return res.status(404).json({ error: "Withdrawal transaction not found" });
       }
       txSnapshot = mapTransaction(txRes.rows[0]);
-      const actionableStatuses = ["Pending" /* PENDING */, "Failed" /* FAILED */];
+      const actionableStatuses = ["Pending" /* PENDING */, "Approved" /* APPROVED */];
       if (!actionableStatuses.includes(txSnapshot.status)) {
         await client.query("ROLLBACK");
         return res.status(400).json({ error: "This withdrawal has already been processed and cannot be modified" });
@@ -3412,13 +3413,13 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
     }
     if (paystackOk) {
       await pool.query(
-        "UPDATE transactions SET status='Success', paystack_transfer_ref=$1, completed_at=NOW() WHERE id=$2",
+        "UPDATE transactions SET status='Paid', paystack_transfer_ref=$1, completed_at=NOW(), rejection_reason=NULL WHERE id=$2",
         [transferRef || null, txSnapshot.id]
       );
     } else {
       console.error(`[Paystack] Transfer failed for tx ${txSnapshot.id}: ${failureNote}`);
       await pool.query(
-        "UPDATE transactions SET status='Failed', rejection_reason=$1 WHERE id=$2",
+        "UPDATE transactions SET status='Approved', rejection_reason=$1 WHERE id=$2",
         [failureNote, txSnapshot.id]
       );
     }
@@ -3428,7 +3429,7 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
       return res.status(200).json({
         success: false,
         transaction: finalTx,
-        error: `Paystack transfer failed: ${failureNote}. Withdrawal is marked Failed \u2014 retry or reject to refund the earner.`
+        error: `Paystack transfer failed: ${failureNote}. Withdrawal moved to "Approved \u2014 Awaiting Payment". Retry, mark paid manually, or reject & refund the earner.`
       });
     }
     res.json({ success: true, transaction: finalTx });
@@ -3448,9 +3449,13 @@ app.post("/api/admin/withdrawals/:id/mark-paid", async (req, res) => {
     if (txRes.rows.length === 0) return res.status(404).json({ error: "Withdrawal not found" });
     const tx = mapTransaction(txRes.rows[0]);
     if (tx.status !== "Approved" /* APPROVED */) {
-      return res.status(400).json({ error: "Only Approved withdrawals can be marked as Paid" });
+      return res.status(400).json({ error: "Only withdrawals in Approved (Awaiting Payment) status can be marked as Paid" });
     }
-    await pool.query("UPDATE transactions SET status='Paid' WHERE id=$1", [req.params.id]);
+    await pool.query(
+      "UPDATE transactions SET status='Paid', completed_at=NOW(), marked_by_admin_id=$1, rejection_reason=NULL WHERE id=$2",
+      [admin.id, req.params.id]
+    );
+    console.log(`[Mark Paid] Withdrawal ${req.params.id} manually marked Paid by admin ${admin.name} (${admin.id})`);
     const updated = await pool.query("SELECT * FROM transactions WHERE id=$1", [req.params.id]);
     res.json({ success: true, transaction: mapTransaction(updated.rows[0]) });
   } catch (err) {
