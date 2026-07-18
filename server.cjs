@@ -166,7 +166,18 @@ function mapUser(row) {
       emailNotifications: true,
       campaignUpdates: true,
       transactionAlerts: true
-    }
+    },
+    colorTheme: (() => {
+      let ct = row.color_theme;
+      if (typeof ct === "string") {
+        try {
+          ct = JSON.parse(ct);
+        } catch (e) {
+          ct = null;
+        }
+      }
+      return ct || null;
+    })()
   };
 }
 function mapTask(row) {
@@ -251,7 +262,8 @@ function mapSettings(row) {
     contactPhone: row.contact_phone,
     telegramChannel: row.telegram_channel || void 0,
     whatsappGroup: row.whatsapp_group || void 0,
-    depositStatOffset: parseFloat(row.deposit_stat_offset) || 0
+    depositStatOffset: parseFloat(row.deposit_stat_offset) || 0,
+    platformDefaultTheme: row.platform_default_theme || "ocean-blue"
   };
 }
 function mapPricing(row) {
@@ -405,7 +417,8 @@ async function getSettings() {
     contactPhone: "09164444315",
     telegramChannel: "https://t.me/tasksearn_ng",
     whatsappGroup: "https://wa.me/2349164444315",
-    depositStatOffset: 0
+    depositStatOffset: 0,
+    platformDefaultTheme: "ocean-blue"
   };
 }
 async function getAuthenticatedUser(req) {
@@ -693,6 +706,8 @@ async function bootstrapTables() {
         UNIQUE(earner_id, task_id)
       )
     `);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS color_theme JSONB NULL`);
+    await client.query(`ALTER TABLE settings ADD COLUMN IF NOT EXISTS platform_default_theme VARCHAR(50) NOT NULL DEFAULT 'ocean-blue'`);
     await client.query(`
       UPDATE settings
       SET withdrawal_fee = 50, min_withdrawal = 200, min_deposit = 100
@@ -1198,6 +1213,30 @@ app.get("/api/user/login-popup", async (req, res) => {
 app.get("/api/public/settings", async (_req, res) => {
   try {
     res.json(await getSettings());
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.get("/api/public/platform-theme", async (_req, res) => {
+  try {
+    const s = await getSettings();
+    res.json({ platformDefaultTheme: s.platformDefaultTheme || "ocean-blue" });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.put("/api/admin/platform-theme", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const { themeId } = req.body;
+    if (!themeId || typeof themeId !== "string") return res.status(400).json({ error: "themeId is required" });
+    await pool.query(
+      `UPDATE settings SET platform_default_theme = $1
+       WHERE id = (SELECT id FROM settings ORDER BY id ASC LIMIT 1)`,
+      [themeId]
+    );
+    res.json({ success: true, platformDefaultTheme: themeId });
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
@@ -2835,12 +2874,13 @@ app.put("/api/user/profile", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user) return res.status(401).json({ error: "Unauthorized" });
-    const { name, username, phone, country, businessName, photoUrl, twoFactorEnabled, notificationPrefs } = req.body;
+    const { name, username, phone, country, businessName, photoUrl, twoFactorEnabled, notificationPrefs, colorTheme } = req.body;
     if (username && username !== user.username) {
       const existing = await pool.query("SELECT id FROM users WHERE username=$1 AND id!=$2", [username.trim(), user.id]);
       if (existing.rows.length > 0) return res.status(400).json({ error: "Username is already taken." });
     }
     const notifJson = notificationPrefs ? JSON.stringify(notificationPrefs) : null;
+    const colorThemeJson = colorTheme !== void 0 ? JSON.stringify(colorTheme) : null;
     await pool.query(
       `UPDATE users SET
         name = COALESCE($1, name),
@@ -2850,7 +2890,8 @@ app.put("/api/user/profile", async (req, res) => {
         business_name = COALESCE($5, business_name),
         photo_url = COALESCE($6, photo_url),
         two_factor_enabled = COALESCE($7, two_factor_enabled),
-        notification_prefs = COALESCE($8::jsonb, notification_prefs)
+        notification_prefs = COALESCE($8::jsonb, notification_prefs),
+        color_theme = COALESCE($10::jsonb, color_theme)
       WHERE id = $9`,
       [
         name?.trim() || null,
@@ -2861,7 +2902,8 @@ app.put("/api/user/profile", async (req, res) => {
         photoUrl?.trim() || null,
         typeof twoFactorEnabled === "boolean" ? twoFactorEnabled : null,
         notifJson,
-        user.id
+        user.id,
+        colorThemeJson
       ]
     );
     const updated = await pool.query("SELECT * FROM users WHERE id=$1", [user.id]);
