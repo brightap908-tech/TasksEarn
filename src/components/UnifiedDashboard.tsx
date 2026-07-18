@@ -11,7 +11,7 @@ import { User, EarnerNotification, WebsiteSettings } from "../types";
 import { usePlatforms } from "../lib/platformsStore";
 import { PlatformIcon, getPlatformFromCategory } from "../lib/platformIcons";
 import ThemeCustomizer from "./ThemeCustomizer";
-import { UserThemePrefs } from "../lib/themes";
+import { UserThemePrefs, ColorMode } from "../lib/themes";
 
 interface Props {
   user: User;
@@ -26,6 +26,7 @@ interface Props {
   onMarkAllNotificationsRead: () => void;
   onOpenDeposit: (amount?: string) => void;
   isDarkMode: boolean;
+  colorMode?: ColorMode;
   themeId?: string;
   customAccent?: string | null;
   platformDefaultThemeId?: string;
@@ -91,6 +92,7 @@ export default function UnifiedDashboard({
   user, onRefreshUser, onNavigate, onLogout, apiFetch, showToast,
   settings, earnerNotifications, onMarkNotificationRead, onMarkAllNotificationsRead,
   onOpenDeposit, isDarkMode,
+  colorMode = "light",
   themeId = "ocean-blue", customAccent = null, platformDefaultThemeId = "ocean-blue", onThemeChange
 }: Props) {
   const { section = "overview" } = useParams<{ section: string }>();
@@ -1092,6 +1094,7 @@ export default function UnifiedDashboard({
       return (
         <ThemeCustomizer
           isDarkMode={isDarkMode}
+          colorMode={colorMode}
           currentThemeId={themeId}
           currentCustomAccent={customAccent}
           platformDefaultThemeId={platformDefaultThemeId}

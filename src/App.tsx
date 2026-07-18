@@ -3,7 +3,7 @@ import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-
 import { AnimatePresence, motion } from "motion/react";
 import { resolvePath, pathToView } from "./lib/routes";
 import BackButton from "./components/BackButton";
-import { resolveTheme, applyThemeCssVars, DEFAULT_THEME_ID, UserThemePrefs } from "./lib/themes";
+import { resolveTheme, applyThemeCssVars, DEFAULT_THEME_ID, UserThemePrefs, ColorMode, getThemeById } from "./lib/themes";
 import { 
   User, 
   UserRole, 
@@ -133,23 +133,52 @@ export default function App() {
     } catch (e) {}
   };
 
-  // Dark Theme State
+  // ── Color Mode State (dark / light / system) ─────────────────────────────
+  const getInitialColorMode = (): ColorMode => {
+    try {
+      const saved = localStorage.getItem("tasksearn_theme");
+      const cm = saved ? (JSON.parse(saved) as any)?.colorMode : null;
+      if (cm === "dark" || cm === "light" || cm === "system") return cm;
+      // Fall back to legacy "theme" key
+      if (localStorage.getItem("theme") === "dark") return "dark";
+    } catch {}
+    return "light";
+  };
+
+  const [colorMode, setColorMode] = React.useState<ColorMode>(getInitialColorMode);
   const [isDarkMode, setIsDarkMode] = React.useState<boolean>(() => {
-    return localStorage.getItem("theme") === "dark";
+    const cm = getInitialColorMode();
+    if (cm === "dark") return true;
+    if (cm === "light") return false;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
 
+  // Apply dark mode class based on colorMode (including system preference)
   React.useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
+    const applyDark = (dark: boolean) => {
+      if (dark) {
+        document.documentElement.classList.add("dark");
+        localStorage.setItem("theme", "dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+        localStorage.setItem("theme", "light");
+      }
+      setIsDarkMode(dark);
+    };
+
+    if (colorMode === "system") {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      applyDark(mq.matches);
+      const handler = (e: MediaQueryListEvent) => applyDark(e.matches);
+      mq.addEventListener("change", handler);
+      return () => mq.removeEventListener("change", handler);
     } else {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
+      applyDark(colorMode === "dark");
     }
-  }, [isDarkMode]);
+  }, [colorMode]);
 
   const toggleDarkMode = () => {
-    setIsDarkMode(prev => !prev);
+    setColorMode(prev => prev === "dark" ? "light" : "dark");
   };
 
   // ── Color Theme State ────────────────────────────────────────────────────
@@ -178,8 +207,14 @@ export default function App() {
   const handleThemeChange = async (prefs: UserThemePrefs) => {
     const theme = resolveTheme(prefs.themeId, prefs.customAccent);
     applyThemeCssVars(theme);
-    if (theme.forceMode === "dark") setIsDarkMode(true);
-    else if (theme.forceMode === "light") setIsDarkMode(false);
+    // Handle forceMode from theme preset (overrides explicit colorMode)
+    if (theme.forceMode === "dark") {
+      setColorMode("dark");
+    } else if (theme.forceMode === "light") {
+      setColorMode("light");
+    } else if (prefs.colorMode) {
+      setColorMode(prefs.colorMode);
+    }
     setThemeId(prefs.themeId);
     setCustomAccent(prefs.customAccent ?? null);
     localStorage.setItem("tasksearn_theme", JSON.stringify(prefs));
@@ -267,15 +302,17 @@ export default function App() {
         setUser(data.user);
         // Apply user's saved theme
         if (data.user.colorTheme) {
-          const { themeId: tid, customAccent: ca } = data.user.colorTheme;
+          const { themeId: tid, customAccent: ca, colorMode: cm } = data.user.colorTheme;
           const resolvedId = tid || DEFAULT_THEME_ID;
           setThemeId(resolvedId);
           setCustomAccent(ca || null);
           localStorage.setItem("tasksearn_theme", JSON.stringify(data.user.colorTheme));
           const t = resolveTheme(resolvedId, ca);
           applyThemeCssVars(t);
-          if (t.forceMode === "dark") setIsDarkMode(true);
-          else if (t.forceMode === "light") setIsDarkMode(false);
+          // Apply color mode from saved prefs (forceMode from theme takes priority)
+          if (t.forceMode === "dark") setColorMode("dark");
+          else if (t.forceMode === "light") setColorMode("light");
+          else if (cm === "dark" || cm === "light" || cm === "system") setColorMode(cm);
         }
         // Automatically route to the appropriate dashboard on startup
         if (data.user.role === UserRole.ADMIN) setCurrentView("admin-dashboard");
@@ -1486,6 +1523,7 @@ export default function App() {
               }}
               onOpenDeposit={openDeposit}
               isDarkMode={isDarkMode}
+              colorMode={colorMode}
               themeId={themeId}
               customAccent={customAccent}
               platformDefaultThemeId={platformDefaultThemeId}
@@ -1504,10 +1542,12 @@ export default function App() {
                 onRefreshUser={refreshUserSession}
                 apiFetch={apiFetch}
                 isDarkMode={isDarkMode}
+                colorMode={colorMode}
                 themeId={themeId}
                 customAccent={customAccent}
                 platformDefaultThemeId={platformDefaultThemeId}
                 onPlatformDefaultThemeChange={(id) => setPlatformDefaultThemeId(id)}
+                onThemeChange={handleThemeChange}
               />
             </div>
           ) : (<Navigate to="/login" replace />)

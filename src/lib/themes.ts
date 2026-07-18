@@ -74,6 +74,30 @@ export const PRESET_THEMES: ThemeConfig[] = [
     primaryGlow: "rgba(234,88,12,0.30)",
   },
   {
+    id: "sky-blue",
+    name: "Sky Blue",
+    emoji: "🩵",
+    primary: "#0EA5E9",
+    primaryDark: "#0284C7",
+    primaryMid: "#38BDF8",
+    primaryLight: "#F0F9FF",
+    primaryBg: "rgba(14,165,233,0.10)",
+    primaryBorder: "rgba(14,165,233,0.20)",
+    primaryGlow: "rgba(14,165,233,0.30)",
+  },
+  {
+    id: "pink",
+    name: "Pink",
+    emoji: "🩷",
+    primary: "#EC4899",
+    primaryDark: "#DB2777",
+    primaryMid: "#F472B6",
+    primaryLight: "#FDF2F8",
+    primaryBg: "rgba(236,72,153,0.10)",
+    primaryBorder: "rgba(236,72,153,0.20)",
+    primaryGlow: "rgba(236,72,153,0.30)",
+  },
+  {
     id: "midnight-dark",
     name: "Midnight Dark",
     emoji: "⚫",
@@ -88,7 +112,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
   },
   {
     id: "light-mode",
-    name: "Light Mode",
+    name: "Light",
     emoji: "⚪",
     primary: "#2563EB",
     primaryDark: "#1D4ED8",
@@ -183,7 +207,10 @@ export function applyThemeCssVars(theme: ThemeConfig): void {
   setTimeout(() => root.classList.remove("theme-transition"), 350);
 }
 
+export type ColorMode = "dark" | "light" | "system";
+
 export interface UserThemePrefs {
   themeId: string;
   customAccent?: string | null;
+  colorMode?: ColorMode;
 }

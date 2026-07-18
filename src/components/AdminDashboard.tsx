@@ -52,24 +52,28 @@ import {
   ShieldCheck,
   UserX,
   UserCircle2,
-  ChevronDown
+  ChevronDown,
+  Palette
 } from "lucide-react";
 import AdminTaskPricing from "./AdminTaskPricing";
 import AdminSocialPlatforms from "./AdminSocialPlatforms";
-import { PRESET_THEMES, getThemeById, applyThemeCssVars, DEFAULT_THEME_ID } from "../lib/themes";
+import { PRESET_THEMES, getThemeById, applyThemeCssVars, DEFAULT_THEME_ID, UserThemePrefs, ColorMode } from "../lib/themes";
+import ThemeCustomizer from "./ThemeCustomizer";
 
 interface AdminDashboardProps {
   user: User;
   onRefreshUser: () => void;
   apiFetch: (endpoint: string, options?: RequestInit) => Promise<any>;
   isDarkMode?: boolean;
+  colorMode?: ColorMode;
   themeId?: string;
   customAccent?: string | null;
   platformDefaultThemeId?: string;
   onPlatformDefaultThemeChange?: (id: string) => void;
+  onThemeChange?: (prefs: UserThemePrefs) => Promise<void>;
 }
 
-export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMode = false, themeId: _themeId, customAccent: _customAccent, platformDefaultThemeId = "ocean-blue", onPlatformDefaultThemeChange }: AdminDashboardProps) {
+export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMode = false, colorMode = "light", themeId: _themeId, customAccent: _customAccent, platformDefaultThemeId = "ocean-blue", onPlatformDefaultThemeChange, onThemeChange }: AdminDashboardProps) {
   type AdminTab = "stats" | "users" | "advertisers" | "campaigns" | "admin-tasks" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings" | "commissions" | "notifications" | "reports" | "profile" | "demo-accounts";
   const VALID_ADMIN_TABS: AdminTab[] = ["stats", "users", "advertisers", "campaigns", "admin-tasks", "withdrawals", "audits", "announcements", "cms", "settings", "pricing", "platforms", "platform-earnings", "commissions", "notifications", "reports", "profile", "demo-accounts"];
   const { section } = useParams<{ section?: string }>();
@@ -113,6 +117,9 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
       setDemoLoading(false);
     }
   };
+
+  // Theme customizer state (for admin personal theme in profile tab)
+  const [showThemeCustomizer, setShowThemeCustomizer] = React.useState(false);
 
   // Admin states
   const [stats, setStats] = React.useState({
@@ -3865,6 +3872,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
 
         {activeTab === "profile" && (
           <div className="space-y-6 animate-fadeIn">
+            {/* Admin Profile Card */}
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
               <h3 className="font-display text-sm font-bold text-gray-900 mb-6">Admin Profile</h3>
               <div className="flex items-center gap-5 mb-6 pb-6 border-b border-gray-100">
@@ -3896,6 +3904,50 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                 ))}
               </div>
             </div>
+
+            {/* Theme Section */}
+            {showThemeCustomizer ? (
+              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                <ThemeCustomizer
+                  isDarkMode={isDarkMode}
+                  colorMode={colorMode}
+                  currentThemeId={_themeId || DEFAULT_THEME_ID}
+                  currentCustomAccent={_customAccent || null}
+                  platformDefaultThemeId={platformDefaultThemeId}
+                  onSave={async (prefs) => {
+                    if (onThemeChange) await onThemeChange(prefs);
+                    setShowThemeCustomizer(false);
+                  }}
+                  onCancel={() => setShowThemeCustomizer(false)}
+                />
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-8 w-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--theme-primary-bg)" }}>
+                    <Palette className="h-4 w-4" style={{ color: "var(--theme-primary)" }} />
+                  </div>
+                  <div>
+                    <h3 className="font-display text-sm font-bold text-gray-900">Theme</h3>
+                    <p className="text-xs text-gray-400 mt-0.5">Customize your accent color &amp; appearance</p>
+                  </div>
+                </div>
+                {/* Mini theme color bar preview */}
+                <div className="flex gap-1.5 mb-4">
+                  {["var(--theme-primary)", "var(--theme-primary-mid)", "var(--theme-primary-dark)", "var(--theme-primary-bg)"].map((c, i) => (
+                    <div key={i} className="h-2 rounded-full flex-1" style={{ background: c }} />
+                  ))}
+                </div>
+                <button
+                  onClick={() => setShowThemeCustomizer(true)}
+                  className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold cursor-pointer transition-all"
+                  style={{ background: "var(--theme-primary-bg)", color: "var(--theme-primary)", border: "1px solid var(--theme-primary-border)", minHeight: "auto" }}
+                >
+                  <Palette className="h-3.5 w-3.5" />
+                  Open Theme Settings
+                </button>
+              </div>
+            )}
           </div>
         )}
 
