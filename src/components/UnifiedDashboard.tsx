@@ -329,14 +329,17 @@ export default function UnifiedDashboard({
             </div>
             <div className="px-4 pb-4" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.625rem" }}>
               {[
-                { label: "Approved", count: dashData.approvedCount ?? 0, color: "#22c55e", bg: "rgba(34,197,94,0.08)",  border: "rgba(34,197,94,0.18)" },
-                { label: "Pending",  count: dashData.pendingCount  ?? 0, color: "#f59e0b", bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.18)" },
-                { label: "Rejected", count: dashData.rejectedCount ?? 0, color: "#ef4444", bg: "rgba(239,68,68,0.08)",  border: "rgba(239,68,68,0.18)" },
+                { label: "Approved", count: dashData.approvedCount ?? 0, color: "#22c55e", bg: "rgba(34,197,94,0.08)",  border: "rgba(34,197,94,0.18)", path: "approved" },
+                { label: "Pending",  count: dashData.pendingCount  ?? 0, color: "#f59e0b", bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.18)", path: "pending"  },
+                { label: "Rejected", count: dashData.rejectedCount ?? 0, color: "#ef4444", bg: "rgba(239,68,68,0.08)",  border: "rgba(239,68,68,0.18)", path: "rejected" },
               ].map(s => (
-                <div key={s.label} className="rounded-xl text-center" style={{ background: s.bg, border: `1px solid ${s.border}`, padding: "0.75rem 0.25rem" }}>
+                <button key={s.label}
+                  onClick={() => navigate(`/dashboard/my-tasks/${s.path}`)}
+                  className="rounded-xl text-center cursor-pointer transition-all hover:opacity-80 active:scale-95"
+                  style={{ background: s.bg, border: `1px solid ${s.border}`, padding: "0.75rem 0.25rem", minHeight: "auto" }}>
                   <p className="font-black leading-none" style={{ fontSize: "clamp(1.25rem,6vw,1.625rem)", color: s.color }}>{s.count}</p>
                   <p className="font-semibold mt-1.5 leading-none" style={{ fontSize: "clamp(9px,2.2vw,11px)", color: "#94A3B8" }}>{s.label}</p>
-                </div>
+                </button>
               ))}
             </div>
           </div>

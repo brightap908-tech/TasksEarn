@@ -1,0 +1,68 @@
+Update the Task Submissions section to behave like a real navigation system.
+
+Requirements:
+
+1. Make every Task Submission card clickable:
+   - Approved → Opens the Approved Tasks page.
+   - Pending → Opens the Pending Tasks page.
+   - Rejected → Opens the Rejected Tasks page.
+
+2. Approved Tasks Page
+   - Display only approved submissions.
+   - Show:
+     - Task title
+     - Reward
+     - Date approved
+     - Status badge (Approved)
+
+3. Pending Tasks Page
+   - Display only pending submissions.
+   - Show:
+     - Task title
+     - Submission date
+     - Reward
+     - Status badge (Pending)
+
+4. Rejected Tasks Page
+   - Display only rejected submissions.
+   - Show:
+     - Task title
+     - Rejection reason
+     - Rejected date
+     - Status badge (Rejected)
+     - A prominent blue "Fix & Resubmit" button on every rejected task.
+
+5. Fix & Resubmit
+   - Clicking "Fix & Resubmit" should open the original task submission page.
+   - Previously submitted details should be loaded automatically.
+   - The user can edit the information or upload a new screenshot.
+   - When submitted again:
+     - Status changes from Rejected → Pending.
+     - The task is removed from the Rejected page.
+     - It appears in the Pending page waiting for admin review.
+
+6. Admin Review
+   - Approve → Move task to Approved page and credit the earner's balance.
+   - Reject → Move task back to Rejected page with the rejection reason.
+
+7. Dashboard Counters
+   - Approved count updates automatically.
+   - Pending count updates automatically.
+   - Rejected count updates automatically.
+
+8. Database
+   - Save all statuses permanently.
+   - Preserve submission history.
+   - Do not lose screenshots or comments unless replaced during resubmission.
+
+9. Mobile UI
+   - Smooth page transitions.
+   - Responsive layout.
+   - Keep the existing blue-and-white TasksEarn design.
+
+10. Testing
+   Verify this complete workflow:
+   Task Submitted → Pending → Approved (or Rejected) → Fix & Resubmit → Pending → Approved.
+
+Finally, commit all changes and push the updated code to my GitHub repository with a clear commit message:
+"Implemented task submission navigation, status pages, and Fix & Resubmit workflow."

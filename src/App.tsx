@@ -23,6 +23,9 @@ import SEO from "./components/SEO";
 import UnifiedDashboard from "./components/UnifiedDashboard";
 import EarnerTaskSubmitPage from "./components/EarnerTaskSubmitPage";
 import EarnerRejectedTaskResubmitPage from "./components/EarnerRejectedTaskResubmitPage";
+import EarnerRejectedTasksPage from "./components/EarnerRejectedTasksPage";
+import EarnerApprovedTasksPage from "./components/EarnerApprovedTasksPage";
+import EarnerPendingTasksPage from "./components/EarnerPendingTasksPage";
 import { isRegularUser } from "./types";
 import AdminDashboard from "./components/AdminDashboard";
 import { simulateApiFetch } from "./mockDb";
@@ -1368,6 +1371,29 @@ export default function App() {
           user && isRegularUser(user.role) ? (
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
               <EarnerTaskSubmitPage apiFetch={apiFetch} showToast={showToast} />
+            </div>
+          ) : (<Navigate to="/login" replace />)
+        } />
+
+        {/* ROLE PROTECTED: STATUS PAGES (must be before /dashboard/:section and resubmit) */}
+        <Route path="/dashboard/my-tasks/approved" element={
+          user && isRegularUser(user.role) ? (
+            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+              <EarnerApprovedTasksPage apiFetch={apiFetch} showToast={showToast} />
+            </div>
+          ) : (<Navigate to="/login" replace />)
+        } />
+        <Route path="/dashboard/my-tasks/pending" element={
+          user && isRegularUser(user.role) ? (
+            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+              <EarnerPendingTasksPage apiFetch={apiFetch} showToast={showToast} />
+            </div>
+          ) : (<Navigate to="/login" replace />)
+        } />
+        <Route path="/dashboard/my-tasks/rejected" element={
+          user && isRegularUser(user.role) ? (
+            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+              <EarnerRejectedTasksPage apiFetch={apiFetch} showToast={showToast} />
             </div>
           ) : (<Navigate to="/login" replace />)
         } />

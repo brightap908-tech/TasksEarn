@@ -169,7 +169,7 @@ export default function EarnerRejectedTaskResubmitPage({
       } else {
         setSubmitSuccess(true);
         showToast("Resubmission sent! Redirecting to Rejected Tasks…", "success");
-        setTimeout(() => navigate("/earner/rejected"), 1500);
+        setTimeout(() => navigate("/dashboard/my-tasks/rejected"), 1500);
       }
     } catch {
       setSubmitError("Failed to submit. Please check your connection and try again.");
@@ -202,7 +202,7 @@ export default function EarnerRejectedTaskResubmitPage({
             This submission may no longer be in a rejected state — it may have already been resubmitted or approved.
           </p>
           <button
-            onClick={() => navigate("/earner/rejected")}
+            onClick={() => navigate("/dashboard/my-tasks/rejected")}
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 text-white px-5 py-2.5 text-xs font-bold hover:bg-blue-700 transition-all"
           >
             <ArrowLeft className="h-4 w-4" /> Back to Rejected Tasks
@@ -238,7 +238,7 @@ export default function EarnerRejectedTaskResubmitPage({
       {/* Breadcrumb */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => navigate("/earner/rejected")}
+          onClick={() => navigate("/dashboard/my-tasks/rejected")}
           className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
@@ -519,7 +519,7 @@ export default function EarnerRejectedTaskResubmitPage({
         <div className="flex gap-3 pt-1">
           <button
             type="button"
-            onClick={() => navigate("/earner/rejected")}
+            onClick={() => navigate("/dashboard/my-tasks/rejected")}
             className="flex-none rounded-xl border border-gray-200 px-5 py-3 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all"
           >
             Cancel

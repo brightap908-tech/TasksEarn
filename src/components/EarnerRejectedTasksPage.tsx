@@ -188,11 +188,11 @@ export default function EarnerRejectedTasksPage({
       {/* Header row */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => navigate("/earner/overview")}
+          onClick={() => navigate("/dashboard/my-tasks")}
           className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Dashboard
+          My Tasks
         </button>
         <span className="text-xs text-gray-400">›</span>
         <span className="text-xs font-semibold text-gray-700">Rejected Tasks</span>
@@ -224,7 +224,7 @@ export default function EarnerRejectedTasksPage({
             You have no rejected tasks right now. Keep completing tasks and submitting great proof!
           </p>
           <button
-            onClick={() => navigate("/earner/tasks")}
+            onClick={() => navigate("/dashboard/tasks")}
             className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-700 transition-all"
           >
             Browse Available Tasks <ChevronRight className="h-3.5 w-3.5" />
@@ -323,8 +323,8 @@ export default function EarnerRejectedTasksPage({
           {/* Action buttons */}
           <div className="p-5 space-y-3">
             <button
-              onClick={() => navigate(`/earner/rejected/${sub.submissionId}`)}
-              className="w-full rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 px-6 py-3.5 text-sm font-black text-white shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+              onClick={() => navigate(`/dashboard/my-tasks/${sub.submissionId}/resubmit`)}
+              className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 px-6 py-3.5 text-sm font-black text-white shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
             >
               <RefreshCw className="h-4 w-4" />
               Fix &amp; Resubmit
