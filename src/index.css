@@ -24,8 +24,7 @@
 }
 
 /* ==========================================================================
-   THEME CSS CUSTOM PROPERTIES (defaults = Ocean Blue)
-   Changed at runtime by applyThemeCssVars() in src/lib/themes.ts
+   THEME CSS CUSTOM PROPERTIES (blue brand defaults — fixed)
    ========================================================================== */
 :root {
   --theme-primary:       #2563EB;
@@ -37,14 +36,6 @@
   --theme-primary-glow:  rgba(37,99,235,0.30);
 }
 
-/* Smooth 250ms transitions during theme switches (class added/removed by JS) */
-html.theme-transition,
-html.theme-transition *,
-html.theme-transition *::before,
-html.theme-transition *::after {
-  transition: color 0.25s ease, background-color 0.25s ease,
-              border-color 0.25s ease, box-shadow 0.25s ease !important;
-}
 
 /* ==========================================================================
    BASE RESETS

@@ -11,7 +11,7 @@ import { User, EarnerNotification, WebsiteSettings } from "../types";
 import { usePlatforms } from "../lib/platformsStore";
 import { PlatformIcon, getPlatformFromCategory } from "../lib/platformIcons";
 
-import { UserThemePrefs, ColorMode } from "../lib/themes";
+import { ColorMode } from "../lib/themes";
 
 interface Props {
   user: User;
@@ -27,10 +27,6 @@ interface Props {
   onOpenDeposit: (amount?: string) => void;
   isDarkMode: boolean;
   colorMode?: ColorMode;
-  themeId?: string;
-  customAccent?: string | null;
-  platformDefaultThemeId?: string;
-  onThemeChange?: (prefs: UserThemePrefs) => Promise<void>;
 }
 
 const SIDEBAR_ITEMS = [
@@ -93,7 +89,6 @@ export default function UnifiedDashboard({
   settings, earnerNotifications, onMarkNotificationRead, onMarkAllNotificationsRead,
   onOpenDeposit, isDarkMode,
   colorMode = "light",
-  themeId = "ocean-blue", customAccent = null, platformDefaultThemeId = "ocean-blue", onThemeChange
 }: Props) {
   const { section = "overview" } = useParams<{ section: string }>();
   const navigate = useNavigate();

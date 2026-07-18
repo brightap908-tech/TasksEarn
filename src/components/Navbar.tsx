@@ -3,12 +3,9 @@ import { User, UserRole, isRegularUser } from "../types";
 import { resolvePath } from "../lib/routes";
 import {
   Coins, LogOut, Shield, User as UserIcon, Wallet, Menu, X,
-  Sun, Moon, Monitor, Zap, Bell, Check, Palette,
+  Sun, Moon, Monitor, Zap, Bell,
 } from "lucide-react";
-import {
-  PRESET_THEMES, ColorMode, UserThemePrefs,
-  applyThemeCssVars, resolveTheme,
-} from "../lib/themes";
+import { ColorMode } from "../lib/themes";
 
 interface NavbarProps {
   user: User | null;
@@ -18,9 +15,7 @@ interface NavbarProps {
   onOpenDeposit: () => void;
   isDarkMode: boolean;
   colorMode: ColorMode;
-  themeId: string;
   onColorModeChange: (mode: ColorMode) => void;
-  onThemeChange: (prefs: UserThemePrefs) => Promise<void>;
   earnerUnreadCount?: number;
 }
 
@@ -32,13 +27,12 @@ const MODE_OPTIONS: { mode: ColorMode; label: string; Icon: React.FC<{ className
 
 export default function Navbar({
   user, currentView, onNavigate, onLogout, onOpenDeposit,
-  isDarkMode, colorMode, themeId,
-  onColorModeChange, onThemeChange,
+  isDarkMode, colorMode,
+  onColorModeChange,
   earnerUnreadCount = 0,
 }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [showAppearance, setShowAppearance] = React.useState(false);
-  const [saving, setSaving] = React.useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
   const btnRef = React.useRef<HTMLButtonElement>(null);
 
@@ -64,23 +58,6 @@ export default function Navbar({
     };
   }, [showAppearance]);
 
-  // Handle mode change — instant, no save needed (App.tsx handles persistence on theme save)
-  const handleModeChange = (mode: ColorMode) => {
-    onColorModeChange(mode);
-  };
-
-  // Handle theme selection — apply immediately then save to DB
-  const handleThemeSelect = async (id: string) => {
-    const theme = resolveTheme(id);
-    applyThemeCssVars(theme);
-    setSaving(true);
-    try {
-      await onThemeChange({ themeId: id, colorMode });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const navLinkClass = (view: string) =>
     `text-sm font-semibold transition-all cursor-pointer px-2 py-1 rounded-lg ${
       currentView === view
@@ -97,16 +74,15 @@ export default function Navbar({
   const dropdownBg  = isDarkMode ? "rgba(10,16,28,0.98)" : "rgba(255,255,255,0.98)";
   const dropdownBdr = isDarkMode ? "rgba(255,255,255,0.08)" : "#E2E8F0";
   const labelColor  = isDarkMode ? "#94A3B8" : "#64748B";
-  const textMain    = isDarkMode ? "#F1F5F9" : "#0F172A";
 
-  // Moon icon color based on current mode
+  // Icon based on current mode
   const ModeIcon = colorMode === "dark" ? Moon : colorMode === "system" ? Monitor : Sun;
   const modeIconColor = colorMode === "dark" ? "#FBBF24" : colorMode === "system" ? "#94A3B8" : "#F59E0B";
 
   const AppearanceDropdown = () => (
     <div
       ref={dropdownRef}
-      className="absolute right-0 top-full mt-2 z-[200] w-[296px] rounded-2xl overflow-hidden"
+      className="absolute right-0 top-full mt-2 z-[200] w-[256px] rounded-2xl overflow-hidden"
       style={{
         background: dropdownBg,
         border: `1px solid ${dropdownBdr}`,
@@ -120,12 +96,9 @@ export default function Navbar({
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-3">
-        <div className="flex items-center gap-2">
-          <Palette className="h-3.5 w-3.5" style={{ color: "var(--theme-primary)" }} />
-          <span className="text-[11px] font-black uppercase tracking-widest" style={{ color: labelColor }}>
-            Appearance
-          </span>
-        </div>
+        <span className="text-[11px] font-black uppercase tracking-widest" style={{ color: labelColor }}>
+          Appearance
+        </span>
         <button
           onClick={() => setShowAppearance(false)}
           className="h-6 w-6 rounded-full flex items-center justify-center cursor-pointer transition-all hover:opacity-70"
@@ -146,7 +119,7 @@ export default function Navbar({
             return (
               <button
                 key={mode}
-                onClick={() => handleModeChange(mode)}
+                onClick={() => { onColorModeChange(mode); setShowAppearance(false); }}
                 className="flex-1 flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-xl cursor-pointer transition-all"
                 style={{
                   background: active ? "var(--theme-primary-bg)" : isDarkMode ? "rgba(255,255,255,0.04)" : "#F8FAFC",
@@ -162,62 +135,6 @@ export default function Navbar({
               </button>
             );
           })}
-        </div>
-      </div>
-
-      {/* Divider */}
-      <div style={{ height: "1px", background: isDarkMode ? "rgba(255,255,255,0.06)" : "#F1F5F9" }} />
-
-      {/* Theme Colors grid */}
-      <div className="px-4 py-4">
-        <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: labelColor }}>
-          Theme Color
-          {saving && <span className="ml-2 font-normal" style={{ color: "var(--theme-primary)" }}>Saving…</span>}
-        </p>
-        <div className="grid grid-cols-5 gap-2">
-          {PRESET_THEMES.map((t) => {
-            const isSelected = themeId === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => handleThemeSelect(t.id)}
-                title={t.name}
-                className="relative flex h-10 w-full items-center justify-center rounded-xl cursor-pointer transition-all"
-                style={{
-                  background: t.forceMode === "dark"
-                    ? `linear-gradient(135deg, ${t.primary}, ${t.primaryDark})`
-                    : t.primary,
-                  boxShadow: isSelected
-                    ? `0 0 0 2.5px ${isDarkMode ? "rgba(255,255,255,0.9)" : "#fff"}, 0 0 0 4.5px ${t.primary}`
-                    : "none",
-                  transform: isSelected ? "scale(1.08)" : "scale(1)",
-                  opacity: saving ? 0.7 : 1,
-                }}
-              >
-                {isSelected && (
-                  <Check
-                    className="h-3.5 w-3.5"
-                    style={{
-                      color: "#fff",
-                      filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.4))",
-                    }}
-                  />
-                )}
-                {/* Tooltip on hover – rendered via title attr */}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Active theme name */}
-        <div className="mt-3 flex items-center gap-2">
-          <div
-            className="h-2.5 w-2.5 rounded-full shrink-0"
-            style={{ background: PRESET_THEMES.find(t => t.id === themeId)?.primary ?? "var(--theme-primary)" }}
-          />
-          <span className="text-[11px] font-semibold" style={{ color: textMain }}>
-            {PRESET_THEMES.find(t => t.id === themeId)?.name ?? "Blue"}
-          </span>
         </div>
       </div>
     </div>
@@ -423,7 +340,7 @@ export default function Navbar({
                 />
               </button>
               {showAppearance && (
-                <div className="absolute right-0 top-full mt-2 z-[200]" style={{ width: "min(296px, calc(100vw - 24px))" }}>
+                <div className="absolute right-0 top-full mt-2 z-[200]" style={{ width: "min(256px, calc(100vw - 24px))" }}>
                   <AppearanceDropdown />
                 </div>
               )}

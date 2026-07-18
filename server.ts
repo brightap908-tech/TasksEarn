@@ -104,11 +104,6 @@ function mapUser(row: any) {
       campaignUpdates: true,
       transactionAlerts: true
     },
-    colorTheme: (() => {
-      let ct = row.color_theme;
-      if (typeof ct === "string") { try { ct = JSON.parse(ct); } catch (e) { ct = null; } }
-      return ct || null;
-    })()
   };
 }
 
@@ -195,7 +190,6 @@ function mapSettings(row: any) {
     telegramChannel: row.telegram_channel || undefined,
     whatsappGroup: row.whatsapp_group || undefined,
     depositStatOffset: parseFloat(row.deposit_stat_offset) || 0,
-    platformDefaultTheme: row.platform_default_theme || "ocean-blue"
   };
 }
 
@@ -378,7 +372,6 @@ async function getSettings(): Promise<ReturnType<typeof mapSettings>> {
     telegramChannel: "https://t.me/tasksearn_ng",
     whatsappGroup: "https://wa.me/2349164444315",
     depositStatOffset: 0,
-    platformDefaultTheme: "ocean-blue"
   };
 }
 
@@ -744,12 +737,6 @@ async function bootstrapTables() {
         UNIQUE(earner_id, task_id)
       )
     `);
-
-    // 28. Migrate: user color theme preference stored as JSONB.
-    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS color_theme JSONB NULL`);
-
-    // 29. Migrate: platform-wide default theme for new users (admin-configurable).
-    await client.query(`ALTER TABLE settings ADD COLUMN IF NOT EXISTS platform_default_theme VARCHAR(50) NOT NULL DEFAULT 'ocean-blue'`);
 
     // 23. Migrate: update settings to new minimums (₦50 fee, ₦200 min withdrawal, ₦100 min deposit).
     //     Runs on every boot; the WHERE guard makes it a no-op if already updated.
@@ -1303,30 +1290,6 @@ app.get("/api/user/login-popup", async (req, res) => {
 app.get("/api/public/settings", async (_req, res) => {
   try {
     res.json(await getSettings());
-  } catch (err) { res.status(500).json({ error: "Server error" }); }
-});
-
-// Public endpoint: returns only the platform default theme (no auth needed).
-app.get("/api/public/platform-theme", async (_req, res) => {
-  try {
-    const s = await getSettings();
-    res.json({ platformDefaultTheme: (s as any).platformDefaultTheme || "ocean-blue" });
-  } catch (err) { res.status(500).json({ error: "Server error" }); }
-});
-
-// Admin endpoint: update the platform default theme for new users.
-app.put("/api/admin/platform-theme", async (req, res) => {
-  try {
-    const user = await getAuthenticatedUser(req);
-    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
-    const { themeId } = req.body;
-    if (!themeId || typeof themeId !== "string") return res.status(400).json({ error: "themeId is required" });
-    await pool.query(
-      `UPDATE settings SET platform_default_theme = $1
-       WHERE id = (SELECT id FROM settings ORDER BY id ASC LIMIT 1)`,
-      [themeId]
-    );
-    res.json({ success: true, platformDefaultTheme: themeId });
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
@@ -3299,7 +3262,7 @@ app.put("/api/user/profile", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user) return res.status(401).json({ error: "Unauthorized" });
 
-    const { name, username, phone, country, businessName, photoUrl, twoFactorEnabled, notificationPrefs, colorTheme } = req.body;
+    const { name, username, phone, country, businessName, photoUrl, twoFactorEnabled, notificationPrefs } = req.body;
 
     // Validate username uniqueness if provided
     if (username && username !== user.username) {
@@ -3308,7 +3271,6 @@ app.put("/api/user/profile", async (req, res) => {
     }
 
     const notifJson = notificationPrefs ? JSON.stringify(notificationPrefs) : null;
-    const colorThemeJson = colorTheme !== undefined ? JSON.stringify(colorTheme) : null;
 
     await pool.query(
       `UPDATE users SET
@@ -3319,8 +3281,7 @@ app.put("/api/user/profile", async (req, res) => {
         business_name = COALESCE($5, business_name),
         photo_url = COALESCE($6, photo_url),
         two_factor_enabled = COALESCE($7, two_factor_enabled),
-        notification_prefs = COALESCE($8::jsonb, notification_prefs),
-        color_theme = COALESCE($10::jsonb, color_theme)
+        notification_prefs = COALESCE($8::jsonb, notification_prefs)
       WHERE id = $9`,
       [
         name?.trim() || null,
@@ -3332,7 +3293,6 @@ app.put("/api/user/profile", async (req, res) => {
         typeof twoFactorEnabled === "boolean" ? twoFactorEnabled : null,
         notifJson,
         user.id,
-        colorThemeJson
       ]
     );
 

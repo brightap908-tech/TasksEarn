@@ -3,7 +3,7 @@ import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-
 import { AnimatePresence, motion } from "motion/react";
 import { resolvePath, pathToView } from "./lib/routes";
 import BackButton from "./components/BackButton";
-import { resolveTheme, applyThemeCssVars, DEFAULT_THEME_ID, UserThemePrefs, ColorMode, getThemeById } from "./lib/themes";
+import { ColorMode } from "./lib/themes";
 import { 
   User, 
   UserRole, 
@@ -136,8 +136,7 @@ export default function App() {
   // ── Color Mode State (dark / light / system) ─────────────────────────────
   const getInitialColorMode = (): ColorMode => {
     try {
-      const saved = localStorage.getItem("tasksearn_theme");
-      const cm = saved ? (JSON.parse(saved) as any)?.colorMode : null;
+      const cm = localStorage.getItem("tasksearn_colormode");
       if (cm === "dark" || cm === "light" || cm === "system") return cm;
       // Fall back to legacy "theme" key
       if (localStorage.getItem("theme") === "dark") return "dark";
@@ -166,6 +165,9 @@ export default function App() {
       setIsDarkMode(dark);
     };
 
+    // Persist the colorMode so system preference survives reloads
+    localStorage.setItem("tasksearn_colormode", colorMode);
+
     if (colorMode === "system") {
       const mq = window.matchMedia("(prefers-color-scheme: dark)");
       applyDark(mq.matches);
@@ -179,55 +181,6 @@ export default function App() {
 
   const toggleDarkMode = () => {
     setColorMode(prev => prev === "dark" ? "light" : "dark");
-  };
-
-  // ── Color Theme State ────────────────────────────────────────────────────
-  const [themeId, setThemeId] = React.useState<string>(() => {
-    try {
-      const saved = localStorage.getItem("tasksearn_theme");
-      return saved ? (JSON.parse(saved)?.themeId || DEFAULT_THEME_ID) : DEFAULT_THEME_ID;
-    } catch { return DEFAULT_THEME_ID; }
-  });
-  const [customAccent, setCustomAccent] = React.useState<string | null>(() => {
-    try {
-      const saved = localStorage.getItem("tasksearn_theme");
-      return saved ? (JSON.parse(saved)?.customAccent || null) : null;
-    } catch { return null; }
-  });
-  const [platformDefaultThemeId, setPlatformDefaultThemeId] = React.useState<string>(DEFAULT_THEME_ID);
-
-  // Apply theme CSS vars whenever themeId / customAccent change
-  React.useEffect(() => {
-    const theme = resolveTheme(themeId, customAccent);
-    applyThemeCssVars(theme);
-    if (theme.forceMode === "dark") setIsDarkMode(true);
-    else if (theme.forceMode === "light") setIsDarkMode(false);
-  }, [themeId, customAccent]);
-
-  const handleThemeChange = async (prefs: UserThemePrefs) => {
-    const theme = resolveTheme(prefs.themeId, prefs.customAccent);
-    applyThemeCssVars(theme);
-    // Handle forceMode from theme preset (overrides explicit colorMode)
-    if (theme.forceMode === "dark") {
-      setColorMode("dark");
-    } else if (theme.forceMode === "light") {
-      setColorMode("light");
-    } else if (prefs.colorMode) {
-      setColorMode(prefs.colorMode);
-    }
-    setThemeId(prefs.themeId);
-    setCustomAccent(prefs.customAccent ?? null);
-    localStorage.setItem("tasksearn_theme", JSON.stringify(prefs));
-    try {
-      await apiFetch("/api/user/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ colorTheme: prefs })
-      });
-      showToast("Theme saved!", "success");
-    } catch {
-      showToast("Theme applied. Could not save to server.", "error");
-    }
   };
 
   const showToast = (message: string, type: "success" | "error" = "success") => {
@@ -300,20 +253,6 @@ export default function App() {
       const data = await apiFetch("/api/auth/me");
       if (data && data.user) {
         setUser(data.user);
-        // Apply user's saved theme
-        if (data.user.colorTheme) {
-          const { themeId: tid, customAccent: ca, colorMode: cm } = data.user.colorTheme;
-          const resolvedId = tid || DEFAULT_THEME_ID;
-          setThemeId(resolvedId);
-          setCustomAccent(ca || null);
-          localStorage.setItem("tasksearn_theme", JSON.stringify(data.user.colorTheme));
-          const t = resolveTheme(resolvedId, ca);
-          applyThemeCssVars(t);
-          // Apply color mode from saved prefs (forceMode from theme takes priority)
-          if (t.forceMode === "dark") setColorMode("dark");
-          else if (t.forceMode === "light") setColorMode("light");
-          else if (cm === "dark" || cm === "light" || cm === "system") setColorMode(cm);
-        }
         // Automatically route to the appropriate dashboard on startup
         if (data.user.role === UserRole.ADMIN) setCurrentView("admin-dashboard");
         else setCurrentView("dashboard-overview");
@@ -353,7 +292,6 @@ export default function App() {
       const d = await apiFetch("/api/public/settings");
       if (d && !d.error) {
         setSettings(d);
-        if (d.platformDefaultTheme) setPlatformDefaultThemeId(d.platformDefaultTheme);
       }
 
       // Get public stats from database
@@ -817,9 +755,7 @@ export default function App() {
         onOpenDeposit={openDeposit}
         isDarkMode={isDarkMode}
         colorMode={colorMode}
-        themeId={themeId}
         onColorModeChange={setColorMode}
-        onThemeChange={handleThemeChange}
         earnerUnreadCount={earnerUnreadCount}
       />
 
@@ -1527,10 +1463,6 @@ export default function App() {
               onOpenDeposit={openDeposit}
               isDarkMode={isDarkMode}
               colorMode={colorMode}
-              themeId={themeId}
-              customAccent={customAccent}
-              platformDefaultThemeId={platformDefaultThemeId}
-              onThemeChange={handleThemeChange}
             />
           ) : user && user.role === UserRole.ADMIN ? (<Navigate to="/admin/stats" replace />) : (<Navigate to="/login" replace />)
         } />
@@ -1546,11 +1478,6 @@ export default function App() {
                 apiFetch={apiFetch}
                 isDarkMode={isDarkMode}
                 colorMode={colorMode}
-                themeId={themeId}
-                customAccent={customAccent}
-                platformDefaultThemeId={platformDefaultThemeId}
-                onPlatformDefaultThemeChange={(id) => setPlatformDefaultThemeId(id)}
-                onThemeChange={handleThemeChange}
               />
             </div>
           ) : (<Navigate to="/login" replace />)

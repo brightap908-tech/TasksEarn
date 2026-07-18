@@ -111,11 +111,6 @@ export interface User {
     campaignUpdates: boolean;
     transactionAlerts: boolean;
   };
-  // Theme preferences
-  colorTheme?: {
-    themeId: string;
-    customAccent?: string | null;
-  } | null;
 }
 
 export interface Task {
@@ -223,7 +218,6 @@ export interface WebsiteSettings {
   contactPhone: string;
   telegramChannel?: string;
   whatsappGroup?: string;
-  platformDefaultTheme?: string;
 }
 
 export interface AdminNotification {
