@@ -56,14 +56,20 @@ import {
 } from "lucide-react";
 import AdminTaskPricing from "./AdminTaskPricing";
 import AdminSocialPlatforms from "./AdminSocialPlatforms";
+import { PRESET_THEMES, getThemeById, applyThemeCssVars, DEFAULT_THEME_ID } from "../lib/themes";
 
 interface AdminDashboardProps {
   user: User;
   onRefreshUser: () => void;
   apiFetch: (endpoint: string, options?: RequestInit) => Promise<any>;
+  isDarkMode?: boolean;
+  themeId?: string;
+  customAccent?: string | null;
+  platformDefaultThemeId?: string;
+  onPlatformDefaultThemeChange?: (id: string) => void;
 }
 
-export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminDashboardProps) {
+export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMode = false, themeId: _themeId, customAccent: _customAccent, platformDefaultThemeId = "ocean-blue", onPlatformDefaultThemeChange }: AdminDashboardProps) {
   type AdminTab = "stats" | "users" | "advertisers" | "campaigns" | "admin-tasks" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings" | "commissions" | "notifications" | "reports" | "profile" | "demo-accounts";
   const VALID_ADMIN_TABS: AdminTab[] = ["stats", "users", "advertisers", "campaigns", "admin-tasks", "withdrawals", "audits", "announcements", "cms", "settings", "pricing", "platforms", "platform-earnings", "commissions", "notifications", "reports", "profile", "demo-accounts"];
   const { section } = useParams<{ section?: string }>();
@@ -2833,6 +2839,56 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
         {/* TAB 7: CORE SYSTEM SETTINGS */}
         {activeTab === "settings" && (
           <div className="space-y-6">
+            {/* Platform Default Theme */}
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <h3 className="font-display text-sm font-bold text-gray-900 mb-1">Platform Default Theme</h3>
+              <p className="text-xs text-gray-500 mb-4">The accent color theme that new users start with. Existing users keep their own saved choice.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-w-lg">
+                {PRESET_THEMES.map((theme) => {
+                  const active = platformDefaultThemeId === theme.id;
+                  return (
+                    <button
+                      key={theme.id}
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await apiFetch("/api/admin/platform-theme", {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ themeId: theme.id })
+                          });
+                          if (onPlatformDefaultThemeChange) onPlatformDefaultThemeChange(theme.id);
+                          applyThemeCssVars(theme);
+                        } catch {}
+                      }}
+                      className="relative rounded-xl p-3 text-left flex flex-col gap-1.5 transition-all cursor-pointer"
+                      style={{
+                        background: active ? "#EFF6FF" : "#F8FAFC",
+                        border: active ? `2px solid ${theme.primary}` : "1.5px solid #E2E8F0",
+                        boxShadow: active ? `0 0 0 3px rgba(${theme.primary === "#2563EB" ? "37,99,235" : "0,0,0"},0.08)` : "none",
+                        minHeight: "auto",
+                      }}
+                    >
+                      <div className="h-7 w-7 rounded-lg shrink-0"
+                        style={{ background: `linear-gradient(135deg, ${theme.primary}, ${theme.primaryDark})` }} />
+                      <span className="text-[11px] font-semibold leading-tight" style={{ color: active ? theme.primary : "#374151" }}>
+                        {theme.name}
+                      </span>
+                      {active && (
+                        <div className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full flex items-center justify-center"
+                          style={{ background: theme.primary }}>
+                          <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-gray-400 mt-3">Selected: <span className="font-semibold text-gray-600">{getThemeById(platformDefaultThemeId).name}</span></p>
+            </div>
+
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
               <h3 className="font-display text-sm font-bold text-gray-900 mb-6">Global Wallet & Fee Configuration Settings</h3>
 

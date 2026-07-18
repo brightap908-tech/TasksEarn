@@ -5,11 +5,13 @@ import {
   Wallet, ArrowDownCircle, Users, Bell, Settings, LogOut, Menu, X,
   Copy, RefreshCw, Trash2, Play, Pause, ChevronDown, ChevronUp,
   Check, AlertCircle, TrendingUp, TrendingDown, Eye, Plus, ArrowRight,
-  PiggyBank, CreditCard, Shield
+  PiggyBank, CreditCard, Shield, Palette
 } from "lucide-react";
 import { User, EarnerNotification, WebsiteSettings } from "../types";
 import { usePlatforms } from "../lib/platformsStore";
 import { PlatformIcon, getPlatformFromCategory } from "../lib/platformIcons";
+import ThemeCustomizer from "./ThemeCustomizer";
+import { UserThemePrefs } from "../lib/themes";
 
 interface Props {
   user: User;
@@ -24,6 +26,10 @@ interface Props {
   onMarkAllNotificationsRead: () => void;
   onOpenDeposit: (amount?: string) => void;
   isDarkMode: boolean;
+  themeId?: string;
+  customAccent?: string | null;
+  platformDefaultThemeId?: string;
+  onThemeChange?: (prefs: UserThemePrefs) => Promise<void>;
 }
 
 const SIDEBAR_ITEMS = [
@@ -84,7 +90,8 @@ function statusBg(status: string) {
 export default function UnifiedDashboard({
   user, onRefreshUser, onNavigate, onLogout, apiFetch, showToast,
   settings, earnerNotifications, onMarkNotificationRead, onMarkAllNotificationsRead,
-  onOpenDeposit, isDarkMode
+  onOpenDeposit, isDarkMode,
+  themeId = "ocean-blue", customAccent = null, platformDefaultThemeId = "ocean-blue", onThemeChange
 }: Props) {
   const { section = "overview" } = useParams<{ section: string }>();
   const navigate = useNavigate();
@@ -120,6 +127,7 @@ export default function UnifiedDashboard({
   const [profLoading, setProfLoading]   = React.useState(false);
   const [pw, setPw]                     = React.useState({ old:"", new:"", confirm:"" });
   const [pwLoading, setPwLoading]       = React.useState(false);
+  const [showThemeCustomizer, setShowThemeCustomizer] = React.useState(false);
 
   const unreadCount = earnerNotifications.filter(n => !n.read).length;
 
@@ -1079,19 +1087,36 @@ export default function UnifiedDashboard({
     </div>
   );
 
-  const renderProfile = () => (
+  const renderProfile = () => {
+    if (showThemeCustomizer) {
+      return (
+        <ThemeCustomizer
+          isDarkMode={isDarkMode}
+          currentThemeId={themeId}
+          currentCustomAccent={customAccent}
+          platformDefaultThemeId={platformDefaultThemeId}
+          onSave={async (prefs) => {
+            if (onThemeChange) await onThemeChange(prefs);
+            setShowThemeCustomizer(false);
+          }}
+          onCancel={() => setShowThemeCustomizer(false)}
+        />
+      );
+    }
+
+    return (
     <div className="space-y-4 animate-fadeIn" style={{ maxWidth: "520px" }}>
       <h2 className="text-base font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>Profile & Settings</h2>
 
       <div className="rounded-2xl p-4 space-y-4" style={card()}>
         <div className="flex items-center gap-3 pb-3" style={{ borderBottom: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid #F1F5F9" }}>
-          <div className="h-12 w-12 rounded-2xl flex items-center justify-center text-lg font-black text-white shrink-0" style={{ background: "linear-gradient(135deg,#2563EB,#7C3AED)" }}>
+          <div className="h-12 w-12 rounded-2xl flex items-center justify-center text-lg font-black text-white shrink-0" style={{ background: "linear-gradient(135deg,var(--theme-primary),#7C3AED)" }}>
             {user.name.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
             <p className="font-bold leading-none" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>{user.name}</p>
             <p className="text-xs mt-1 truncate" style={{ color: "#94A3B8" }}>{user.email}</p>
-            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full mt-1 inline-flex items-center gap-1" style={{ background: "rgba(37,99,235,0.10)", color: "#2563EB" }}>
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full mt-1 inline-flex items-center gap-1" style={{ background: "var(--theme-primary-bg)", color: "var(--theme-primary)" }}>
               <Shield className="h-2.5 w-2.5"/>Member
             </span>
           </div>
@@ -1112,10 +1137,48 @@ export default function UnifiedDashboard({
           ))}
           <button type="submit" disabled={profLoading}
             className="w-full rounded-xl py-2.5 text-sm font-bold text-white cursor-pointer"
-            style={{ background: "linear-gradient(135deg,#2563EB,#1D4ED8)" }}>
+            style={{ background: "linear-gradient(135deg,var(--theme-primary),var(--theme-primary-dark))", boxShadow: "0 4px 14px var(--theme-primary-glow)" }}>
             {profLoading ? "Saving…" : "Save Profile"}
           </button>
         </form>
+      </div>
+
+      {/* Theme Customizer entry point */}
+      <div className="rounded-2xl p-4" style={card()}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: "var(--theme-primary-bg)" }}>
+              <Palette className="h-4 w-4" style={{ color: "var(--theme-primary)" }} />
+            </div>
+            <div>
+              <p className="text-sm font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>Theme</p>
+              <p className="text-xs mt-0.5" style={{ color: "#94A3B8" }}>
+                Customize your accent color &amp; appearance
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowThemeCustomizer(true)}
+            className="text-xs font-bold px-4 py-2 rounded-xl cursor-pointer"
+            style={{
+              background: "var(--theme-primary-bg)",
+              color: "var(--theme-primary)",
+              border: "1px solid var(--theme-primary-border)",
+              minHeight: "auto",
+            }}
+          >
+            Customize
+          </button>
+        </div>
+        {/* Mini theme preview bar */}
+        <div className="flex gap-1.5 mt-3">
+          {["var(--theme-primary)", "var(--theme-primary-mid)", "var(--theme-primary-dark)",
+            "var(--theme-primary-bg)"].map((c, i) => (
+            <div key={i} className="h-2 rounded-full flex-1"
+              style={{ background: c }} />
+          ))}
+        </div>
       </div>
 
       <div className="rounded-2xl p-4 space-y-3" style={card()}>
@@ -1140,7 +1203,8 @@ export default function UnifiedDashboard({
         </form>
       </div>
     </div>
-  );
+    );
+  };
 
   // ─── Content switch ────────────────────────────────────────────────────────
   const renderContent = () => {
@@ -1515,13 +1579,13 @@ export default function UnifiedDashboard({
                       marginBottom: idx < arr.length - 1 ? "3px" : 0,
                       borderRadius: "14px", border: "none", cursor: "pointer", textAlign: "left",
                       transition: "background 0.15s",
-                      background: active ? (isDarkMode ? "rgba(37,99,235,0.20)" : "#EFF6FF") : "transparent",
-                      color: active ? "#2563EB" : (isDarkMode ? "#94A3B8" : "#64748B"),
+                      background: active ? (isDarkMode ? "var(--theme-primary-bg)" : "var(--theme-primary-light)") : "transparent",
+                      color: active ? "var(--theme-primary)" : (isDarkMode ? "#94A3B8" : "#64748B"),
                     }}
                   >
                     <Icon style={{
                       width: "20px", height: "20px", flexShrink: 0,
-                      color: active ? "#2563EB" : (isDarkMode ? "#64748B" : "#94A3B8"),
+                      color: active ? "var(--theme-primary)" : (isDarkMode ? "#64748B" : "#94A3B8"),
                       strokeWidth: active ? 2.2 : 1.7,
                     }}/>
                     <span style={{
@@ -1536,7 +1600,7 @@ export default function UnifiedDashboard({
                       }}>{badge > 99 ? "99+" : badge}</span>
                     )}
                     {active && !badge && (
-                      <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#2563EB", flexShrink: 0 }}/>
+                      <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "var(--theme-primary)", flexShrink: 0 }}/>
                     )}
                   </button>
                 );
@@ -1559,10 +1623,10 @@ export default function UnifiedDashboard({
                   width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
                   padding: "14px 20px", marginBottom: "8px",
                   borderRadius: "14px", border: "none", cursor: "pointer",
-                  background: "linear-gradient(135deg, #2563EB 0%, #1d4ed8 100%)",
+                  background: "linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%)",
                   color: "#fff", fontSize: "14px", fontWeight: 700,
                   letterSpacing: "-0.01em",
-                  boxShadow: "0 4px 16px rgba(37,99,235,0.35)",
+                  boxShadow: "0 4px 16px var(--theme-primary-glow)",
                 }}
               >
                 <PiggyBank style={{ width: "18px", height: "18px" }} />
@@ -1575,13 +1639,13 @@ export default function UnifiedDashboard({
                 style={{
                   width: "100%", display: "flex", alignItems: "center", gap: "14px",
                   padding: "12px 16px", borderRadius: "14px", border: "none", cursor: "pointer", textAlign: "left",
-                  background: section === "profile" ? (isDarkMode ? "rgba(37,99,235,0.20)" : "#EFF6FF") : "transparent",
-                  color: section === "profile" ? "#2563EB" : (isDarkMode ? "#94A3B8" : "#64748B"),
+                  background: section === "profile" ? (isDarkMode ? "var(--theme-primary-bg)" : "var(--theme-primary-light)") : "transparent",
+                  color: section === "profile" ? "var(--theme-primary)" : (isDarkMode ? "#94A3B8" : "#64748B"),
                 }}
               >
                 <Settings style={{
                   width: "20px", height: "20px", flexShrink: 0,
-                  color: section === "profile" ? "#2563EB" : (isDarkMode ? "#64748B" : "#94A3B8"),
+                  color: section === "profile" ? "var(--theme-primary)" : (isDarkMode ? "#64748B" : "#94A3B8"),
                   strokeWidth: section === "profile" ? 2.2 : 1.7,
                 }}/>
                 <span style={{ fontSize: "14px", fontWeight: section === "profile" ? 700 : 500, flex: 1 }}>

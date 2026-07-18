@@ -24,6 +24,29 @@
 }
 
 /* ==========================================================================
+   THEME CSS CUSTOM PROPERTIES (defaults = Ocean Blue)
+   Changed at runtime by applyThemeCssVars() in src/lib/themes.ts
+   ========================================================================== */
+:root {
+  --theme-primary:       #2563EB;
+  --theme-primary-dark:  #1D4ED8;
+  --theme-primary-mid:   #3B82F6;
+  --theme-primary-light: #EFF6FF;
+  --theme-primary-bg:    rgba(37,99,235,0.10);
+  --theme-primary-border:rgba(37,99,235,0.20);
+  --theme-primary-glow:  rgba(37,99,235,0.30);
+}
+
+/* Smooth 250ms transitions during theme switches (class added/removed by JS) */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition: color 0.25s ease, background-color 0.25s ease,
+              border-color 0.25s ease, box-shadow 0.25s ease !important;
+}
+
+/* ==========================================================================
    BASE RESETS
    ========================================================================== */
 *, *::before, *::after { box-sizing: border-box; }
@@ -970,4 +993,173 @@ html.dark .tx-row:hover {
 }
 .quick-action-btn:active {
   transform: translateY(0);
+}
+
+/* ==========================================================================
+   THEME VARIABLE OVERRIDES
+   These rules appear AFTER the hardcoded blue rules above, so they win
+   when both have equal specificity + !important (last-one-wins).
+   CSS custom properties make every color respond to runtime theme changes.
+   ========================================================================== */
+
+/* --- Text colors --- */
+.text-blue-600, .text-blue-700 { color: var(--theme-primary) !important; }
+.text-blue-500                  { color: var(--theme-primary-mid) !important; }
+.text-blue-800                  { color: var(--theme-primary-dark) !important; }
+
+html.dark .text-blue-600,
+html.dark .text-blue-500        { color: var(--theme-primary-mid) !important; }
+
+/* --- Background colors --- */
+.bg-blue-600   { background-color: var(--theme-primary) !important; }
+.bg-blue-500   { background-color: var(--theme-primary-mid) !important; }
+.bg-blue-100   {
+  background-color: var(--theme-primary-bg) !important;
+  color: var(--theme-primary) !important;
+}
+.bg-blue-50,
+[class*="bg-blue-50"] {
+  background-color: var(--theme-primary-light) !important;
+  color: var(--theme-primary) !important;
+}
+html.dark .bg-blue-50,
+html.dark [class*="bg-blue-50"],
+html.dark .bg-blue-100 {
+  background-color: var(--theme-primary-bg) !important;
+  color: var(--theme-primary-mid) !important;
+}
+
+/* --- Border colors --- */
+.border-blue-500, .border-blue-600 { border-color: var(--theme-primary) !important; }
+.border-blue-200                   { border-color: var(--theme-primary-border) !important; }
+
+/* --- Primary buttons (gradient) --- */
+button.bg-blue-500,
+button.bg-blue-600,
+.btn-primary {
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%) !important;
+  box-shadow: 0 4px 14px var(--theme-primary-glow) !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+button.bg-blue-500:hover,
+button.bg-blue-600:hover,
+.btn-primary:hover {
+  box-shadow: 0 6px 20px var(--theme-primary-glow) !important;
+  opacity: 0.93 !important;
+}
+
+/* --- Indigo buttons map to primary --- */
+button.bg-indigo-600,
+.bg-indigo-600 {
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%) !important;
+  box-shadow: 0 4px 14px var(--theme-primary-glow) !important;
+}
+
+/* --- Transparent blue tints --- */
+.bg-blue-500\/10 {
+  background-color: var(--theme-primary-bg) !important;
+  border-color: var(--theme-primary-border) !important;
+  color: var(--theme-primary) !important;
+}
+html.dark .bg-blue-500\/10 { color: var(--theme-primary-mid) !important; }
+
+/* --- Input / focus states --- */
+input:focus, textarea:focus, select:focus {
+  border-color: var(--theme-primary) !important;
+  box-shadow: 0 0 0 3px var(--theme-primary-bg) !important;
+}
+html.dark input:focus,
+html.dark textarea:focus,
+html.dark select:focus {
+  border-color: var(--theme-primary) !important;
+  box-shadow: 0 0 0 3px var(--theme-primary-bg) !important;
+}
+
+/* --- Header nav hover --- */
+#app-header nav span:hover        { color: var(--theme-primary) !important; }
+html.dark #app-header nav span:hover { color: var(--theme-primary-mid) !important; }
+
+/* --- Scrollbar thumb hover --- */
+::-webkit-scrollbar-thumb:hover        { background: var(--theme-primary) !important; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: var(--theme-primary) !important; }
+
+/* --- Glows --- */
+.glow-blue { box-shadow: 0 0 24px var(--theme-primary-bg), 0 0 48px var(--theme-primary-bg); }
+.glow-sm   { box-shadow: 0 0 12px var(--theme-primary-bg); }
+
+/* --- Card hover accent --- */
+.premium-card:hover {
+  border-color: var(--theme-primary-border) !important;
+  box-shadow: 0 6px 28px var(--theme-primary-bg), 0 2px 6px rgba(15,23,42,0.06) !important;
+}
+html.dark .premium-card:hover {
+  border-color: var(--theme-primary-border) !important;
+}
+
+/* --- Wallet card --- */
+.wallet-card-primary {
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%) !important;
+  box-shadow: 0 6px 20px var(--theme-primary-glow) !important;
+}
+
+/* --- Hero balance card --- */
+.hero-balance-card {
+  background: linear-gradient(135deg, var(--theme-primary-dark) 0%, var(--theme-primary) 45%, var(--theme-primary-mid) 100%) !important;
+  box-shadow: 0 12px 40px var(--theme-primary-glow), 0 3px 10px var(--theme-primary-bg) !important;
+}
+
+/* --- Fintech card hover --- */
+.fintech-card:hover {
+  box-shadow: 0 6px 24px var(--theme-primary-bg), 0 2px 8px rgba(15,23,42,0.05) !important;
+  border-color: var(--theme-primary-border) !important;
+}
+
+/* --- Photo upload ring hover --- */
+.photo-upload-ring:hover {
+  border-color: var(--theme-primary) !important;
+  box-shadow: 0 0 0 4px var(--theme-primary-bg) !important;
+}
+html.dark .photo-upload-ring:hover {
+  border-color: var(--theme-primary) !important;
+  box-shadow: 0 0 0 4px var(--theme-primary-bg) !important;
+}
+
+/* --- Transaction row hover --- */
+.tx-row:hover { background: var(--theme-primary-bg) !important; }
+
+/* --- Sidebar button active state (Tailwind class used in AdminDashboard) --- */
+.bg-blue-50.text-blue-600 {
+  background-color: var(--theme-primary-light) !important;
+  color: var(--theme-primary) !important;
+}
+.border-blue-500.border-r-4 {
+  border-color: var(--theme-primary) !important;
+}
+
+/* --- Hero grid lines tint --- */
+.hero-grid {
+  background-image:
+    linear-gradient(var(--theme-primary-bg) 1px, transparent 1px),
+    linear-gradient(90deg, var(--theme-primary-bg) 1px, transparent 1px) !important;
+}
+
+/* --- Shimmer tint --- */
+.shimmer {
+  background: linear-gradient(90deg, transparent 25%, var(--theme-primary-bg) 50%, transparent 75%) !important;
+}
+
+/* --- Glow orbs --- */
+.glow-orb-blue {
+  background: radial-gradient(circle, var(--theme-primary-bg) 0%, transparent 70%) !important;
+}
+html.dark .glow-orb-blue {
+  background: radial-gradient(circle, var(--theme-primary-border) 0%, transparent 70%) !important;
+}
+
+/* --- Active admin sidebar tab --- */
+button.bg-blue-50.text-blue-600.border-r-4.border-blue-500 {
+  background-color: var(--theme-primary-light) !important;
+  color: var(--theme-primary) !important;
+  border-right-color: var(--theme-primary) !important;
 }
