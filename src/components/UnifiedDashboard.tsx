@@ -5,12 +5,12 @@ import {
   Wallet, ArrowDownCircle, Users, Bell, Settings, LogOut, Menu, X,
   Copy, RefreshCw, Trash2, Play, Pause, ChevronDown, ChevronUp,
   Check, AlertCircle, TrendingUp, TrendingDown, Eye, Plus, ArrowRight,
-  PiggyBank, CreditCard, Shield, Palette
+  PiggyBank, CreditCard, Shield
 } from "lucide-react";
 import { User, EarnerNotification, WebsiteSettings } from "../types";
 import { usePlatforms } from "../lib/platformsStore";
 import { PlatformIcon, getPlatformFromCategory } from "../lib/platformIcons";
-import ThemeCustomizer from "./ThemeCustomizer";
+
 import { UserThemePrefs, ColorMode } from "../lib/themes";
 
 interface Props {
@@ -129,8 +129,6 @@ export default function UnifiedDashboard({
   const [profLoading, setProfLoading]   = React.useState(false);
   const [pw, setPw]                     = React.useState({ old:"", new:"", confirm:"" });
   const [pwLoading, setPwLoading]       = React.useState(false);
-  const [showThemeCustomizer, setShowThemeCustomizer] = React.useState(false);
-
   const unreadCount = earnerNotifications.filter(n => !n.read).length;
 
   const loadSection = React.useCallback(async (sec: string) => {
@@ -1090,23 +1088,6 @@ export default function UnifiedDashboard({
   );
 
   const renderProfile = () => {
-    if (showThemeCustomizer) {
-      return (
-        <ThemeCustomizer
-          isDarkMode={isDarkMode}
-          colorMode={colorMode}
-          currentThemeId={themeId}
-          currentCustomAccent={customAccent}
-          platformDefaultThemeId={platformDefaultThemeId}
-          onSave={async (prefs) => {
-            if (onThemeChange) await onThemeChange(prefs);
-            setShowThemeCustomizer(false);
-          }}
-          onCancel={() => setShowThemeCustomizer(false)}
-        />
-      );
-    }
-
     return (
     <div className="space-y-4 animate-fadeIn" style={{ maxWidth: "520px" }}>
       <h2 className="text-base font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>Profile & Settings</h2>
@@ -1144,44 +1125,6 @@ export default function UnifiedDashboard({
             {profLoading ? "Saving…" : "Save Profile"}
           </button>
         </form>
-      </div>
-
-      {/* Theme Customizer entry point */}
-      <div className="rounded-2xl p-4" style={card()}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: "var(--theme-primary-bg)" }}>
-              <Palette className="h-4 w-4" style={{ color: "var(--theme-primary)" }} />
-            </div>
-            <div>
-              <p className="text-sm font-bold" style={{ color: isDarkMode ? "#f1f5f9" : "#0F172A" }}>Theme</p>
-              <p className="text-xs mt-0.5" style={{ color: "#94A3B8" }}>
-                Customize your accent color &amp; appearance
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setShowThemeCustomizer(true)}
-            className="text-xs font-bold px-4 py-2 rounded-xl cursor-pointer"
-            style={{
-              background: "var(--theme-primary-bg)",
-              color: "var(--theme-primary)",
-              border: "1px solid var(--theme-primary-border)",
-              minHeight: "auto",
-            }}
-          >
-            Customize
-          </button>
-        </div>
-        {/* Mini theme preview bar */}
-        <div className="flex gap-1.5 mt-3">
-          {["var(--theme-primary)", "var(--theme-primary-mid)", "var(--theme-primary-dark)",
-            "var(--theme-primary-bg)"].map((c, i) => (
-            <div key={i} className="h-2 rounded-full flex-1"
-              style={{ background: c }} />
-          ))}
-        </div>
       </div>
 
       <div className="rounded-2xl p-4 space-y-3" style={card()}>

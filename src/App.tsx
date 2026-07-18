@@ -816,7 +816,10 @@ export default function App() {
         onLogout={handleLogout}
         onOpenDeposit={openDeposit}
         isDarkMode={isDarkMode}
-        onToggleDarkMode={toggleDarkMode}
+        colorMode={colorMode}
+        themeId={themeId}
+        onColorModeChange={setColorMode}
+        onThemeChange={handleThemeChange}
         earnerUnreadCount={earnerUnreadCount}
       />
 
