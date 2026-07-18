@@ -181,6 +181,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
   // Real-Time Notification System States
   const [notifications, setNotifications] = React.useState<AdminNotification[]>([]);
   const [showNotifDropdown, setShowNotifDropdown] = React.useState(false);
+  const notifContainerRef = React.useRef<HTMLDivElement>(null);
   const [activeToast, setActiveToast] = React.useState<AdminNotification | null>(null);
   
   // CMS Content State
@@ -601,6 +602,18 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
       return () => clearTimeout(timer);
     }
   }, [activeToast]);
+
+  // Close notification dropdown when clicking outside the bell container
+  React.useEffect(() => {
+    if (!showNotifDropdown) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (notifContainerRef.current && !notifContainerRef.current.contains(e.target as Node)) {
+        setShowNotifDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [showNotifDropdown]);
 
   const handleMarkAllRead = async () => {
     try {
@@ -1306,33 +1319,35 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
       )}
 
       {/* Top Admin Header with Notification Bell */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white rounded-3xl p-6 border border-slate-100 shadow-sm gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+      <div className="flex flex-row items-center justify-between bg-white rounded-3xl p-4 sm:p-6 border border-slate-100 shadow-sm gap-3">
+        {/* Left: title + Live WebSocket badge + subtitle */}
+        <div className="min-w-0 flex-1">
+          <h1 className="font-display text-lg sm:text-2xl font-black text-slate-900 tracking-tight flex flex-wrap items-center gap-2 leading-tight">
             Admin Control Center
-            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-[10px] font-bold text-blue-700 border border-blue-100">
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-[10px] font-bold text-blue-700 border border-blue-100 whitespace-nowrap">
               <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" /> Live WebSocket
             </span>
           </h1>
-          <p className="text-xs text-slate-500 font-medium mt-1">
-            System administration & real-time transaction clearing desks. Welcome back, <span className="font-bold text-slate-700">{user.name}</span>.
+          <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-1 leading-snug">
+            System administration & real-time transaction clearing. Welcome back, <span className="font-bold text-slate-700">{user.name}</span>.
           </p>
         </div>
 
-        {/* Real-time Notification Desk */}
-        <div className="relative shrink-0">
-          <button 
+        {/* Right: Notification Bell — always pinned to far right */}
+        <div className="relative shrink-0" ref={notifContainerRef}>
+          <button
             id="admin-notification-bell"
-            onClick={() => setShowNotifDropdown(!showNotifDropdown)}
+            onClick={() => setShowNotifDropdown(prev => !prev)}
             className={`relative rounded-full p-2.5 transition-all outline-none cursor-pointer ${
               showNotifDropdown ? "bg-slate-100 text-slate-800" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
             }`}
+            aria-label="Notifications"
           >
             {unreadCount > 0 ? (
               <>
                 <BellRing className="h-5 w-5 text-blue-500 animate-bounce" />
                 <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white ring-2 ring-white">
-                  {unreadCount}
+                  {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               </>
             ) : (
@@ -1340,18 +1355,21 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
             )}
           </button>
 
-          {/* Notifications Dropdown Card */}
+          {/* Notifications Dropdown — opens below bell, clamped to viewport */}
           {showNotifDropdown && (
-            <div className="absolute right-0 mt-3 z-50 w-72 sm:w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-100 bg-white p-4 shadow-2xl space-y-3 animate-fadeIn">
+            <div
+              className="absolute right-0 top-full mt-2 z-50 rounded-2xl border border-slate-100 bg-white p-4 shadow-2xl space-y-3"
+              style={{ width: "18rem", maxWidth: "calc(100vw - 1.5rem)" }}
+            >
               <div className="flex justify-between items-center border-b border-slate-50 pb-2.5">
                 <div>
                   <h4 className="font-display text-xs font-extrabold text-slate-900">Notifications ({unreadCount})</h4>
                   <p className="text-[9px] text-slate-400 font-medium">Real-time alerts & activities</p>
                 </div>
                 {unreadCount > 0 && (
-                  <button 
+                  <button
                     onClick={handleMarkAllRead}
-                    className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-[9px] font-bold text-blue-700 hover:bg-blue-100 transition-all cursor-pointer"
+                    className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-[9px] font-bold text-blue-700 hover:bg-blue-100 transition-all cursor-pointer whitespace-nowrap"
                   >
                     <CheckCheck className="h-3 w-3" /> Mark all read
                   </button>
@@ -1368,7 +1386,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                   </div>
                 ) : (
                   notifications.map((notif) => (
-                    <div 
+                    <div
                       key={notif.id}
                       onClick={() => handleNotificationClick(notif)}
                       className={`py-2.5 px-2 rounded-xl transition-all flex gap-2.5 cursor-pointer text-left items-start ${
@@ -1385,8 +1403,8 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch }: AdminD
                           {notif.message}
                         </p>
                         <p className="text-[9px] text-slate-400 mt-1 flex items-center gap-1">
-                          <Clock className="h-2.5 w-2.5" /> 
-                          {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          <Clock className="h-2.5 w-2.5" />
+                          {new Date(notif.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </p>
                       </div>
                       {!notif.read && (
