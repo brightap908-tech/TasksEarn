@@ -16,6 +16,7 @@ import PlatformIcon from "./PlatformIcon";
 import EarnerNotifications from "./EarnerNotifications";
 import PushNotificationSettings from "./PushNotificationSettings";
 import NotificationManageModal from "./NotificationManageModal";
+import PushPermissionBanner from "./PushPermissionBanner";
 import { 
   Briefcase, 
   DollarSign, 
@@ -468,6 +469,8 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
 
   return (
     <>
+    {/* Push permission banner — shown when permission not yet granted */}
+    <PushPermissionBanner apiFetch={apiFetch} showToast={showToast} />
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
       
       {/* Sidebar Nav Panels */}

@@ -4972,6 +4972,23 @@ async function sendBrowserPushToUser(userId: string, payloadJson: string): Promi
 
 // ─── Earner Notification Broadcasting ────────────────────────────────────────
 
+/**
+ * Dedup guard — prevents the same task triggering multiple push blasts
+ * (e.g. if the publish endpoint is accidentally called twice).
+ * Entries are evicted after 24 h to avoid unbounded memory growth.
+ */
+const _pushedTaskIds = new Map<string, number>(); // taskId → timestamp
+function _markTaskPushed(taskId: string): boolean {
+  const now = Date.now();
+  // Evict entries older than 24 h
+  for (const [id, ts] of _pushedTaskIds) {
+    if (now - ts > 86_400_000) _pushedTaskIds.delete(id);
+  }
+  if (_pushedTaskIds.has(taskId)) return false; // already sent
+  _pushedTaskIds.set(taskId, now);
+  return true;
+}
+
 async function notifyEarners(task: { id: string; title: string; category: string; earningPerSlot: number }) {
   try {
     const platform = getPlatformForCategory(task.category as TaskCategory);
@@ -5014,18 +5031,24 @@ async function notifyEarners(task: { id: string; title: string; category: string
       }
     });
 
-    // Send browser push notifications to all earners with active subscriptions (fire-and-forget)
-    const pushPayload = JSON.stringify({
-      title: "🎉 New Task Available",
-      body: `A new earning task has been posted. Tap to complete it before it fills up.`,
-      url: "/earner/tasks",
-      tag: "tasksearn-new-task"
-    });
-    sendBrowserPushToAllEarners(pushPayload)
-      .then((sent) => {
-        if (sent > 0) console.log(`[Push] Sent browser push to ${sent} subscriber(s) for task: ${task.title}`);
-      })
-      .catch(() => {});
+    // Send browser push notifications — deduped per task ID
+    if (_markTaskPushed(task.id)) {
+      const pushPayload = JSON.stringify({
+        title: "📢 New Task Available",
+        body: "A new task has been posted. Tap to start earning now!",
+        icon: "/icon-192.png",
+        badge: "/icon-72.png",
+        url: "https://tasksearn.name.ng/tasks",
+        tag: "tasksearn-new-task"
+      });
+      sendBrowserPushToAllEarners(pushPayload)
+        .then((sent) => {
+          if (sent > 0) console.log(`[Push] Sent browser push to ${sent} subscriber(s) for task: ${task.title}`);
+        })
+        .catch(() => {});
+    } else {
+      console.log(`[Push] Skipping duplicate push for task: ${task.id}`);
+    }
 
     console.log(`[Earner Notify] Notified ${earnersRes.rows.length} earner(s) about task: ${task.title}`);
   } catch (err) {
