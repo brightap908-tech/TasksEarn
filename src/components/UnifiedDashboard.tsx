@@ -8,6 +8,7 @@ import {
   PiggyBank, CreditCard, Shield
 } from "lucide-react";
 import { User, EarnerNotification, WebsiteSettings } from "../types";
+import { BrowserPushCard } from "./EarnerNotifications";
 import { usePlatforms } from "../lib/platformsStore";
 import { PlatformIcon, getPlatformFromCategory } from "../lib/platformIcons";
 
@@ -1051,6 +1052,9 @@ export default function UnifiedDashboard({
           </button>
         )}
       </div>
+
+      {/* Browser push notification subscription card — always shown when not subscribed */}
+      <BrowserPushCard apiFetch={apiFetch} showToast={showToast} />
       {earnerNotifications.length === 0 ? (
         <div className="text-center py-12" style={{ color: "#94A3B8" }}>
           <Bell className="h-10 w-10 mx-auto mb-3 opacity-25"/>

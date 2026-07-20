@@ -26,8 +26,8 @@ interface EarnerNotificationsProps {
   showToast: (message: string, type?: "success" | "error") => void;
 }
 
-// ─── Push subscription card ───────────────────────────────────────────────────
-function BrowserPushCard({
+// ─── Push subscription card (also exported for use in UnifiedDashboard) ───────
+export function BrowserPushCard({
   apiFetch,
   showToast,
 }: Pick<EarnerNotificationsProps, "apiFetch" | "showToast">) {
