@@ -2371,11 +2371,15 @@ app.post("/api/advertiser/tasks", async (req, res) => {
       "SELECT * FROM social_platforms WHERE status = 'Active' ORDER BY LENGTH(name) DESC"
     );
     const activePlatforms = activePlatformsRes.rows.map(mapSocialPlatform);
-    const derivedPlatform = activePlatforms.find(
-      (p) => category.toLowerCase().startsWith(p.name.toLowerCase() + " ") || category.toLowerCase() === p.name.toLowerCase()
-    );
+    const catLower = category.toLowerCase();
+    const derivedPlatform = activePlatforms.find((p) => {
+      const nameLower = p.name.toLowerCase();
+      return catLower.startsWith(nameLower + " - ") || // "Instagram - Follow"
+      catLower.startsWith(nameLower + " ") || // "Instagram Follow" (legacy)
+      catLower === nameLower;
+    });
     if (!derivedPlatform) {
-      return res.status(400).json({ error: "Unknown platform for this campaign category. Please contact the administrator." });
+      return res.status(400).json({ error: `Unknown platform in category "${category}". Please select a valid platform.` });
     }
     const pricingRes = await pool.query(
       "SELECT * FROM task_pricing WHERE LOWER(platform) = LOWER($1) LIMIT 1",
