@@ -33,14 +33,16 @@ function BrowserPushCard({
 }: Pick<EarnerNotificationsProps, "apiFetch" | "showToast">) {
   const [status, setStatus] = useState<PushStatus>("checking");
 
-  // Determine initial status once
+  // Determine initial status once on mount
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
       setStatus("unsupported");
       return;
     }
-    const perm = Notification.permission;
-    if (perm === "denied") { setStatus("denied"); return; }
+    if (Notification.permission === "denied") {
+      setStatus("denied");
+      return;
+    }
     apiFetch("/api/notifications/status")
       .then(res => setStatus(res.subscribed ? "subscribed" : "unsubscribed"))
       .catch(() => setStatus("unsubscribed"));
@@ -49,15 +51,18 @@ function BrowserPushCard({
   const handleSubscribe = useCallback(async () => {
     setStatus("loading");
     try {
+      // 1. Request browser permission
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
         setStatus("denied");
         return;
       }
 
+      // 2. Register service worker
       const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
       await navigator.serviceWorker.ready;
 
+      // 3. Fetch VAPID public key and create push subscription
       const { publicKey } = await apiFetch("/api/notifications/vapid-public-key");
       if (!publicKey) throw new Error("VAPID key missing");
 
@@ -69,6 +74,7 @@ function BrowserPushCard({
       const subJson = sub.toJSON();
       if (!subJson.keys?.p256dh || !subJson.keys?.auth) throw new Error("Subscription keys missing");
 
+      // 4. Save subscription to backend
       const result = await apiFetch("/api/notifications/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -81,6 +87,7 @@ function BrowserPushCard({
 
       if (!result.success) throw new Error(result.error || "Failed to save subscription");
 
+      // 5. Update UI immediately — no page refresh needed
       setStatus("subscribed");
       showToast("🔔 Browser notifications enabled! You'll be alerted when new tasks arrive.", "success");
     } catch (err: any) {
@@ -90,10 +97,10 @@ function BrowserPushCard({
     }
   }, [apiFetch, showToast]);
 
-  // ── Unsupported browser: always show an explanation card ──────────────────
+  // ── Push not supported by this browser ────────────────────────────────────
   if (status === "unsupported") {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 mb-1 flex items-center gap-4">
+      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 mb-1 flex items-start gap-4">
         <div className="shrink-0 flex items-center justify-center rounded-xl h-10 w-10 bg-gray-100">
           <BellOff className="h-5 w-5 text-gray-400" />
         </div>
@@ -107,95 +114,77 @@ function BrowserPushCard({
     );
   }
 
-  // ── While checking: show the button in a disabled/loading state so it's always visible ──
-  if (status === "checking") {
+  // ── Successfully subscribed — replace button with green success card ───────
+  if (status === "subscribed") {
     return (
-      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 mb-1 flex items-center gap-4">
-        <div className="shrink-0 flex items-center justify-center rounded-xl h-10 w-10 bg-blue-100">
-          <Bell className="h-5 w-5 text-blue-600" />
+      <div className="rounded-2xl border border-green-200 bg-green-50 p-4 mb-1 flex items-center gap-4">
+        <div className="shrink-0 flex items-center justify-center rounded-xl h-10 w-10 bg-green-100">
+          <CheckCircle2 className="h-5 w-5 text-green-600" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-bold text-blue-900">Enable Browser Notifications</p>
-          <p className="text-[11px] text-blue-700 mt-0.5">
-            Get instant alerts when new tasks are posted — even when the website is closed.
+          <p className="text-xs font-bold text-green-800">Browser notifications enabled ✅</p>
+          <p className="text-[11px] text-green-700 mt-0.5">
+            You'll receive an alert on your device whenever a new task is posted — even when the browser is closed.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Permission denied — warning card with Retry button ────────────────────
+  if (status === "denied") {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 mb-1 flex items-center gap-4">
+        <div className="shrink-0 flex items-center justify-center rounded-xl h-10 w-10 bg-amber-100">
+          <BellOff className="h-5 w-5 text-amber-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-amber-800">Notification permission denied</p>
+          <p className="text-[11px] text-amber-700 mt-0.5">
+            Go to <strong>Browser Settings → Site Settings → Notifications</strong>, allow this site, then tap Retry.
           </p>
         </div>
         <button
-          disabled
-          className="shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold bg-blue-600 text-white opacity-50 cursor-not-allowed"
+          onClick={handleSubscribe}
+          className="shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all cursor-pointer"
         >
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Checking…
+          <Bell className="h-3.5 w-3.5" />
+          Retry
         </button>
       </div>
     );
   }
 
-  // ── Subscribed / unsubscribed / denied / loading ───────────────────────────
+  // ── Checking / loading / unsubscribed — prominent enable card ─────────────
+  // Always displayed at top when user is not subscribed.
   return (
-    <div className={`rounded-2xl border p-4 mb-1 flex items-center gap-4 ${
-      status === "subscribed"
-        ? "border-green-200 bg-green-50"
-        : status === "denied"
-        ? "border-amber-200 bg-amber-50"
-        : "border-blue-200 bg-blue-50"
-    }`}>
-      {/* Icon */}
-      <div className={`shrink-0 flex items-center justify-center rounded-xl h-10 w-10 ${
-        status === "subscribed" ? "bg-green-100" : status === "denied" ? "bg-amber-100" : "bg-blue-100"
-      }`}>
-        {status === "subscribed"
-          ? <CheckCircle2 className="h-5 w-5 text-green-600" />
-          : status === "denied"
-          ? <BellOff className="h-5 w-5 text-amber-500" />
-          : <Bell className="h-5 w-5 text-blue-600" />}
+    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 mb-1 flex items-center gap-4">
+      <div className="shrink-0 flex items-center justify-center rounded-xl h-10 w-10 bg-blue-100">
+        <Bell className="h-5 w-5 text-blue-600" />
       </div>
-
-      {/* Text */}
       <div className="flex-1 min-w-0">
-        {status === "subscribed" && (
-          <>
-            <p className="text-xs font-bold text-green-800">Browser notifications enabled ✅</p>
-            <p className="text-[11px] text-green-700 mt-0.5">
-              You'll receive an alert on your device whenever a new task is posted — even when the browser is closed.
-            </p>
-          </>
-        )}
-        {status === "denied" && (
-          <>
-            <p className="text-xs font-bold text-amber-800">Notifications are blocked</p>
-            <p className="text-[11px] text-amber-700 mt-0.5">
-              Go to <strong>Browser Settings → Site Settings → Notifications</strong>, allow this site, then tap Retry below.
-            </p>
-          </>
-        )}
-        {(status === "unsubscribed" || status === "loading") && (
-          <>
-            <p className="text-xs font-bold text-blue-900">Enable Browser Notifications</p>
-            <p className="text-[11px] text-blue-700 mt-0.5">
-              Get instant alerts when new tasks are posted — even when the website is closed.
-            </p>
-          </>
-        )}
+        <p className="text-xs font-bold text-blue-900">Enable Browser Notifications</p>
+        <p className="text-[11px] text-blue-700 mt-0.5">
+          Get instant alerts when new tasks are posted — even when the website is closed.
+        </p>
       </div>
 
-      {/* CTA */}
-      {status !== "subscribed" && (
+      {/* Loading indicator while checking status or processing subscription */}
+      {(status === "checking" || status === "loading") ? (
+        <button
+          disabled
+          className="shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold bg-blue-600 text-white opacity-60 cursor-not-allowed"
+        >
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          {status === "checking" ? "Checking…" : "Enabling…"}
+        </button>
+      ) : (
         <button
           onClick={handleSubscribe}
-          disabled={status === "loading"}
-          className={`shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all cursor-pointer disabled:opacity-60 ${
-            status === "denied"
-              ? "bg-amber-500 hover:bg-amber-600 text-white"
-              : "bg-blue-600 hover:bg-blue-700 text-white"
-          }`}
+          className="shrink-0 flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-all cursor-pointer shadow-md shadow-blue-200"
         >
-          {status === "loading"
-            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Enabling…</>
-            : status === "denied"
-            ? <><Bell className="h-3.5 w-3.5" />Retry</>
-            : <><Bell className="h-3.5 w-3.5" />Enable Browser Notifications</>
-          }
+          <Bell className="h-3.5 w-3.5" />
+          Enable Browser Notifications
         </button>
       )}
     </div>
