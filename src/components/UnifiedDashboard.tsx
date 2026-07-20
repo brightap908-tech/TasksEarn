@@ -426,6 +426,9 @@ export default function UnifiedDashboard({
           </button>
         </div>
 
+        {/* Browser push notification subscription card */}
+        <BrowserPushCard apiFetch={apiFetch} showToast={showToast} />
+
         {/* Platform filter chips */}
         <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap" }}>
           {platformOptions.slice(0, 8).map(p => (

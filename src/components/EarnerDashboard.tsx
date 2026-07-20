@@ -13,7 +13,7 @@ import {
 } from "../types";
 import { usePlatforms } from "../lib/platformsStore";
 import PlatformIcon from "./PlatformIcon";
-import EarnerNotifications from "./EarnerNotifications";
+import EarnerNotifications, { BrowserPushCard } from "./EarnerNotifications";
 import PushNotificationSettings from "./PushNotificationSettings";
 import NotificationManageModal from "./NotificationManageModal";
 import PushPermissionBanner from "./PushPermissionBanner";
@@ -733,7 +733,10 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
         {/* TAB 2: BROWSE TASKS */}
         {activeTab === "tasks" && (
           <div className="space-y-6">
-            
+
+            {/* Browser push notification subscription card */}
+            <BrowserPushCard apiFetch={apiFetch} showToast={showToast} />
+
             {/* Header / Filter bar */}
             <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm flex flex-col sm:flex-row gap-3 justify-between items-center">
               
