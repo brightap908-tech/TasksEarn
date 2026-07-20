@@ -1168,13 +1168,62 @@ export default function UnifiedDashboard({
 
   async function handleCreateCampaign(e: React.FormEvent) {
     e.preventDefault();
+
+    // Trim every field before validation
+    const platform   = cp.platform.trim();
+    const action     = cp.action.trim();
+    const title      = cp.title.trim();
+    const desc       = cp.desc.trim();
+    const link       = cp.link.trim();
+    const proof      = cp.proof.trim();
+    const slots      = cp.slots;
+
+    // Per-field validation — name the exact missing field
+    if (!platform)  { showToast("Platform is required. Please select a platform.", "error"); return; }
+    if (!action)    { showToast("Action is required. Please select an action type.", "error"); return; }
+    if (!title)     { showToast("Campaign Title is required.", "error"); return; }
+    if (!link)      { showToast("Target Link / URL is required.", "error"); return; }
+    if (!desc)      { showToast("Task Instructions (description) is required.", "error"); return; }
+    if (!proof)     { showToast("Proof Requirements is required.", "error"); return; }
+    if (!slots || isNaN(slots) || slots < 1) { showToast("Total Slots must be at least 1.", "error"); return; }
+
+    // Build category from validated fields — format: "Platform - Action"
+    // e.g. "Instagram - Follow", "TikTok - Share", "YouTube - Subscribe"
+    const category = `${platform} - ${action}`;
+
+    // Explicit guard: belt-and-suspenders after the per-field checks above
+    if (!category || category.trim() === "-") {
+      showToast("Category could not be generated. Please select a platform and action.", "error");
+      return;
+    }
+
+    // Log full payload before sending — visible in browser DevTools console
+    console.log("[Campaign Create] Submitting payload:", {
+      platform,
+      action,
+      category,
+      title,
+      description: desc,
+      targetLink: link,
+      proofRequirements: proof,
+      slots
+    });
+
     setCampaignSubmitting(true);
     try {
       const res = await apiFetch("/api/advertiser/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platform: cp.platform, action: cp.action, title: cp.title, description: cp.desc, link: cp.link, proofRequirements: cp.proof, totalSlots: cp.slots })
+        body: JSON.stringify({
+          title,
+          description: desc,
+          category,            // "Platform - Action" e.g. "Instagram - Follow"
+          proofRequirements: proof,
+          link,
+          totalSlots: slots    // number, not string
+        })
       });
+      console.log("[Campaign Create] Response:", res);
       if (res?.error) { showToast(res.error, "error"); }
       else if (res?.task) {
         showToast("Campaign created!", "success");
@@ -1182,7 +1231,10 @@ export default function UnifiedDashboard({
         setCp({ platform:"", action:"", title:"", desc:"", link:"", proof:"", slots:100 });
         navTo("my-campaigns");
       }
-    } catch { showToast("Failed to create campaign.", "error"); }
+    } catch (err) {
+      console.error("[Campaign Create] Network error:", err);
+      showToast("Failed to create campaign. Please try again.", "error");
+    }
     setCampaignSubmitting(false);
   }
 
