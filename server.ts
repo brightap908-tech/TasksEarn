@@ -1001,6 +1001,18 @@ async function seedDatabase() {
       new Date(Date.now() - 1 * 24 * 3600 * 1000)
     ]);
 
+    // Commission record for sub-1 (pre-approved seed submission).
+    // sub-1 was approved directly via seed SQL, so it never went through the review API.
+    // We insert the commission row here so the platform earnings dashboard starts with the
+    // correct opening balance (task-1 cost_per_slot ₦20 − reward ₦15 = ₦5 commission).
+    await client.query(`
+      INSERT INTO admin_commissions (id, type, amount, description, reference, user_id, user_name, related_transaction_ref, created_at)
+      VALUES ('com-seed-sub-1', 'task_commission', 5.00,
+              'Task commission: "YouTube Subscribe - TechNaija Channel" — Tunde Bakare',
+              'COMM-SEED-sub-1', $1, 'Tunde Bakare', 'sub-1', $2)
+      ON CONFLICT (reference) DO NOTHING
+    `, [earnerId, new Date(Date.now() - 2 * 24 * 3600 * 1000)]);
+
     // Referrals (seed demo data — reward is 0 since the earner referral commission is disabled)
     await client.query(`
       INSERT INTO referrals (id, referrer_id, referee_id, referee_name, referee_email, reward_earned, created_at)
