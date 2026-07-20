@@ -256,33 +256,52 @@ export default function AdvertiserDashboard({
   // ── Campaign Create ───────────────────────────────────────────────────────
   const handleCreateCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!campaignForm.title || !campaignForm.description || !campaignForm.link || !campaignForm.proofRequirements) {
-      setFormError("All campaign fields are required.");
+
+    // Trim all string fields before validation
+    const trimmedTitle = campaignForm.title.trim();
+    const trimmedDescription = campaignForm.description.trim();
+    const trimmedLink = campaignForm.link.trim();
+    const trimmedProofRequirements = campaignForm.proofRequirements.trim();
+    const trimmedPlatform = campaignForm.platform.trim();
+
+    // Validate each required field individually so we can name the missing one
+    if (!trimmedPlatform) { setFormError("Platform is required — please select a platform."); return; }
+    if (!trimmedTitle) { setFormError("Campaign Title is required."); return; }
+    if (!campaignForm.action) { setFormError("Action Type is required."); return; }
+    if (!trimmedLink) { setFormError("Target Link / URL is required."); return; }
+    if (!trimmedDescription) { setFormError("Task Instructions (description) is required."); return; }
+    if (!trimmedProofRequirements) { setFormError("Proof Requirements is required."); return; }
+    const slotsNum = parseInt(campaignForm.totalSlots);
+    if (!campaignForm.totalSlots || isNaN(slotsNum) || slotsNum < 1) {
+      setFormError("Total Slots is required and must be at least 1.");
       return;
     }
+
     if (!matchingPricing) {
       setFormError("Platform pricing is not available yet. Please try again or contact the administrator.");
       return;
     }
-    if (totalCost > user.walletBalance) {
-      setFormError(`Insufficient balance. This campaign costs ₦${totalCost.toLocaleString()} (₦${costPerSlot}/slot × ${slotsVal} slots). Please fund your wallet.`);
+    if (totalCost > (user.adBalance || 0)) {
+      setFormError(`Insufficient Ad Balance. This campaign costs ₦${totalCost.toLocaleString()} (₦${costPerSlot}/slot × ${slotsVal} slots). Please fund your Ad Wallet.`);
       return;
     }
     setFormSubmitting(true);
     setFormError("");
     setFormSuccess(false);
     try {
+      const payload = {
+        title: trimmedTitle,
+        description: trimmedDescription,
+        category,
+        proofRequirements: trimmedProofRequirements,
+        link: trimmedLink,
+        totalSlots: slotsNum   // send as number, not string
+      };
+      console.log("[Campaign Create] Sending payload:", payload);
       const res = await apiFetch("/api/advertiser/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: campaignForm.title,
-          description: campaignForm.description,
-          category,
-          proofRequirements: campaignForm.proofRequirements,
-          link: campaignForm.link,
-          totalSlots: campaignForm.totalSlots
-        })
+        body: JSON.stringify(payload)
       });
       if (res?.error) {
         setFormError(res.error);
@@ -491,7 +510,7 @@ export default function AdvertiserDashboard({
               Ad Wallet Balance
             </span>
             <span className="font-mono text-lg font-black text-blue-600">
-              ₦{user.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              ₦{(user.adBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </span>
           </div>
 
@@ -809,7 +828,7 @@ export default function AdvertiserDashboard({
                           <span>₦{totalCost.toLocaleString()}</span>
                         </div>
                         <div className="text-[10px] text-blue-500 font-sans pt-0.5">
-                          Wallet after launch: <strong>₦{(user.walletBalance - totalCost).toLocaleString()}</strong>
+                          Ad Wallet after launch: <strong>₦{((user.adBalance || 0) - totalCost).toLocaleString()}</strong>
                         </div>
                       </div>
                     ) : (
@@ -1514,7 +1533,7 @@ export default function AdvertiserDashboard({
                   <Wallet className="h-5 w-5 text-blue-500" />
                   <h3 className="font-display text-sm font-bold text-gray-900">Ad Wallet</h3>
                 </div>
-                <span className="font-mono text-xl font-black text-blue-600">₦{user.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                <span className="font-mono text-xl font-black text-blue-600">₦{(user.adBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="flex gap-3">
                 <button onClick={() => setActiveTab("fund")} className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2.5 text-xs font-bold text-white transition-all shadow-sm cursor-pointer flex items-center gap-1.5">
@@ -1558,8 +1577,8 @@ export default function AdvertiserDashboard({
             <p className="text-xs text-gray-400 mb-5">Secured by Paystack — cards, bank transfer &amp; USSD.</p>
 
             <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 flex items-center justify-between mb-4">
-              <span className="text-xs text-gray-600">Current wallet balance</span>
-              <span className="font-mono font-bold text-blue-600">₦{user.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              <span className="text-xs text-gray-600">Current Ad Wallet balance</span>
+              <span className="font-mono font-bold text-blue-600">₦{(user.adBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
 
             <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Amount to fund (₦)</label>

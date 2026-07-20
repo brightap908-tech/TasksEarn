@@ -2673,12 +2673,27 @@ app.post("/api/advertiser/tasks", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role === UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-    const { title, description, category, proofRequirements, link, totalSlots } = req.body;
-    if (!title || !description || !category || !proofRequirements || !link || !totalSlots) {
-      return res.status(400).json({ error: "All campaign fields are required" });
+    console.log("[Campaign Create] Received body:", JSON.stringify(req.body));
+
+    // Trim all string inputs up-front
+    const title = typeof req.body.title === "string" ? req.body.title.trim() : req.body.title;
+    const description = typeof req.body.description === "string" ? req.body.description.trim() : req.body.description;
+    const category = typeof req.body.category === "string" ? req.body.category.trim() : req.body.category;
+    const proofRequirements = typeof req.body.proofRequirements === "string" ? req.body.proofRequirements.trim() : req.body.proofRequirements;
+    const link = typeof req.body.link === "string" ? req.body.link.trim() : req.body.link;
+    const { totalSlots } = req.body;
+
+    // Validate each field individually so we can name exactly which one is missing
+    if (!title) return res.status(400).json({ error: "Missing required field: title" });
+    if (!description) return res.status(400).json({ error: "Missing required field: description" });
+    if (!category) return res.status(400).json({ error: "Missing required field: category (platform + action)" });
+    if (!proofRequirements) return res.status(400).json({ error: "Missing required field: proofRequirements" });
+    if (!link) return res.status(400).json({ error: "Missing required field: link (target URL)" });
+    if (totalSlots === undefined || totalSlots === null || totalSlots === "") {
+      return res.status(400).json({ error: "Missing required field: totalSlots" });
     }
 
-    const slots = parseInt(totalSlots);
+    const slots = typeof totalSlots === "number" ? totalSlots : parseInt(totalSlots);
     if (isNaN(slots) || slots < 1 || slots > 1000000) {
       return res.status(400).json({ error: "Slot count must be between 1 and 1,000,000" });
     }
