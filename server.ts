@@ -3014,6 +3014,21 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
       );
     }
 
+    // Fire-and-forget browser push to the earner about their submission decision
+    if (updatedSubmission) {
+      const earnerId = updatedSubmission.earnerId;
+      const isApproved = updatedSubmission.status === SubmissionStatus.APPROVED;
+      const pushPayload = JSON.stringify({
+        title: isApproved ? "✅ Task Approved — Reward Credited!" : "❌ Task Submission Rejected",
+        body: isApproved
+          ? `Your proof for "${updatedSubmission.taskTitle}" was approved. ₦${updatedSubmission.reward.toLocaleString()} added to your wallet.`
+          : `Your submission for "${updatedSubmission.taskTitle}" was rejected. Tap to review feedback and resubmit.`,
+        url: isApproved ? "/earner/wallet" : "/earner/history",
+        tag: "tasksearn-account"
+      });
+      sendBrowserPushToUser(earnerId, pushPayload).catch(() => {});
+    }
+
     res.json({ success: true, submission: updatedSubmission });
   } catch (err) {
     console.error("Review submission error:", err);
@@ -3877,6 +3892,21 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
       );
     }
 
+    // Fire-and-forget browser push to the earner about their submission decision (admin review)
+    if (updatedSubmission) {
+      const earnerId = updatedSubmission.earnerId;
+      const isApproved = updatedSubmission.status === SubmissionStatus.APPROVED;
+      const pushPayload = JSON.stringify({
+        title: isApproved ? "✅ Task Approved — Reward Credited!" : "❌ Task Submission Rejected",
+        body: isApproved
+          ? `Your proof for "${updatedSubmission.taskTitle}" was approved. ₦${updatedSubmission.reward.toLocaleString()} added to your wallet.`
+          : `Your submission for "${updatedSubmission.taskTitle}" was rejected. Tap to review feedback and resubmit.`,
+        url: isApproved ? "/earner/wallet" : "/earner/history",
+        tag: "tasksearn-account"
+      });
+      sendBrowserPushToUser(earnerId, pushPayload).catch(() => {});
+    }
+
     res.json({ success: true, submission: updatedSubmission });
   } catch (err) {
     console.error("Admin review error:", err);
@@ -3991,6 +4021,13 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
         await client.query("COMMIT");
         console.log(`[Review] Withdrawal ${txSnapshot.id} rejected — full refund ₦${totalRefund} (₦${txSnapshot.amount} + ₦${storedFee} fee) returned to ${txSnapshot.userName}; platform wallet fee credit reversed`);
         const updated = await pool.query("SELECT * FROM transactions WHERE id=$1", [txSnapshot.id]);
+        // Push: notify earner their withdrawal was rejected and refunded
+        sendBrowserPushToUser(txSnapshot.userId, JSON.stringify({
+          title: "❌ Withdrawal Request Rejected",
+          body: `Your withdrawal of ₦${txSnapshot.amount.toLocaleString()} was rejected. ₦${totalRefund.toLocaleString()} has been refunded to your wallet.`,
+          url: "/earner/wallet",
+          tag: "tasksearn-account"
+        })).catch(() => {});
         return res.json({ success: true, transaction: mapTransaction(updated.rows[0]) });
       }
 
@@ -4068,6 +4105,16 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
       });
     }
 
+    // Push: notify earner their withdrawal was paid
+    if (paystackOk) {
+      sendBrowserPushToUser(txSnapshot.userId, JSON.stringify({
+        title: "💸 Withdrawal Payment Sent!",
+        body: `Your withdrawal of ₦${txSnapshot.amount.toLocaleString()} has been processed and sent to your bank account.`,
+        url: "/earner/wallet",
+        tag: "tasksearn-account"
+      })).catch(() => {});
+    }
+
     res.json({ success: true, transaction: finalTx });
   } catch (err) {
     console.error("[Review withdrawal] error:", err);
@@ -4100,7 +4147,15 @@ app.post("/api/admin/withdrawals/:id/mark-paid", async (req, res) => {
 
     console.log(`[Mark Paid] Withdrawal ${req.params.id} manually marked Paid by admin ${admin.name} (${admin.id})`);
     const updated = await pool.query("SELECT * FROM transactions WHERE id=$1", [req.params.id]);
-    res.json({ success: true, transaction: mapTransaction(updated.rows[0]) });
+    const paidTx = mapTransaction(updated.rows[0]);
+    // Push: notify earner their withdrawal was manually marked as paid
+    sendBrowserPushToUser(paidTx.userId, JSON.stringify({
+      title: "💸 Withdrawal Payment Confirmed!",
+      body: `Your withdrawal of ₦${paidTx.amount.toLocaleString()} has been confirmed as paid to your bank account.`,
+      url: "/earner/wallet",
+      tag: "tasksearn-account"
+    })).catch(() => {});
+    res.json({ success: true, transaction: paidTx });
   } catch (err) {
     console.error("[Mark paid] error:", err);
     res.status(500).json({ error: "Server error" });
@@ -4194,7 +4249,18 @@ app.post("/api/admin/announcements", async (req, res) => {
        VALUES ($1,$2,$3,$4,true,$5,$6,$7,$8) RETURNING *`,
       [id, title, content, type || "info", dismissible !== false, validatedLink, finalButtonText, new Date()]
     );
-    res.json({ success: true, announcement: mapAnnouncement(result.rows[0]) });
+    const ann = mapAnnouncement(result.rows[0]);
+    // Fire-and-forget browser push to all earners about the new announcement
+    const pushPayload = JSON.stringify({
+      title: "📢 New Announcement from TasksEarn",
+      body: ann.title,
+      url: "/earner/notifications",
+      tag: "tasksearn-announcement"
+    });
+    sendBrowserPushToAllEarners(pushPayload)
+      .then((sent) => { if (sent > 0) console.log(`[Push] Announcement push sent to ${sent} subscriber(s): "${ann.title}"`); })
+      .catch(() => {});
+    res.json({ success: true, announcement: ann });
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
@@ -4868,6 +4934,40 @@ async function sendBrowserPushToAllEarners(payloadJson: string): Promise<number>
     console.error("[Push] Error fetching subscriptions:", err);
   }
   return sent;
+}
+
+// ─── Per-User Browser Push Helper ─────────────────────────────────────────────
+
+/**
+ * Sends a Web Push notification to a single user by userId.
+ * Silently invalidates stale subscriptions (410/404).
+ */
+async function sendBrowserPushToUser(userId: string, payloadJson: string): Promise<void> {
+  if (!vapidPublicKey || !vapidPrivateKey) return;
+  try {
+    const result = await pool.query(
+      "SELECT id, endpoint, p256dh_key, auth_key FROM notification_subscriptions WHERE user_id=$1 AND active=true",
+      [userId]
+    );
+    for (const row of result.rows) {
+      const pushSubscription = {
+        endpoint: row.endpoint,
+        keys: { p256dh: row.p256dh_key, auth: row.auth_key }
+      };
+      try {
+        await webpush.sendNotification(pushSubscription, payloadJson, { TTL: 86400 });
+      } catch (pushErr: any) {
+        if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+          await pool.query(
+            "UPDATE notification_subscriptions SET active=false, updated_at=NOW() WHERE id=$1",
+            [row.id]
+          );
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Push] sendBrowserPushToUser error:", err);
+  }
 }
 
 // ─── Earner Notification Broadcasting ────────────────────────────────────────

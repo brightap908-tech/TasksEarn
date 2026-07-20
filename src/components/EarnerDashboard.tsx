@@ -15,6 +15,7 @@ import { usePlatforms } from "../lib/platformsStore";
 import PlatformIcon from "./PlatformIcon";
 import EarnerNotifications from "./EarnerNotifications";
 import PushNotificationSettings from "./PushNotificationSettings";
+import NotificationManageModal from "./NotificationManageModal";
 import { 
   Briefcase, 
   DollarSign, 
@@ -39,6 +40,7 @@ import {
   FileText,
   Image as ImageIcon,
   Bell,
+  BellOff,
   RefreshCw
 } from "lucide-react";
 
@@ -115,6 +117,18 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
 
   // Rejected submissions (dedicated page — fetched from /api/earner/rejected-submissions)
   const [rejectedSubmissions, setRejectedSubmissions] = React.useState<any[]>([]);
+
+  // Push notification modal state
+  const [showNotifModal, setShowNotifModal] = React.useState(false);
+  const [pushSubscribed, setPushSubscribed] = React.useState<boolean | null>(null);
+
+  // Check push subscription status once on mount
+  React.useEffect(() => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    apiFetch("/api/notifications/status")
+      .then(res => setPushSubscribed(!!res.subscribed))
+      .catch(() => setPushSubscribed(false));
+  }, [apiFetch]);
 
   // Task delete (hide) state
   const [deleteConfirmTask, setDeleteConfirmTask] = React.useState<Task | null>(null);
@@ -453,6 +467,7 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
   };
 
   return (
+    <>
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
       
       {/* Sidebar Nav Panels */}
@@ -719,16 +734,35 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
             {/* Header / Filter bar */}
             <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm flex flex-col sm:flex-row gap-3 justify-between items-center">
               
-              {/* Search box */}
-              <div className="relative w-full sm:max-w-xs">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <input 
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 pl-9 pr-3 py-2 text-xs focus:border-blue-500 focus:outline-none"
-                  placeholder="Search available jobs..."
-                />
+              {/* Top row: search + notification button */}
+              <div className="flex w-full sm:w-auto items-center gap-2">
+                {/* Search box */}
+                <div className="relative flex-1 sm:max-w-xs">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <input 
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 pl-9 pr-3 py-2 text-xs focus:border-blue-500 focus:outline-none"
+                    placeholder="Search available jobs..."
+                  />
+                </div>
+
+                {/* Get Task Notifications button */}
+                <button
+                  onClick={() => setShowNotifModal(true)}
+                  title={pushSubscribed ? "Notifications are active — click to manage" : "Get notified when new tasks are posted"}
+                  className={`shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold border transition-all cursor-pointer ${
+                    pushSubscribed
+                      ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                      : "bg-blue-600 border-blue-600 text-white hover:bg-blue-700"
+                  }`}
+                >
+                  {pushSubscribed
+                    ? <><Bell className="h-3.5 w-3.5" /><span className="hidden sm:inline">Notifications On</span></>
+                    : <><Bell className="h-3.5 w-3.5" /><span className="hidden sm:inline">Get Task Notifications</span></>
+                  }
+                </button>
               </div>
 
               {/* Category selector */}
@@ -1784,5 +1818,16 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
       </div>
 
     </div>
+
+    {/* Push Notification Management Modal */}
+    {showNotifModal && (
+      <NotificationManageModal
+        apiFetch={apiFetch}
+        showToast={showToast}
+        onClose={() => setShowNotifModal(false)}
+        onStatusChange={(subscribed) => setPushSubscribed(subscribed)}
+      />
+    )}
+    </>
   );
 }
