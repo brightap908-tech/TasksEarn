@@ -267,7 +267,8 @@ export default function AdvertiserDashboard({
     // Validate each required field individually so we can name the missing one
     if (!trimmedPlatform) { setFormError("Platform is required — please select a platform."); return; }
     if (!trimmedTitle) { setFormError("Campaign Title is required."); return; }
-    if (!campaignForm.action) { setFormError("Action Type is required."); return; }
+    const trimmedAction = campaignForm.action.trim();
+    if (!trimmedAction) { setFormError("Action Type is required."); return; }
     if (!trimmedLink) { setFormError("Target Link / URL is required."); return; }
     if (!trimmedDescription) { setFormError("Task Instructions (description) is required."); return; }
     if (!trimmedProofRequirements) { setFormError("Proof Requirements is required."); return; }
@@ -276,6 +277,11 @@ export default function AdvertiserDashboard({
       setFormError("Total Slots is required and must be at least 1.");
       return;
     }
+
+    // Build category from already-validated trimmed values — never rely on the
+    // render-scope `category` constant, which can be "" if platform state hasn't
+    // settled yet (async useEffect) even when campaignForm.platform is set.
+    const submittedCategory = `${trimmedPlatform} ${trimmedAction}`;
 
     if (!matchingPricing) {
       setFormError("Platform pricing is not available yet. Please try again or contact the administrator.");
@@ -292,10 +298,10 @@ export default function AdvertiserDashboard({
       const payload = {
         title: trimmedTitle,
         description: trimmedDescription,
-        category,
+        category: submittedCategory,
         proofRequirements: trimmedProofRequirements,
         link: trimmedLink,
-        totalSlots: slotsNum   // send as number, not string
+        totalSlots: slotsNum   // number, not string
       };
       console.log("[Campaign Create] Sending payload:", payload);
       const res = await apiFetch("/api/advertiser/tasks", {
