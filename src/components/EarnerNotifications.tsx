@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { EarnerNotification } from "../types";
 import PlatformIcon from "./PlatformIcon";
-import { Bell, BellOff, CheckCheck, Clock, ChevronRight, Inbox, Loader2, CheckCircle2 } from "lucide-react";
+import { Bell, BellOff, CheckCheck, Clock, ChevronRight, Inbox, Loader2, CheckCircle2, BellRing } from "lucide-react";
 
 // ─── VAPID helper ─────────────────────────────────────────────────────────────
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -32,6 +32,7 @@ export function BrowserPushCard({
   showToast,
 }: Pick<EarnerNotificationsProps, "apiFetch" | "showToast">) {
   const [status, setStatus] = useState<PushStatus>("checking");
+  const [unsubscribeLoading, setUnsubscribeLoading] = useState(false);
 
   // Determine initial status once on mount
   useEffect(() => {
@@ -97,6 +98,30 @@ export function BrowserPushCard({
     }
   }, [apiFetch, showToast]);
 
+  const handleUnsubscribe = useCallback(async () => {
+    setUnsubscribeLoading(true);
+    try {
+      // 1. Unsubscribe from browser Push API
+      const reg = await navigator.serviceWorker.getRegistration("/");
+      if (reg) {
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) await sub.unsubscribe();
+      }
+
+      // 2. Delete subscription from database (does not affect in-app notification history)
+      await apiFetch("/api/notifications/unsubscribe", { method: "POST" });
+
+      // 3. Update UI immediately
+      setStatus("unsubscribed");
+      showToast("Browser notifications disabled.", "success");
+    } catch (err: any) {
+      console.error("[PushCard] unsubscribe error:", err);
+      showToast("Could not disable notifications. Please try again.", "error");
+    } finally {
+      setUnsubscribeLoading(false);
+    }
+  }, [apiFetch, showToast]);
+
   // ── Push not supported by this browser ────────────────────────────────────
   if (status === "unsupported") {
     return (
@@ -114,19 +139,34 @@ export function BrowserPushCard({
     );
   }
 
-  // ── Successfully subscribed — replace button with green success card ───────
+  // ── Successfully subscribed — green card + red unsubscribe button ──────────
   if (status === "subscribed") {
     return (
-      <div className="rounded-2xl border border-green-200 bg-green-50 p-4 mb-1 flex items-center gap-4">
-        <div className="shrink-0 flex items-center justify-center rounded-xl h-10 w-10 bg-green-100">
-          <CheckCircle2 className="h-5 w-5 text-green-600" />
+      <div className="space-y-2 mb-1">
+        {/* Green success card */}
+        <div className="rounded-2xl border border-green-200 bg-green-50 p-4 flex items-center gap-4">
+          <div className="shrink-0 flex items-center justify-center rounded-xl h-10 w-10 bg-green-100">
+            <CheckCircle2 className="h-5 w-5 text-green-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-green-800">Browser notifications enabled ✅</p>
+            <p className="text-[11px] text-green-700 mt-0.5">
+              You'll receive an alert whenever a new task is posted — even when the browser is closed.
+            </p>
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-bold text-green-800">Browser notifications enabled ✅</p>
-          <p className="text-[11px] text-green-700 mt-0.5">
-            You'll receive an alert on your device whenever a new task is posted — even when the browser is closed.
-          </p>
-        </div>
+
+        {/* Red unsubscribe button */}
+        <button
+          onClick={handleUnsubscribe}
+          disabled={unsubscribeLoading}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2.5 text-xs font-bold text-red-600 transition-all cursor-pointer"
+        >
+          {unsubscribeLoading
+            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Disabling…</>
+            : <><BellOff className="h-3.5 w-3.5" />Disable Browser Notifications</>
+          }
+        </button>
       </div>
     );
   }
@@ -155,17 +195,16 @@ export function BrowserPushCard({
     );
   }
 
-  // ── Checking / loading / unsubscribed — prominent enable card ─────────────
-  // Always displayed at top when user is not subscribed.
+  // ── Checking / loading / unsubscribed — prominent subscribe card ───────────
   return (
     <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 mb-1 flex items-center gap-4">
       <div className="shrink-0 flex items-center justify-center rounded-xl h-10 w-10 bg-blue-100">
-        <Bell className="h-5 w-5 text-blue-600" />
+        <BellRing className="h-5 w-5 text-blue-600" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-bold text-blue-900">Enable Browser Notifications</p>
+        <p className="text-xs font-bold text-blue-900">Browser Push Notifications</p>
         <p className="text-[11px] text-blue-700 mt-0.5">
-          Get instant alerts when new tasks are posted — even when the website is closed.
+          Enable browser notifications to receive instant alerts whenever a new task is posted, even when the website is not open.
         </p>
       </div>
 
@@ -184,7 +223,7 @@ export function BrowserPushCard({
           className="shrink-0 flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-all cursor-pointer shadow-md shadow-blue-200"
         >
           <Bell className="h-3.5 w-3.5" />
-          Enable Browser Notifications
+          Subscribe to Notifications
         </button>
       )}
     </div>
