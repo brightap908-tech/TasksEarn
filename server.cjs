@@ -4368,6 +4368,16 @@ async function sendBrowserPushToUser(userId, payloadJson) {
     console.error("[Push] sendBrowserPushToUser error:", err);
   }
 }
+var _pushedTaskIds = /* @__PURE__ */ new Map();
+function _markTaskPushed(taskId) {
+  const now = Date.now();
+  for (const [id, ts] of _pushedTaskIds) {
+    if (now - ts > 864e5) _pushedTaskIds.delete(id);
+  }
+  if (_pushedTaskIds.has(taskId)) return false;
+  _pushedTaskIds.set(taskId, now);
+  return true;
+}
 async function notifyEarners(task) {
   try {
     const platform = getPlatformForCategory(task.category);
@@ -4402,16 +4412,22 @@ async function notifyEarners(task) {
         client.send(broadcastPayload);
       }
     });
-    const pushPayload = JSON.stringify({
-      title: "\u{1F389} New Task Available",
-      body: `A new earning task has been posted. Tap to complete it before it fills up.`,
-      url: "/earner/tasks",
-      tag: "tasksearn-new-task"
-    });
-    sendBrowserPushToAllEarners(pushPayload).then((sent) => {
-      if (sent > 0) console.log(`[Push] Sent browser push to ${sent} subscriber(s) for task: ${task.title}`);
-    }).catch(() => {
-    });
+    if (_markTaskPushed(task.id)) {
+      const pushPayload = JSON.stringify({
+        title: "\u{1F4E2} New Task Available",
+        body: "A new task has been posted. Tap to start earning now!",
+        icon: "/icon-192.png",
+        badge: "/icon-72.png",
+        url: "https://tasksearn.name.ng/tasks",
+        tag: "tasksearn-new-task"
+      });
+      sendBrowserPushToAllEarners(pushPayload).then((sent) => {
+        if (sent > 0) console.log(`[Push] Sent browser push to ${sent} subscriber(s) for task: ${task.title}`);
+      }).catch(() => {
+      });
+    } else {
+      console.log(`[Push] Skipping duplicate push for task: ${task.id}`);
+    }
     console.log(`[Earner Notify] Notified ${earnersRes.rows.length} earner(s) about task: ${task.title}`);
   } catch (err) {
     console.error("[Earner Notify] Failed:", err);
