@@ -1,9 +1,7 @@
 // TasksEarn Service Worker — Browser Push Notification Support
-// Version: 2.0
+// Version: 3.0
 
-const CACHE_NAME = "tasksearn-v1";
-
-self.addEventListener("install", (event) => {
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
@@ -19,21 +17,30 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data.json();
   } catch {
-    data = { title: "🎉 New Task Available", body: event.data.text() };
+    data = { title: "🔔 TasksEarn Alert", body: event.data.text() };
   }
 
-  const title = data.title || "🎉 New Task Available";
+  const title = data.title || "🔔 TasksEarn Alert";
+  const tag = data.tag || "tasksearn-general";
+  const url = data.url || "/earner/tasks";
+
+  // Choose action labels based on notification type
+  let viewLabel = "View";
+  if (tag === "tasksearn-new-task") viewLabel = "View Tasks";
+  else if (tag === "tasksearn-announcement") viewLabel = "View Announcement";
+  else if (tag === "tasksearn-account") viewLabel = "View Account";
+
   const options = {
-    body: data.body || "A new earning task has been posted. Tap to complete it before it fills up.",
+    body: data.body || "You have a new notification from TasksEarn.",
     icon: "/icon-192.png",
     badge: "/icon-192.png",
-    tag: data.tag || "tasksearn-new-task",
+    tag,
     renotify: true,
-    requireInteraction: true,
+    requireInteraction: false,
     vibrate: [200, 100, 200],
-    data: { url: data.url || "/earner/tasks" },
+    data: { url },
     actions: [
-      { action: "open", title: "View Tasks" },
+      { action: "open", title: viewLabel },
       { action: "dismiss", title: "Dismiss" }
     ]
   };

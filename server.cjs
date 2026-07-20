@@ -2648,6 +2648,18 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
         `[Commission] Advertiser Approval | Submission ID: ${commissionData.submissionId} | Advertiser Cost: \u20A6${commissionData.costPerSlot} | Earner Reward: \u20A6${commissionData.earnerReward} | Commission Added: \u20A6${commissionData.amount} | New Task Commission Balance: \u20A6${parseFloat(totalRes.rows[0].total).toLocaleString()}`
       );
     }
+    if (updatedSubmission) {
+      const earnerId = updatedSubmission.earnerId;
+      const isApproved = updatedSubmission.status === "Approved" /* APPROVED */;
+      const pushPayload = JSON.stringify({
+        title: isApproved ? "\u2705 Task Approved \u2014 Reward Credited!" : "\u274C Task Submission Rejected",
+        body: isApproved ? `Your proof for "${updatedSubmission.taskTitle}" was approved. \u20A6${updatedSubmission.reward.toLocaleString()} added to your wallet.` : `Your submission for "${updatedSubmission.taskTitle}" was rejected. Tap to review feedback and resubmit.`,
+        url: isApproved ? "/earner/wallet" : "/earner/history",
+        tag: "tasksearn-account"
+      });
+      sendBrowserPushToUser(earnerId, pushPayload).catch(() => {
+      });
+    }
     res.json({ success: true, submission: updatedSubmission });
   } catch (err) {
     console.error("Review submission error:", err);
@@ -3384,6 +3396,18 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
         `[Commission] Admin Approval | Task ID: ${adminCommData.submissionId} | Advertiser Cost: \u20A6${adminCommData.costPerSlot} | Earner Reward: \u20A6${updatedSubmission?.reward ?? adminCommData.costPerSlot - adminCommData.amount} | Commission Added: \u20A6${adminCommData.amount} | New Task Commission Balance: \u20A6${parseFloat(totalRes.rows[0].total).toLocaleString()}`
       );
     }
+    if (updatedSubmission) {
+      const earnerId = updatedSubmission.earnerId;
+      const isApproved = updatedSubmission.status === "Approved" /* APPROVED */;
+      const pushPayload = JSON.stringify({
+        title: isApproved ? "\u2705 Task Approved \u2014 Reward Credited!" : "\u274C Task Submission Rejected",
+        body: isApproved ? `Your proof for "${updatedSubmission.taskTitle}" was approved. \u20A6${updatedSubmission.reward.toLocaleString()} added to your wallet.` : `Your submission for "${updatedSubmission.taskTitle}" was rejected. Tap to review feedback and resubmit.`,
+        url: isApproved ? "/earner/wallet" : "/earner/history",
+        tag: "tasksearn-account"
+      });
+      sendBrowserPushToUser(earnerId, pushPayload).catch(() => {
+      });
+    }
     res.json({ success: true, submission: updatedSubmission });
   } catch (err) {
     console.error("Admin review error:", err);
@@ -3475,6 +3499,13 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
         await client.query("COMMIT");
         console.log(`[Review] Withdrawal ${txSnapshot.id} rejected \u2014 full refund \u20A6${totalRefund} (\u20A6${txSnapshot.amount} + \u20A6${storedFee} fee) returned to ${txSnapshot.userName}; platform wallet fee credit reversed`);
         const updated = await pool.query("SELECT * FROM transactions WHERE id=$1", [txSnapshot.id]);
+        sendBrowserPushToUser(txSnapshot.userId, JSON.stringify({
+          title: "\u274C Withdrawal Request Rejected",
+          body: `Your withdrawal of \u20A6${txSnapshot.amount.toLocaleString()} was rejected. \u20A6${totalRefund.toLocaleString()} has been refunded to your wallet.`,
+          url: "/earner/wallet",
+          tag: "tasksearn-account"
+        })).catch(() => {
+        });
         return res.json({ success: true, transaction: mapTransaction(updated.rows[0]) });
       }
       await client.query("UPDATE transactions SET status='Approved', rejection_reason=NULL WHERE id=$1", [txSnapshot.id]);
@@ -3538,6 +3569,15 @@ app.post("/api/admin/withdrawals/:id/review", async (req, res) => {
         error: `Paystack transfer failed: ${failureNote}. Withdrawal moved to "Approved \u2014 Awaiting Payment". Retry, mark paid manually, or reject & refund the earner.`
       });
     }
+    if (paystackOk) {
+      sendBrowserPushToUser(txSnapshot.userId, JSON.stringify({
+        title: "\u{1F4B8} Withdrawal Payment Sent!",
+        body: `Your withdrawal of \u20A6${txSnapshot.amount.toLocaleString()} has been processed and sent to your bank account.`,
+        url: "/earner/wallet",
+        tag: "tasksearn-account"
+      })).catch(() => {
+      });
+    }
     res.json({ success: true, transaction: finalTx });
   } catch (err) {
     console.error("[Review withdrawal] error:", err);
@@ -3563,7 +3603,15 @@ app.post("/api/admin/withdrawals/:id/mark-paid", async (req, res) => {
     );
     console.log(`[Mark Paid] Withdrawal ${req.params.id} manually marked Paid by admin ${admin.name} (${admin.id})`);
     const updated = await pool.query("SELECT * FROM transactions WHERE id=$1", [req.params.id]);
-    res.json({ success: true, transaction: mapTransaction(updated.rows[0]) });
+    const paidTx = mapTransaction(updated.rows[0]);
+    sendBrowserPushToUser(paidTx.userId, JSON.stringify({
+      title: "\u{1F4B8} Withdrawal Payment Confirmed!",
+      body: `Your withdrawal of \u20A6${paidTx.amount.toLocaleString()} has been confirmed as paid to your bank account.`,
+      url: "/earner/wallet",
+      tag: "tasksearn-account"
+    })).catch(() => {
+    });
+    res.json({ success: true, transaction: paidTx });
   } catch (err) {
     console.error("[Mark paid] error:", err);
     res.status(500).json({ error: "Server error" });
@@ -3656,7 +3704,18 @@ app.post("/api/admin/announcements", async (req, res) => {
        VALUES ($1,$2,$3,$4,true,$5,$6,$7,$8) RETURNING *`,
       [id, title, content, type || "info", dismissible !== false, validatedLink, finalButtonText, /* @__PURE__ */ new Date()]
     );
-    res.json({ success: true, announcement: mapAnnouncement(result.rows[0]) });
+    const ann = mapAnnouncement(result.rows[0]);
+    const pushPayload = JSON.stringify({
+      title: "\u{1F4E2} New Announcement from TasksEarn",
+      body: ann.title,
+      url: "/earner/notifications",
+      tag: "tasksearn-announcement"
+    });
+    sendBrowserPushToAllEarners(pushPayload).then((sent) => {
+      if (sent > 0) console.log(`[Push] Announcement push sent to ${sent} subscriber(s): "${ann.title}"`);
+    }).catch(() => {
+    });
+    res.json({ success: true, announcement: ann });
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
@@ -4281,6 +4340,33 @@ async function sendBrowserPushToAllEarners(payloadJson) {
     console.error("[Push] Error fetching subscriptions:", err);
   }
   return sent;
+}
+async function sendBrowserPushToUser(userId, payloadJson) {
+  if (!vapidPublicKey || !vapidPrivateKey) return;
+  try {
+    const result = await pool.query(
+      "SELECT id, endpoint, p256dh_key, auth_key FROM notification_subscriptions WHERE user_id=$1 AND active=true",
+      [userId]
+    );
+    for (const row of result.rows) {
+      const pushSubscription = {
+        endpoint: row.endpoint,
+        keys: { p256dh: row.p256dh_key, auth: row.auth_key }
+      };
+      try {
+        await import_web_push.default.sendNotification(pushSubscription, payloadJson, { TTL: 86400 });
+      } catch (pushErr) {
+        if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+          await pool.query(
+            "UPDATE notification_subscriptions SET active=false, updated_at=NOW() WHERE id=$1",
+            [row.id]
+          );
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Push] sendBrowserPushToUser error:", err);
+  }
 }
 async function notifyEarners(task) {
   try {
