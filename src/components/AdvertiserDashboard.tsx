@@ -278,10 +278,17 @@ export default function AdvertiserDashboard({
       return;
     }
 
-    // Build category from already-validated trimmed values — never rely on the
-    // render-scope `category` constant, which can be "" if platform state hasn't
-    // settled yet (async useEffect) even when campaignForm.platform is set.
-    const submittedCategory = `${trimmedPlatform} ${trimmedAction}`;
+    // Build category from already-validated trimmed values.
+    // Format: "Platform - Action" (e.g. "Instagram - Follow", "TikTok - Share").
+    // Never rely on the render-scope `category` constant — it can be "" if the
+    // platform useEffect hasn't settled yet when this handler fires.
+    const submittedCategory = `${trimmedPlatform} - ${trimmedAction}`;
+
+    // Explicit pre-submission guard — belt-and-suspenders after the per-field checks above.
+    if (!submittedCategory || submittedCategory.trim() === "-") {
+      setFormError("Category could not be generated. Please select a platform and action.");
+      return;
+    }
 
     if (!matchingPricing) {
       setFormError("Platform pricing is not available yet. Please try again or contact the administrator.");
@@ -298,12 +305,22 @@ export default function AdvertiserDashboard({
       const payload = {
         title: trimmedTitle,
         description: trimmedDescription,
-        category: submittedCategory,
+        category: submittedCategory,        // e.g. "Instagram - Follow"
         proofRequirements: trimmedProofRequirements,
         link: trimmedLink,
-        totalSlots: slotsNum   // number, not string
+        totalSlots: slotsNum                // number, not string
       };
-      console.log("[Campaign Create] Sending payload:", payload);
+      // Verify full payload before sending — visible in browser DevTools console
+      console.log("[Campaign Create] Sending payload:", {
+        platform: trimmedPlatform,
+        action: trimmedAction,
+        category: submittedCategory,
+        title: trimmedTitle,
+        description: trimmedDescription,
+        targetLink: trimmedLink,
+        proofRequirements: trimmedProofRequirements,
+        slots: slotsNum
+      });
       const res = await apiFetch("/api/advertiser/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
