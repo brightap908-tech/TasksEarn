@@ -1402,6 +1402,8 @@ export default function EarnerDashboard({ user, onRefreshUser, onNavigate, apiFe
               setHighlightTaskId(taskId);
               setActiveTab("tasks");
             }}
+            apiFetch={apiFetch}
+            showToast={showToast}
           />
         )}
 
