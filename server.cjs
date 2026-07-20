@@ -323,11 +323,12 @@ function mapEarnerNotification(row) {
     read: row.read === true || row.read === "true"
   };
 }
-async function creditAdminCommission(opts) {
+async function creditAdminCommission(opts, client) {
   if (!opts.amount || opts.amount <= 0) return;
   const id = "com-" + Math.random().toString(36).substr(2, 9);
+  const db = client || pool;
   try {
-    await pool.query(
+    await db.query(
       `INSERT INTO admin_commissions (id, type, amount, description, reference, user_id, user_name, related_transaction_ref, created_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT (reference) DO NOTHING`,
@@ -2573,7 +2574,16 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
         await client.query("UPDATE tasks SET filled_slots=$1, status=$2 WHERE id=$3", [newFilled, newStatus, task.id]);
         const commission = (task.costPerSlot || 0) - submission.reward;
         if (commission > 0) {
-          commissionData = { amount: commission, submissionId: submission.id, taskTitle: task.title, earnerName };
+          commissionData = { amount: commission, submissionId: submission.id, taskTitle: task.title, earnerName, costPerSlot: task.costPerSlot, earnerReward: submission.reward };
+          await creditAdminCommission({
+            type: "task_commission",
+            amount: commission,
+            description: `Task commission: "${task.title}" \u2014 ${earnerName}`,
+            reference: "COMM-TASK-" + submission.id,
+            userId: submission.earnerId,
+            userName: earnerName,
+            relatedRef: submission.id
+          }, client);
         }
       } else {
         const rejectedNow = /* @__PURE__ */ new Date();
@@ -2611,15 +2621,10 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
       updatedSubmission.proofScreenshot = null;
     }
     if (commissionData) {
-      await creditAdminCommission({
-        type: "task_commission",
-        amount: commissionData.amount,
-        description: `Task commission: "${commissionData.taskTitle}" \u2014 ${commissionData.earnerName}`,
-        reference: "COMM-TASK-" + commissionData.submissionId,
-        userId: updatedSubmission.earnerId,
-        userName: commissionData.earnerName,
-        relatedRef: commissionData.submissionId
-      });
+      const totalRes = await pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM admin_commissions WHERE type='task_commission'");
+      console.log(
+        `[Commission] Advertiser Approval | Submission ID: ${commissionData.submissionId} | Advertiser Cost: \u20A6${commissionData.costPerSlot} | Earner Reward: \u20A6${commissionData.earnerReward} | Commission Added: \u20A6${commissionData.amount} | New Task Commission Balance: \u20A6${parseFloat(totalRes.rows[0].total).toLocaleString()}`
+      );
     }
     res.json({ success: true, submission: updatedSubmission });
   } catch (err) {
@@ -3284,6 +3289,7 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
         await client.query("UPDATE submissions SET status=$1, feedback=$2, approved_at=$3 WHERE id=$4", [status, feedback || "", now, submission.id]);
         const earnerRes = await client.query("SELECT name, role FROM users WHERE id=$1", [submission.earnerId]);
         if (earnerRes.rows.length > 0) {
+          const earnerName = earnerRes.rows[0].name;
           await client.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2", [submission.reward, submission.earnerId]);
           await client.query(`
             INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
@@ -3291,7 +3297,7 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
           `, [
             "tx-" + Math.random().toString(36).substr(2, 9),
             submission.earnerId,
-            earnerRes.rows[0].name,
+            earnerName,
             earnerRes.rows[0].role,
             submission.reward,
             `Earned from task (Admin Audited): ${task.title}`,
@@ -3300,7 +3306,16 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
           ]);
           const commission = (task.costPerSlot || 0) - submission.reward;
           if (commission > 0) {
-            adminCommData = { amount: commission, submissionId: submission.id, taskTitle: task.title, earnerName: earnerRes.rows[0].name };
+            adminCommData = { amount: commission, submissionId: submission.id, taskTitle: task.title, earnerName, costPerSlot: task.costPerSlot };
+            await creditAdminCommission({
+              type: "task_commission",
+              amount: commission,
+              description: `Task commission (Admin): "${task.title}" \u2014 ${earnerName}`,
+              reference: "COMM-ADMTASK-" + submission.id,
+              userId: submission.earnerId,
+              userName: earnerName,
+              relatedRef: submission.id
+            }, client);
           }
         }
         const newFilled = task.filledSlots + 1;
@@ -3342,13 +3357,10 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
       updatedSubmission.proofScreenshot = null;
     }
     if (adminCommData) {
-      await creditAdminCommission({
-        type: "task_commission",
-        amount: adminCommData.amount,
-        description: `Task commission (Admin): "${adminCommData.taskTitle}" \u2014 ${adminCommData.earnerName}`,
-        reference: "COMM-ADMTASK-" + adminCommData.submissionId,
-        relatedRef: adminCommData.submissionId
-      });
+      const totalRes = await pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM admin_commissions WHERE type='task_commission'");
+      console.log(
+        `[Commission] Admin Approval | Task ID: ${adminCommData.submissionId} | Advertiser Cost: \u20A6${adminCommData.costPerSlot} | Earner Reward: \u20A6${updatedSubmission?.reward ?? adminCommData.costPerSlot - adminCommData.amount} | Commission Added: \u20A6${adminCommData.amount} | New Task Commission Balance: \u20A6${parseFloat(totalRes.rows[0].total).toLocaleString()}`
+      );
     }
     res.json({ success: true, submission: updatedSubmission });
   } catch (err) {
