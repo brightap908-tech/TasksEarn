@@ -278,11 +278,12 @@ async function creditAdminCommission(opts: {
   userId?: string;
   userName?: string;
   relatedRef?: string;
-}) {
+}, client?: any) {
   if (!opts.amount || opts.amount <= 0) return;
   const id = "com-" + Math.random().toString(36).substr(2, 9);
+  const db = client || pool;
   try {
-    await pool.query(
+    await db.query(
       `INSERT INTO admin_commissions (id, type, amount, description, reference, user_id, user_name, related_transaction_ref, created_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT (reference) DO NOTHING`,
@@ -2878,7 +2879,7 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
 
     const client = await pool.connect();
     let updatedSubmission: any;
-    let commissionData: { amount: number; submissionId: string; taskTitle: string; earnerName: string } | null = null;
+    let commissionData: { amount: number; submissionId: string; taskTitle: string; earnerName: string; costPerSlot: number; earnerReward: number } | null = null;
     try {
       await client.query("BEGIN");
 
@@ -2916,10 +2917,21 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
         const newStatus = newFilled >= task.totalSlots ? TaskStatus.COMPLETED : task.status;
         await client.query("UPDATE tasks SET filled_slots=$1, status=$2 WHERE id=$3", [newFilled, newStatus, task.id]);
 
-        // Capture commission data for after commit
+        // Calculate and credit platform commission inside the transaction so it
+        // is atomic with the approval — no commission can be lost if the server
+        // crashes between commit and a post-commit credit call.
         const commission = (task.costPerSlot || 0) - submission.reward;
         if (commission > 0) {
-          commissionData = { amount: commission, submissionId: submission.id, taskTitle: task.title, earnerName };
+          commissionData = { amount: commission, submissionId: submission.id, taskTitle: task.title, earnerName, costPerSlot: task.costPerSlot, earnerReward: submission.reward };
+          await creditAdminCommission({
+            type: "task_commission",
+            amount: commission,
+            description: `Task commission: "${task.title}" — ${earnerName}`,
+            reference: "COMM-TASK-" + submission.id,
+            userId: submission.earnerId,
+            userName: earnerName,
+            relatedRef: submission.id
+          }, client);
         }
       } else {
         const rejectedNow = new Date();
@@ -2956,17 +2968,14 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
       updatedSubmission.proofScreenshot = null;
     }
 
-    // Credit admin platform commission after commit (prevents double-crediting via ON CONFLICT)
+    // Log commission details after commit so the new DB total is accurate
     if (commissionData) {
-      await creditAdminCommission({
-        type: "task_commission",
-        amount: commissionData.amount,
-        description: `Task commission: "${commissionData.taskTitle}" — ${commissionData.earnerName}`,
-        reference: "COMM-TASK-" + commissionData.submissionId,
-        userId: updatedSubmission.earnerId,
-        userName: commissionData.earnerName,
-        relatedRef: commissionData.submissionId
-      });
+      const totalRes = await pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM admin_commissions WHERE type='task_commission'");
+      console.log(
+        `[Commission] Advertiser Approval | Submission ID: ${commissionData.submissionId} | ` +
+        `Advertiser Cost: ₦${commissionData.costPerSlot} | Earner Reward: ₦${commissionData.earnerReward} | ` +
+        `Commission Added: ₦${commissionData.amount} | New Task Commission Balance: ₦${parseFloat(totalRes.rows[0].total).toLocaleString()}`
+      );
     }
 
     res.json({ success: true, submission: updatedSubmission });
@@ -3735,7 +3744,7 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
     }
     const client = await pool.connect();
     let updatedSubmission: any;
-    let adminCommData: { amount: number; submissionId: string; taskTitle: string; earnerName: string } | null = null;
+    let adminCommData: { amount: number; submissionId: string; taskTitle: string; earnerName: string; costPerSlot: number } | null = null;
     try {
       await client.query("BEGIN");
 
@@ -3755,20 +3764,32 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
         await client.query("UPDATE submissions SET status=$1, feedback=$2, approved_at=$3 WHERE id=$4", [status, feedback || "", now, submission.id]);
         const earnerRes = await client.query("SELECT name, role FROM users WHERE id=$1", [submission.earnerId]);
         if (earnerRes.rows.length > 0) {
+          const earnerName = earnerRes.rows[0].name;
           await client.query("UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id=$2", [submission.reward, submission.earnerId]);
           await client.query(`
             INSERT INTO transactions (id, user_id, user_name, user_role, amount, type, status, description, reference, created_at)
             VALUES ($1,$2,$3,$4,$5,'Task Earnings','Success',$6,$7,$8)
           `, [
             "tx-" + Math.random().toString(36).substr(2, 9),
-            submission.earnerId, earnerRes.rows[0].name, earnerRes.rows[0].role,
+            submission.earnerId, earnerName, earnerRes.rows[0].role,
             submission.reward,
             `Earned from task (Admin Audited): ${task.title}`,
             "E-TASK-ADM-" + Math.floor(10000000 + Math.random() * 90000000), now
           ]);
+
+          // Credit commission atomically inside the transaction.
           const commission = (task.costPerSlot || 0) - submission.reward;
           if (commission > 0) {
-            adminCommData = { amount: commission, submissionId: submission.id, taskTitle: task.title, earnerName: earnerRes.rows[0].name };
+            adminCommData = { amount: commission, submissionId: submission.id, taskTitle: task.title, earnerName, costPerSlot: task.costPerSlot };
+            await creditAdminCommission({
+              type: "task_commission",
+              amount: commission,
+              description: `Task commission (Admin): "${task.title}" — ${earnerName}`,
+              reference: "COMM-ADMTASK-" + submission.id,
+              userId: submission.earnerId,
+              userName: earnerName,
+              relatedRef: submission.id
+            }, client);
           }
         }
         const newFilled = task.filledSlots + 1;
@@ -3810,15 +3831,14 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
       updatedSubmission.proofScreenshot = null;
     }
 
-    // Credit admin platform commission after commit
+    // Log commission details after commit so the new DB total is accurate
     if (adminCommData) {
-      await creditAdminCommission({
-        type: "task_commission",
-        amount: adminCommData.amount,
-        description: `Task commission (Admin): "${adminCommData.taskTitle}" — ${adminCommData.earnerName}`,
-        reference: "COMM-ADMTASK-" + adminCommData.submissionId,
-        relatedRef: adminCommData.submissionId
-      });
+      const totalRes = await pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM admin_commissions WHERE type='task_commission'");
+      console.log(
+        `[Commission] Admin Approval | Task ID: ${adminCommData.submissionId} | ` +
+        `Advertiser Cost: ₦${adminCommData.costPerSlot} | Earner Reward: ₦${updatedSubmission?.reward ?? adminCommData.costPerSlot - adminCommData.amount} | ` +
+        `Commission Added: ₦${adminCommData.amount} | New Task Commission Balance: ₦${parseFloat(totalRes.rows[0].total).toLocaleString()}`
+      );
     }
 
     res.json({ success: true, submission: updatedSubmission });

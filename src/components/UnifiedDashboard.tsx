@@ -1218,9 +1218,10 @@ export default function UnifiedDashboard({
 
   async function handleReviewSub(subId: string, action: "approve"|"reject", campaignId: string, feedback?: string) {
     try {
+      const status = action === "approve" ? "Approved" : "Rejected";
       const res = await apiFetch(`/api/advertiser/submissions/${subId}/review`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, feedback })
+        body: JSON.stringify({ status, feedback })
       });
       if (!res?.error) {
         showToast(`Submission ${action}d.`, "success");
