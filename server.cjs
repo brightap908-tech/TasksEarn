@@ -914,6 +914,13 @@ async function seedDatabase() {
       new Date(Date.now() - 1 * 24 * 3600 * 1e3)
     ]);
     await client.query(`
+      INSERT INTO admin_commissions (id, type, amount, description, reference, user_id, user_name, related_transaction_ref, created_at)
+      VALUES ('com-seed-sub-1', 'task_commission', 5.00,
+              'Task commission: "YouTube Subscribe - TechNaija Channel" \u2014 Tunde Bakare',
+              'COMM-SEED-sub-1', $1, 'Tunde Bakare', 'sub-1', $2)
+      ON CONFLICT (reference) DO NOTHING
+    `, [earnerId, new Date(Date.now() - 2 * 24 * 3600 * 1e3)]);
+    await client.query(`
       INSERT INTO referrals (id, referrer_id, referee_id, referee_name, referee_email, reward_earned, created_at)
       VALUES ('ref-1', $1, 'u-referee-1', 'Sola Alabi', 'sola@example.com', 0, $2)
     `, [earnerId, new Date(Date.now() - 5 * 24 * 3600 * 1e3)]);
