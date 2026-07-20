@@ -90,9 +90,48 @@ function BrowserPushCard({
     }
   }, [apiFetch, showToast]);
 
-  // Don't render anything while checking or if unsupported
-  if (status === "checking" || status === "unsupported") return null;
+  // ── Unsupported browser: always show an explanation card ──────────────────
+  if (status === "unsupported") {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 mb-1 flex items-center gap-4">
+        <div className="shrink-0 flex items-center justify-center rounded-xl h-10 w-10 bg-gray-100">
+          <BellOff className="h-5 w-5 text-gray-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-gray-700">Browser notifications unavailable</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">
+            Your current browser does not support Push Notifications. Try Chrome, Edge, Firefox, or Samsung Internet on Android to receive instant task alerts.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
+  // ── While checking: show the button in a disabled/loading state so it's always visible ──
+  if (status === "checking") {
+    return (
+      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 mb-1 flex items-center gap-4">
+        <div className="shrink-0 flex items-center justify-center rounded-xl h-10 w-10 bg-blue-100">
+          <Bell className="h-5 w-5 text-blue-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-blue-900">Enable Browser Notifications</p>
+          <p className="text-[11px] text-blue-700 mt-0.5">
+            Get instant alerts when new tasks are posted — even when the website is closed.
+          </p>
+        </div>
+        <button
+          disabled
+          className="shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold bg-blue-600 text-white opacity-50 cursor-not-allowed"
+        >
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Checking…
+        </button>
+      </div>
+    );
+  }
+
+  // ── Subscribed / unsubscribed / denied / loading ───────────────────────────
   return (
     <div className={`rounded-2xl border p-4 mb-1 flex items-center gap-4 ${
       status === "subscribed"
