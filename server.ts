@@ -249,6 +249,12 @@ function mapNotification(row: any): AdminNotification {
     type: row.type,
     message: row.message,
     referenceId: row.reference_id,
+    earnerName: row.earner_name || undefined,
+    taskTitle: row.task_title || undefined,
+    submittedAt: row.submitted_at instanceof Date
+      ? row.submitted_at.toISOString()
+      : row.submitted_at || (row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at),
+    reviewUrl: row.review_url || undefined,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     read: row.read === true || row.read === "true"
   };
@@ -596,9 +602,24 @@ async function bootstrapTables() {
         type VARCHAR(50) NOT NULL,
         message TEXT NOT NULL,
         reference_id VARCHAR(50) NOT NULL,
+        dedupe_key VARCHAR(150) NULL,
+        earner_name VARCHAR(150) NULL,
+        task_title VARCHAR(255) NULL,
+        submitted_at TIMESTAMP NULL,
+        review_url TEXT NULL,
         read BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+    await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS dedupe_key VARCHAR(150) NULL`);
+    await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS earner_name VARCHAR(150) NULL`);
+    await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS task_title VARCHAR(255) NULL`);
+    await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP NULL`);
+    await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS review_url TEXT NULL`);
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS notifications_dedupe_key_idx
+      ON notifications (dedupe_key)
+      WHERE dedupe_key IS NOT NULL
     `);
 
     // 14b. Earner Notifications (per-earner new-task alerts)
@@ -2038,7 +2059,16 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       ]);
 
       await client.query("COMMIT");
-      notifyAdmin({ type: "submission", message: `Task resubmission from ${user.name} for "${task.title}"`, referenceId: existing.id });
+      await notifyAdmin({
+        type: "submission",
+        message: `${user.name} submitted a task for review.`,
+        referenceId: existing.id,
+        dedupeKey: `submission-resubmission:${existing.id}:${resubmittedAt.toISOString()}`,
+        earnerName: user.name,
+        taskTitle: task.title,
+        submittedAt: resubmittedAt,
+        reviewUrl: `/admin/audits?submission=${encodeURIComponent(existing.id)}`
+      });
       const subRes = await pool.query("SELECT * FROM submissions WHERE id = $1", [existing.id]);
       return res.status(200).json({ success: true, message: "Task resubmitted successfully", submission: mapSubmission(subRes.rows[0]) });
     }
@@ -2055,6 +2085,21 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
     }
     const task = mapTask(taskRes.rows[0]);
 
+    // Re-check after locking the task row. This closes the race where two
+    // submit clicks arrive at the same time before either has inserted a row.
+    const concurrentSub = await client.query(
+      "SELECT id, status FROM submissions WHERE task_id = $1 AND earner_id = $2",
+      [taskId, user.id]
+    );
+    if (concurrentSub.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        error: concurrentSub.rows[0].status === SubmissionStatus.PENDING
+          ? "Your submission is already pending review. Please wait for the advertiser's decision."
+          : "You have already successfully completed this task."
+      });
+    }
+
     // Count occupied slots (Pending + Rejected-reserved) to prevent overbooking.
     const occupiedRes = await client.query(
       "SELECT COUNT(*) FROM submissions WHERE task_id=$1 AND status IN ('Pending','Rejected')",
@@ -2068,14 +2113,24 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
 
     const subId = "sub-" + Math.random().toString(36).substr(2, 9);
 
+    const submittedAt = new Date();
     await client.query(`
       INSERT INTO submissions (id, task_id, task_title, category, earner_id, earner_name, proof_text, proof_screenshot, status, reward, submitted_at)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Pending',$9,$10)
-    `, [subId, taskId, task.title, task.category, user.id, user.name, finalProofText, screenshot, task.earningPerSlot, new Date()]);
+    `, [subId, taskId, task.title, task.category, user.id, user.name, finalProofText, screenshot, task.earningPerSlot, submittedAt]);
 
     await client.query("COMMIT");
 
-    notifyAdmin({ type: "submission", message: `New task submission from ${user.name} for "${task.title}"`, referenceId: subId });
+    await notifyAdmin({
+      type: "submission",
+      message: `${user.name} submitted a task for review.`,
+      referenceId: subId,
+      dedupeKey: `submission:${subId}`,
+      earnerName: user.name,
+      taskTitle: task.title,
+      submittedAt,
+      reviewUrl: `/admin/audits?submission=${encodeURIComponent(subId)}`
+    });
 
     const subRes = await pool.query("SELECT * FROM submissions WHERE id = $1", [subId]);
     res.status(201).json({ success: true, message: "Task submitted successfully", submission: mapSubmission(subRes.rows[0]) });
@@ -5416,24 +5471,65 @@ async function notifyEarners(task: { id: string; title: string; category: string
   }
 }
 
-async function notifyAdmin(notification: { type: "submission" | "withdrawal" | "deposit"; message: string; referenceId: string }) {
+async function notifyAdmin(notification: {
+  type: "submission" | "withdrawal" | "deposit";
+  message: string;
+  referenceId: string;
+  dedupeKey?: string;
+  earnerName?: string;
+  taskTitle?: string;
+  submittedAt?: Date;
+  reviewUrl?: string;
+}) {
   const id = "notif-" + Math.random().toString(36).substr(2, 9);
   const now = new Date();
+  const dedupeKey = notification.dedupeKey || `${notification.type}:${notification.referenceId}`;
+  let persistedNotification: any = null;
 
   try {
-    await pool.query(
-      "INSERT INTO notifications (id, type, message, reference_id, read, created_at) VALUES ($1,$2,$3,$4,false,$5)",
-      [id, notification.type, notification.message, notification.referenceId, now]
+    const result = await pool.query(
+      `INSERT INTO notifications
+        (id, type, message, reference_id, dedupe_key, earner_name, task_title, submitted_at, review_url, read, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,false,$10)
+       ON CONFLICT (dedupe_key) DO NOTHING
+       RETURNING *`,
+      [
+        id,
+        notification.type,
+        notification.message,
+        notification.referenceId,
+        dedupeKey,
+        notification.earnerName || null,
+        notification.taskTitle || null,
+        notification.submittedAt || now,
+        notification.reviewUrl || null,
+        now
+      ]
     );
+    persistedNotification = result.rows[0] || null;
     // Keep only last 100 notifications
-    await pool.query("DELETE FROM notifications WHERE id NOT IN (SELECT id FROM notifications ORDER BY created_at DESC LIMIT 100)");
+    if (persistedNotification) {
+      await pool.query("DELETE FROM notifications WHERE id NOT IN (SELECT id FROM notifications ORDER BY created_at DESC LIMIT 100)");
+    }
   } catch (err) {
     console.error("[Notify] Failed to persist notification:", err);
   }
 
+  // A retry of the same submission event is already represented in the database
+  // and must not produce a second browser alert or an inflated badge count.
+  if (!persistedNotification) return;
+
   const newNotif: AdminNotification = {
-    id, type: notification.type, message: notification.message,
-    referenceId: notification.referenceId, createdAt: now.toISOString(), read: false
+    id: persistedNotification.id,
+    type: notification.type,
+    message: notification.message,
+    referenceId: notification.referenceId,
+    earnerName: notification.earnerName,
+    taskTitle: notification.taskTitle,
+    submittedAt: notification.submittedAt?.toISOString() || now.toISOString(),
+    reviewUrl: notification.reviewUrl,
+    createdAt: now.toISOString(),
+    read: false
   };
 
   const payload = JSON.stringify({ type: "notification", notification: newNotif });

@@ -211,6 +211,9 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
   const [showNotifDropdown, setShowNotifDropdown] = React.useState(false);
   const notifContainerRef = React.useRef<HTMLDivElement>(null);
   const [activeToast, setActiveToast] = React.useState<AdminNotification | null>(null);
+  const seenNotificationIdsRef = React.useRef<Set<string>>(new Set());
+  const activeTabRef = React.useRef(activeTab);
+  const notificationSocketRef = React.useRef<WebSocket | null>(null);
   
   // CMS Content State
   const [pagesCMS, setPagesCMS] = React.useState<{ [key: string]: { title: string; content: string } }>({});
@@ -641,35 +644,109 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
     }
   }, [selectedCMSPage, pagesCMS]);
 
+  React.useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
   // Real-Time Notification Stream Hook & Helpers
   const unreadCount = notifications.filter(n => !n.read).length;
 
   React.useEffect(() => {
-    const fetchNotifications = async () => {
+    let socket: WebSocket | null = null;
+    let isConnected = false;
+    let isDisposed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+    const playNotificationSound = () => {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContextClass) return;
+        const context = new AudioContextClass();
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(880, context.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(660, context.currentTime + 0.14);
+        gain.gain.setValueAtTime(0.0001, context.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.16);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start();
+        oscillator.stop(context.currentTime + 0.17);
+        oscillator.addEventListener("ended", () => context.close().catch(() => {}));
+      } catch {
+        // Browsers may block audio until the admin interacts with the page.
+      }
+    };
+
+    const showBrowserNotification = (notification: AdminNotification) => {
+      if (notification.type !== "submission" || !("Notification" in window)) return;
+      if (Notification.permission !== "granted") return;
+      const browserNotification = new Notification("New Task Submission", {
+        body: `${notification.earnerName || "An earner"} submitted a task for review.`,
+        tag: `tasksearn-submission-${notification.referenceId}`,
+        icon: "/icon-192.png",
+        badge: "/icon-72.png"
+      });
+      browserNotification.onclick = () => {
+        window.focus();
+        setActiveTab("audits");
+        browserNotification.close();
+      };
+      playNotificationSound();
+    };
+
+    const handleNewNotification = (newNotif: AdminNotification) => {
+      if (!newNotif?.id || seenNotificationIdsRef.current.has(newNotif.id)) return;
+      seenNotificationIdsRef.current.add(newNotif.id);
+      setNotifications(prev => [
+        newNotif,
+        ...prev.filter(notification => notification.id !== newNotif.id).slice(0, 99)
+      ]);
+      setActiveToast(newNotif);
+      showBrowserNotification(newNotif);
+
+      fetchStats();
+      if (activeTabRef.current === "stats") fetchDepositsAndReferrals();
+      if (activeTabRef.current === "withdrawals") fetchWithdrawals();
+      if (activeTabRef.current === "audits") fetchAudits();
+    };
+
+    const syncNotifications = async (announceNew: boolean) => {
       try {
         const list = await apiFetch("/api/admin/notifications");
-        if (Array.isArray(list)) {
+        if (!Array.isArray(list)) return;
+        if (announceNew) {
+          list.slice().reverse().forEach((notification: AdminNotification) => handleNewNotification(notification));
+        } else {
+          list.forEach((notification: AdminNotification) => seenNotificationIdsRef.current.add(notification.id));
           setNotifications(list);
         }
       } catch (e) {
         console.warn("Failed to fetch notifications list", e);
       }
     };
-    fetchNotifications();
 
-    let socket: WebSocket | null = null;
-    let isConnected = false;
+    // Ask on the first admin dashboard mount/login. If the browser has already
+    // answered, the API is a no-op and does not show another prompt.
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+
+    syncNotifications(false);
 
     const connectWS = () => {
+      if (isDisposed) return;
       try {
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const host = window.location.host;
-        socket = new WebSocket(`${protocol}//${host}/ws`);
+        socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+        notificationSocketRef.current = socket;
 
         socket.onopen = () => {
           isConnected = true;
           setWsConnected(true);
-          console.log("[Admin WS] Connected to notification server");
           socket?.send(JSON.stringify({ type: "register-admin" }));
         };
 
@@ -677,17 +754,11 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
           try {
             const data = JSON.parse(event.data);
             if (data.type === "init-unread") {
-              setNotifications(data.notifications);
+              const list = Array.isArray(data.notifications) ? data.notifications : [];
+              list.forEach((notification: AdminNotification) => seenNotificationIdsRef.current.add(notification.id));
+              setNotifications(list);
             } else if (data.type === "notification") {
-              const newNotif = data.notification;
-              setNotifications(prev => [newNotif, ...prev.slice(0, 99)]);
-              setActiveToast(newNotif);
-              
-              // Refreshes Stats and Tables
-              fetchStats();
-              if (activeTab === "stats") fetchDepositsAndReferrals();
-              if (activeTab === "withdrawals") fetchWithdrawals();
-              if (activeTab === "audits") fetchAudits();
+              handleNewNotification(data.notification);
             }
           } catch (e) {
             console.error("[Admin WS] Error parsing message", e);
@@ -697,46 +768,44 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
         socket.onclose = () => {
           isConnected = false;
           setWsConnected(false);
-          console.log("[Admin WS] Connection closed, retrying in 5s...");
-          setTimeout(() => {
-            if (!isConnected) connectWS();
-          }, 5000);
+          if (!isDisposed) {
+            reconnectTimer = setTimeout(connectWS, 5000);
+          }
         };
 
-        socket.onerror = (err) => {
-          console.warn("[Admin WS] Connection status check:", err);
+        socket.onerror = () => {
           socket?.close();
         };
-      } catch (err) {
-        console.warn("WS setup failed, using simulated fallback event listener", err);
+      } catch {
+        setWsConnected(false);
       }
     };
 
     connectWS();
+    // Efficient fallback: only poll while WebSocket is unavailable. New rows
+    // are deduped by their persisted notification ID before they are announced.
+    pollTimer = setInterval(() => {
+      if (!isConnected) syncNotifications(true);
+    }, 15000);
 
     const handleMockNotification = (e: Event) => {
       const customEvent = e as CustomEvent<AdminNotification>;
       if (customEvent.detail) {
-        const newNotif = customEvent.detail;
-        setNotifications(prev => [newNotif, ...prev.slice(0, 99)]);
-        setActiveToast(newNotif);
-        
-        fetchStats();
-        if (activeTab === "stats") fetchDepositsAndReferrals();
-        if (activeTab === "withdrawals") fetchWithdrawals();
-        if (activeTab === "audits") fetchAudits();
+        handleNewNotification(customEvent.detail);
       }
     };
 
     window.addEventListener("mock-notification", handleMockNotification);
 
     return () => {
-      if (socket) {
-        socket.close();
-      }
+      isDisposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (pollTimer) clearInterval(pollTimer);
+      if (socket) socket.close();
+      notificationSocketRef.current = null;
       window.removeEventListener("mock-notification", handleMockNotification);
     };
-  }, [activeTab]);
+  }, []);
 
   React.useEffect(() => {
     if (activeToast) {
@@ -1546,9 +1615,23 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                         <p className={`text-[11px] leading-tight ${notif.read ? "text-slate-600 font-medium" : "text-slate-900 font-bold"}`}>
                           {notif.message}
                         </p>
+                        {notif.type === "submission" && (
+                          <>
+                            <p className="text-[10px] text-slate-500 mt-1 truncate">
+                              {notif.earnerName || "Earner"} · {notif.taskTitle || "Task submission"}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={(event) => { event.stopPropagation(); void handleNotificationClick(notif); }}
+                              className="inline-block text-[9px] font-bold text-blue-600 mt-1 hover:underline cursor-pointer"
+                            >
+                              Review submission →
+                            </button>
+                          </>
+                        )}
                         <p className="text-[9px] text-slate-400 mt-1 flex items-center gap-1">
                           <Clock className="h-2.5 w-2.5" />
-                          {new Date(notif.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {new Date(notif.submittedAt || notif.createdAt).toLocaleString("en-NG", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                         </p>
                       </div>
                       {!notif.read && (
@@ -1669,7 +1752,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                 { label: "Pending Withdrawals", value: `₦${stats.pendingWithdrawals.toLocaleString()}`, icon: <Clock className="h-4 w-4" />, bg: "bg-gradient-to-br from-rose-50 to-pink-50", border: "border-rose-100", iconBg: "bg-rose-100", iconColor: "text-rose-500", valueColor: "text-rose-600", sub: "Awaiting approval", action: () => setActiveTab("withdrawals") },
                 { label: "Completed Withdrawals", value: `₦${stats.completedWithdrawals.toLocaleString()}`, icon: <CheckCheck className="h-4 w-4" />, bg: "bg-gradient-to-br from-teal-50 to-emerald-50", border: "border-teal-100", iconBg: "bg-teal-100", iconColor: "text-teal-600", valueColor: "text-teal-700", sub: "All-time approved", action: null },
                 { label: "Total Deposits", value: `₦${stats.totalDeposited.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: <ArrowDownCircle className="h-4 w-4" />, bg: "bg-gradient-to-br from-blue-50 to-indigo-50", border: "border-blue-100", iconBg: "bg-blue-100", iconColor: "text-blue-600", valueColor: "text-blue-700", sub: "Advertiser deposits", isDeposit: true, action: null },
-                { label: "Total Earners Earnings", value: `₦${(stats.totalEarned ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: <BadgeDollarSign className="h-4 w-4" />, bg: "bg-gradient-to-br from-amber-50 to-orange-50", border: "border-amber-100", iconBg: "bg-amber-100", iconColor: "text-amber-600", valueColor: "text-amber-700", sub: "Paid out from approved tasks", action: () => setActiveTab("submissions") },
+                { label: "Total Earners Earnings", value: `₦${(stats.totalEarned ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: <BadgeDollarSign className="h-4 w-4" />, bg: "bg-gradient-to-br from-amber-50 to-orange-50", border: "border-amber-100", iconBg: "bg-amber-100", iconColor: "text-amber-600", valueColor: "text-amber-700", sub: "Paid out from approved tasks", action: () => setActiveTab("audits") },
                 { label: "Earners Commission", value: `₦${(stats.earnersCommission ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: <Percent className="h-4 w-4" />, bg: "bg-gradient-to-br from-green-50 to-emerald-50", border: "border-green-100", iconBg: "bg-green-100", iconColor: "text-green-600", valueColor: "text-green-700", sub: "Task commission earned", action: () => setActiveTab("platform-earnings") },
                 { label: "Total Revenue", value: `₦${platformStats.totalPlatformRevenue.toLocaleString()}`, icon: <TrendingUp className="h-4 w-4" />, bg: "bg-gradient-to-br from-violet-50 to-purple-50", border: "border-violet-100", iconBg: "bg-violet-100", iconColor: "text-violet-600", valueColor: "text-violet-700", sub: "Commission & fees", action: () => setActiveTab("platform-earnings") },
               ].map((card: any, i: number) => (
@@ -4096,9 +4179,23 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={`text-xs leading-tight ${notif.read ? "text-slate-600 font-medium" : "text-slate-900 font-bold"}`}>{notif.message}</p>
+                        {notif.type === "submission" && (
+                          <>
+                            <p className="text-[10px] text-slate-500 mt-1">
+                              {notif.earnerName || "Earner"} · {notif.taskTitle || "Task submission"}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={(event) => { event.stopPropagation(); void handleNotificationClick(notif); }}
+                              className="inline-block text-[10px] font-bold text-blue-600 mt-1 hover:underline cursor-pointer"
+                            >
+                              Review submission →
+                            </button>
+                          </>
+                        )}
                         <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {new Date(notif.createdAt).toLocaleString("en-NG", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          {new Date(notif.submittedAt || notif.createdAt).toLocaleString("en-NG", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </p>
                       </div>
                       {!notif.read && <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0 mt-2" />}

@@ -225,6 +225,10 @@ export interface AdminNotification {
   type: "submission" | "withdrawal" | "deposit";
   message: string;
   referenceId: string;
+  earnerName?: string;
+  taskTitle?: string;
+  submittedAt?: string;
+  reviewUrl?: string;
   createdAt: string;
   read: boolean;
 }
