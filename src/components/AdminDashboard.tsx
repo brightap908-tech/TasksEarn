@@ -58,7 +58,8 @@ import {
   MailCheck,
   MailX,
   RefreshCw,
-  History
+  History,
+  BadgeDollarSign
 } from "lucide-react";
 import AdminTaskPricing from "./AdminTaskPricing";
 import AdminSocialPlatforms from "./AdminSocialPlatforms";
@@ -1663,11 +1664,12 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
             </div>
 
             {/* ── 2b. Financial KPIs ───────────────────────────────────────── */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
                 { label: "Pending Withdrawals", value: `₦${stats.pendingWithdrawals.toLocaleString()}`, icon: <Clock className="h-4 w-4" />, bg: "bg-gradient-to-br from-rose-50 to-pink-50", border: "border-rose-100", iconBg: "bg-rose-100", iconColor: "text-rose-500", valueColor: "text-rose-600", sub: "Awaiting approval", action: () => setActiveTab("withdrawals") },
                 { label: "Completed Withdrawals", value: `₦${stats.completedWithdrawals.toLocaleString()}`, icon: <CheckCheck className="h-4 w-4" />, bg: "bg-gradient-to-br from-teal-50 to-emerald-50", border: "border-teal-100", iconBg: "bg-teal-100", iconColor: "text-teal-600", valueColor: "text-teal-700", sub: "All-time approved", action: null },
                 { label: "Total Deposits", value: `₦${stats.totalDeposited.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: <ArrowDownCircle className="h-4 w-4" />, bg: "bg-gradient-to-br from-blue-50 to-indigo-50", border: "border-blue-100", iconBg: "bg-blue-100", iconColor: "text-blue-600", valueColor: "text-blue-700", sub: "Advertiser deposits", isDeposit: true, action: null },
+                { label: "Total Earners Earnings", value: `₦${(stats.totalEarned ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: <BadgeDollarSign className="h-4 w-4" />, bg: "bg-gradient-to-br from-amber-50 to-orange-50", border: "border-amber-100", iconBg: "bg-amber-100", iconColor: "text-amber-600", valueColor: "text-amber-700", sub: "Paid out from approved tasks", action: () => setActiveTab("submissions") },
                 { label: "Earners Commission", value: `₦${(stats.earnersCommission ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: <Percent className="h-4 w-4" />, bg: "bg-gradient-to-br from-green-50 to-emerald-50", border: "border-green-100", iconBg: "bg-green-100", iconColor: "text-green-600", valueColor: "text-green-700", sub: "Task commission earned", action: () => setActiveTab("platform-earnings") },
                 { label: "Total Revenue", value: `₦${platformStats.totalPlatformRevenue.toLocaleString()}`, icon: <TrendingUp className="h-4 w-4" />, bg: "bg-gradient-to-br from-violet-50 to-purple-50", border: "border-violet-100", iconBg: "bg-violet-100", iconColor: "text-violet-600", valueColor: "text-violet-700", sub: "Commission & fees", action: () => setActiveTab("platform-earnings") },
               ].map((card: any, i: number) => (
