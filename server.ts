@@ -616,10 +616,13 @@ async function bootstrapTables() {
     await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS task_title VARCHAR(255) NULL`);
     await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP NULL`);
     await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS review_url TEXT NULL`);
+    // The application uses ON CONFLICT (dedupe_key), which requires a
+    // full unique index/constraint target. Drop the earlier partial index
+    // if this database was booted with the first notification migration.
+    await client.query(`DROP INDEX IF EXISTS notifications_dedupe_key_idx`);
     await client.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS notifications_dedupe_key_idx
+      CREATE UNIQUE INDEX notifications_dedupe_key_idx
       ON notifications (dedupe_key)
-      WHERE dedupe_key IS NOT NULL
     `);
 
     // 14b. Earner Notifications (per-earner new-task alerts)
