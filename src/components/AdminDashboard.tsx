@@ -1506,10 +1506,10 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
           { tab: "platform-earnings" as AdminTab, icon: <TrendingUp className="h-4 w-4 text-slate-400" />, label: "Wallet & Commission" },
           { tab: "withdrawals" as AdminTab, icon: <CreditCard className="h-4 w-4 text-slate-400" />, label: `Withdrawals (${withdrawalsList.filter(w => w.status === TransactionStatus.PENDING || w.status === TransactionStatus.APPROVED).length})` },
           { tab: "announcements" as AdminTab, icon: <Megaphone className="h-4 w-4 text-slate-400" />, label: "Popup Messages" },
+          { tab: "broadcast" as AdminTab, icon: <Mail className="h-4 w-4 text-blue-400" />, label: "Broadcast Email" },
           { tab: "notifications" as AdminTab, icon: <Bell className="h-4 w-4 text-slate-400" />, label: `Notifications (${unreadCount})` },
           { tab: "reports" as AdminTab, icon: <TrendingUp className="h-4 w-4 text-slate-400" />, label: "Reports" },
           { tab: "settings" as AdminTab, icon: <Settings className="h-4 w-4 text-slate-400" />, label: "Site Settings" },
-          { tab: "broadcast" as AdminTab, icon: <Mail className="h-4 w-4 text-slate-400" />, label: "Broadcast Email" },
           { tab: "profile" as AdminTab, icon: <FolderSync className="h-4 w-4 text-slate-400" />, label: "Profile" },
           { tab: "demo-accounts" as AdminTab, icon: <ShieldAlert className="h-4 w-4 text-slate-400" />, label: "Demo Accounts" },
         ] as { tab: AdminTab; icon: React.ReactNode; label: string }[]).map(({ tab, icon, label }) => (
