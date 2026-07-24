@@ -705,6 +705,19 @@ async function bootstrapTables() {
       )
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS admin_push_subscriptions (
+        id           TEXT PRIMARY KEY,
+        user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        endpoint     TEXT NOT NULL,
+        p256dh_key   TEXT NOT NULL,
+        auth_key     TEXT NOT NULL,
+        active       BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE(user_id, endpoint)
+      )
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS hidden_tasks (
         id          TEXT PRIMARY KEY,
         earner_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -2176,6 +2189,70 @@ app.post("/api/notifications/unsubscribe", async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error("[Push] Unsubscribe error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.get("/api/admin/notifications/push/status", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const result = await pool.query(
+      "SELECT created_at FROM admin_push_subscriptions WHERE user_id=$1 AND active=true ORDER BY created_at DESC LIMIT 1",
+      [user.id]
+    );
+    if (result.rows.length > 0) {
+      res.json({ subscribed: true, lastSubscribed: result.rows[0].created_at });
+    } else {
+      res.json({ subscribed: false });
+    }
+  } catch (err) {
+    console.error("[AdminPush] Status check error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.post("/api/admin/notifications/push/subscribe", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const { endpoint, p256dh, auth } = req.body;
+    if (!endpoint || !p256dh || !auth) {
+      return res.status(400).json({ error: "Missing subscription fields: endpoint, p256dh, auth" });
+    }
+    const id = "aps-" + Math.random().toString(36).substr(2, 9);
+    const now = /* @__PURE__ */ new Date();
+    await pool.query(`
+      INSERT INTO admin_push_subscriptions (id, user_id, endpoint, p256dh_key, auth_key, active, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, true, $6, $6)
+      ON CONFLICT (user_id, endpoint)
+      DO UPDATE SET p256dh_key=$4, auth_key=$5, active=true, updated_at=$6
+    `, [id, user.id, endpoint, p256dh, auth, now]);
+    console.log(`[AdminPush] Subscription saved for admin ${user.name} (${user.id})`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[AdminPush] Subscribe error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.post("/api/admin/notifications/push/unsubscribe", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const { endpoint } = req.body;
+    if (endpoint) {
+      await pool.query(
+        "UPDATE admin_push_subscriptions SET active=false, updated_at=NOW() WHERE user_id=$1 AND endpoint=$2",
+        [user.id, endpoint]
+      );
+    } else {
+      await pool.query(
+        "UPDATE admin_push_subscriptions SET active=false, updated_at=NOW() WHERE user_id=$1",
+        [user.id]
+      );
+    }
+    console.log(`[AdminPush] Subscription deactivated for admin ${user.name} (${user.id})`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[AdminPush] Unsubscribe error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -4663,6 +4740,37 @@ server.on("upgrade", (request, socket, head) => {
     wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
   }
 });
+async function sendBrowserPushToAdmins(payloadJson) {
+  if (!vapidPublicKey || !vapidPrivateKey) return 0;
+  try {
+    const subs = await pool.query(
+      "SELECT id, user_id, endpoint, p256dh_key, auth_key FROM admin_push_subscriptions WHERE active=true"
+    );
+    let sent = 0;
+    for (const row of subs.rows) {
+      const pushSubscription = {
+        endpoint: row.endpoint,
+        keys: { p256dh: row.p256dh_key, auth: row.auth_key }
+      };
+      try {
+        await import_web_push.default.sendNotification(pushSubscription, payloadJson, { TTL: 86400 });
+        sent++;
+      } catch (err) {
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          await pool.query(
+            "UPDATE admin_push_subscriptions SET active=false, updated_at=NOW() WHERE id=$1",
+            [row.id]
+          );
+        }
+        console.warn(`[AdminPush] Failed to deliver to endpoint for user ${row.user_id}:`, err.message || err);
+      }
+    }
+    return sent;
+  } catch (err) {
+    console.error("[AdminPush] sendBrowserPushToAdmins error:", err);
+    return 0;
+  }
+}
 async function sendBrowserPushToAllEarners(payloadJson) {
   if (!vapidPublicKey || !vapidPrivateKey) return 0;
   let sent = 0;
@@ -4835,9 +4943,32 @@ async function notifyAdmin(notification) {
     createdAt: now.toISOString(),
     read: false
   };
-  const payload = JSON.stringify({ type: "notification", notification: newNotif });
+  const wsPayload = JSON.stringify({ type: "notification", notification: newNotif });
   adminClients.forEach((client) => {
-    if (client.readyState === import_ws.WebSocket.OPEN) client.send(payload);
+    if (client.readyState === import_ws.WebSocket.OPEN) client.send(wsPayload);
+  });
+  const submittedTime = new Date(newNotif.submittedAt || newNotif.createdAt);
+  const timeStr = submittedTime.toLocaleString("en-NG", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  const pushTitle = notification.type === "submission" ? "\u{1F4E5} New Task Submission" : notification.type === "withdrawal" ? "\u{1F4B8} Withdrawal Request" : "\u{1F4B3} New Deposit";
+  const pushBody = notification.type === "submission" ? `${notification.earnerName || "An earner"} submitted "${notification.taskTitle || "a task"}" for review \xB7 ${timeStr}` : notification.message;
+  const pushUrl = notification.reviewUrl || (notification.type === "submission" ? "/admin/audits" : notification.type === "withdrawal" ? "/admin/withdrawals" : "/admin/stats");
+  const pushPayload = JSON.stringify({
+    title: pushTitle,
+    body: pushBody,
+    icon: "/icon-192.png",
+    badge: "/icon-72.png",
+    tag: `tasksearn-admin-${notification.type}-${notification.referenceId}`,
+    url: pushUrl,
+    role: "admin"
+  });
+  sendBrowserPushToAdmins(pushPayload).then((sent) => {
+    if (sent > 0) console.log(`[AdminPush] Push delivered to ${sent} admin device(s) for ${notification.type} ${notification.referenceId}`);
+  }).catch(() => {
   });
 }
 async function startServer() {
