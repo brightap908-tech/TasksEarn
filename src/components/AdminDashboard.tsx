@@ -63,6 +63,7 @@ import {
 import AdminTaskPricing from "./AdminTaskPricing";
 import AdminSocialPlatforms from "./AdminSocialPlatforms";
 import { ColorMode } from "../lib/themes";
+import { ADMIN_NAV_ITEMS, ADMIN_NAV_TABS, AdminTab } from "../lib/adminNavigation";
 
 
 interface AdminDashboardProps {
@@ -74,11 +75,9 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMode = false, colorMode = "light" }: AdminDashboardProps) {
-  type AdminTab = "stats" | "users" | "advertisers" | "campaigns" | "admin-tasks" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings" | "commissions" | "notifications" | "reports" | "profile" | "demo-accounts" | "broadcast";
-  const VALID_ADMIN_TABS: AdminTab[] = ["stats", "users", "advertisers", "campaigns", "admin-tasks", "withdrawals", "audits", "announcements", "cms", "settings", "pricing", "platforms", "platform-earnings", "commissions", "notifications", "reports", "profile", "demo-accounts", "broadcast"];
   const { section } = useParams<{ section?: string }>();
   const navigate = useNavigate();
-  const activeTab: AdminTab = (VALID_ADMIN_TABS.includes(section as AdminTab) ? section : "stats") as AdminTab;
+  const activeTab: AdminTab = (ADMIN_NAV_TABS.includes(section as AdminTab) ? section : "stats") as AdminTab;
   const setActiveTab = (tab: AdminTab) => navigate(`/admin/${tab}`);
 
   // Demo account state (admin-only)
@@ -1492,27 +1491,19 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
       
-      {/* Left Sidebar Menu Rail (desktop only — mobile uses the bottom nav bar + hamburger menu) */}
+       {/* Left Sidebar Menu Rail (desktop; mobile uses the shared menu below) */}
       <div className="hidden lg:block lg:col-span-1 space-y-1 lg:sticky lg:top-20 lg:self-start">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-2">Admin Dashboard</p>
 
-        {([
-          { tab: "stats" as AdminTab, icon: <LayoutGrid className="h-4 w-4 text-slate-400" />, label: "Dashboard" },
-          { tab: "users" as AdminTab, icon: <Users className="h-4 w-4 text-slate-400" />, label: "User Management" },
-          { tab: "advertisers" as AdminTab, icon: <Megaphone className="h-4 w-4 text-slate-400" />, label: "Advertiser Management" },
-          { tab: "campaigns" as AdminTab, icon: <Briefcase className="h-4 w-4 text-slate-400" />, label: "Campaign Management" },
-          { tab: "admin-tasks" as AdminTab, icon: <ListTodo className="h-4 w-4 text-slate-400" />, label: `Task Management (${adminTasksList.filter(t => t.status === TaskStatus.ACTIVE).length})` },
-          { tab: "pricing" as AdminTab, icon: <Coins className="h-4 w-4 text-slate-400" />, label: "Pricing Settings" },
-          { tab: "platform-earnings" as AdminTab, icon: <TrendingUp className="h-4 w-4 text-slate-400" />, label: "Wallet & Commission" },
-          { tab: "withdrawals" as AdminTab, icon: <CreditCard className="h-4 w-4 text-slate-400" />, label: `Withdrawals (${withdrawalsList.filter(w => w.status === TransactionStatus.PENDING || w.status === TransactionStatus.APPROVED).length})` },
-          { tab: "announcements" as AdminTab, icon: <Megaphone className="h-4 w-4 text-slate-400" />, label: "Popup Messages" },
-          { tab: "broadcast" as AdminTab, icon: <Mail className="h-4 w-4 text-blue-400" />, label: "Broadcast Email" },
-          { tab: "notifications" as AdminTab, icon: <Bell className="h-4 w-4 text-slate-400" />, label: `Notifications (${unreadCount})` },
-          { tab: "reports" as AdminTab, icon: <TrendingUp className="h-4 w-4 text-slate-400" />, label: "Reports" },
-          { tab: "settings" as AdminTab, icon: <Settings className="h-4 w-4 text-slate-400" />, label: "Site Settings" },
-          { tab: "profile" as AdminTab, icon: <FolderSync className="h-4 w-4 text-slate-400" />, label: "Profile" },
-          { tab: "demo-accounts" as AdminTab, icon: <ShieldAlert className="h-4 w-4 text-slate-400" />, label: "Demo Accounts" },
-        ] as { tab: AdminTab; icon: React.ReactNode; label: string }[]).map(({ tab, icon, label }) => (
+        {ADMIN_NAV_ITEMS.map(({ tab, icon: Icon, label, accent }) => {
+          const itemLabel = tab === "admin-tasks"
+            ? `${label} (${adminTasksList.filter(t => t.status === TaskStatus.ACTIVE).length})`
+            : tab === "withdrawals"
+            ? `${label} (${withdrawalsList.filter(w => w.status === TransactionStatus.PENDING || w.status === TransactionStatus.APPROVED).length})`
+            : tab === "notifications"
+            ? `${label} (${unreadCount})`
+            : label;
+          return (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -1520,10 +1511,11 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
               activeTab === tab ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500" : "text-slate-500 hover:bg-slate-50/50"
             }`}
           >
-            {icon}
-            <span>{label}</span>
+            <Icon className={`h-4 w-4 ${accent ? "text-blue-400" : "text-slate-400"}`} />
+            <span>{itemLabel}</span>
           </button>
-        ))}
+          );
+        })}
       </div>
 
       {/* Main Content Pane */}
