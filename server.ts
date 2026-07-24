@@ -3512,7 +3512,8 @@ app.get("/api/admin/dashboard", async (req, res) => {
       emailHistoryToday, emailHistoryFailed,
       lastEmailSent,
       settings,
-      trendRegs, trendDeps, trendWds
+      trendRegs, trendDeps, trendWds,
+      earnersCommissionRes
     ] = await Promise.all([
       pool.query("SELECT COUNT(*) FROM users WHERE role = 'User'"),
       pool.query("SELECT COUNT(DISTINCT advertiser_id) FROM tasks WHERE advertiser_id IS NOT NULL"),
@@ -3549,7 +3550,9 @@ app.get("/api/admin/dashboard", async (req, res) => {
         FROM transactions
         WHERE type='Withdrawal' AND status='Approved' AND created_at >= NOW() - INTERVAL '7 days'
         GROUP BY day ORDER BY day ASC
-      `)
+      `),
+      // Total platform commission earned from completed earner tasks
+      pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM admin_commissions WHERE type='task_commission'")
     ]);
 
     const rawTotalDeposited = parseFloat(totalDep.rows[0].total);
@@ -3589,6 +3592,7 @@ app.get("/api/admin/dashboard", async (req, res) => {
       completedWithdrawals: parseFloat(completedWd.rows[0].total),
       totalDeposited: displayedTotalDeposited,
       todayNewUsers: parseInt(todayUsers.rows[0].count),
+      earnersCommission: parseFloat(earnersCommissionRes.rows[0].total) || 0,
       emailService: {
         configured: emailServiceConfigured,
         emailsSentToday: parseInt(emailHistoryToday.rows[0]?.count || "0"),
