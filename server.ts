@@ -834,10 +834,12 @@ async function bootstrapTables() {
         total_recipients INT NOT NULL DEFAULT 0,
         sent_count INT NOT NULL DEFAULT 0,
         failed_count INT NOT NULL DEFAULT 0,
+        retried_count INT NOT NULL DEFAULT 0,
         failed_emails JSONB NOT NULL DEFAULT '[]',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS retried_count INT NOT NULL DEFAULT 0`);
 
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
@@ -1186,7 +1188,13 @@ async function sendEmail({ to, subject, html }: { to: string; subject: string; h
   if (resend) {
     const from = process.env.RESEND_FROM || "TasksEarn <onboarding@resend.dev>";
     const response = await resend.emails.send({ from, to: [to], subject, html });
-    if (response.error) throw new Error(`Resend error: ${response.error.message}`);
+    if (response.error) {
+      const resendError = response.error as any;
+      const error = new Error(`Resend error: ${resendError.message || "Unknown Resend error"}`);
+      (error as any).statusCode = resendError.statusCode ?? resendError.status ?? resendError.code;
+      (error as any).provider = "resend";
+      throw error;
+    }
     return { success: true, provider: "resend" };
   }
 
@@ -1199,6 +1207,57 @@ async function sendEmail({ to, subject, html }: { to: string; subject: string; h
   }
 
   throw new Error("No email provider is configured. Please set RESEND_API_KEY or SMTP_HOST/SMTP_USER/SMTP_PASSWORD.");
+}
+
+const BROADCAST_BATCH_SIZE = 10;
+const BROADCAST_BATCH_DELAY_MS = 2000;
+const BROADCAST_MAX_RETRIES = 3;
+const BROADCAST_RETRY_DELAYS_MS = [2000, 4000, 8000] as const;
+
+function isResendRateLimitError(error: unknown): boolean {
+  const candidate = error as any;
+  const statusCode = candidate?.statusCode ?? candidate?.status ?? candidate?.response?.status;
+  const message = String(candidate?.message || "").toLowerCase();
+  return statusCode === 429
+    || statusCode === "429"
+    || message.includes("429")
+    || message.includes("too many requests")
+    || message.includes("rate limit");
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+async function sendBroadcastRecipientWithRetry({
+  to,
+  subject,
+  html,
+}: {
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<{ email: string; delivered: boolean; retries: number; reason?: string }> {
+  let retries = 0;
+
+  while (true) {
+    try {
+      await sendEmail({ to, subject, html });
+      return { email: to, delivered: true, retries };
+    } catch (error: any) {
+      if (!isResendRateLimitError(error) || retries >= BROADCAST_MAX_RETRIES) {
+        return {
+          email: to,
+          delivered: false,
+          retries,
+          reason: error?.message || "Unknown error",
+        };
+      }
+
+      await wait(BROADCAST_RETRY_DELAYS_MS[retries]);
+      retries += 1;
+    }
+  }
 }
 
 async function sendVerificationEmail(email: string, name: string, code: string) {
@@ -4863,6 +4922,7 @@ app.get("/api/admin/broadcast-email/logs", async (req, res) => {
       totalRecipients: r.total_recipients,
       sentCount: r.sent_count,
       failedCount: r.failed_count,
+      retriedCount: Number(r.retried_count ?? 0),
       failedEmails: r.failed_emails,
       createdAt: r.created_at,
     })));
@@ -4921,33 +4981,40 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
       return res.status(400).json({ error: "No recipients found for the selected target" });
     }
 
-    const BATCH_SIZE = 10;
     const sentEmails: string[] = [];
     const failedEmails: { email: string; reason: string }[] = [];
+    let retriedCount = 0;
 
-    for (let i = 0; i < recipientRows.length; i += BATCH_SIZE) {
-      const batch = recipientRows.slice(i, i + BATCH_SIZE);
-      await Promise.all(
-        batch.map(async (recipient) => {
-          try {
-            await sendEmail({ to: recipient.email, subject, html });
-            sentEmails.push(recipient.email);
-          } catch (err: any) {
-            failedEmails.push({ email: recipient.email, reason: err?.message || "Unknown error" });
-          }
-        })
+    for (let i = 0; i < recipientRows.length; i += BROADCAST_BATCH_SIZE) {
+      const batch = recipientRows.slice(i, i + BROADCAST_BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(recipient => sendBroadcastRecipientWithRetry({
+          to: recipient.email,
+          subject,
+          html,
+        }))
       );
-      // Small delay between batches to respect rate limits
-      if (i + BATCH_SIZE < recipientRows.length) {
-        await new Promise(resolve => setTimeout(resolve, 200));
+
+      for (const result of batchResults) {
+        retriedCount += result.retries;
+        if (result.delivered) {
+          sentEmails.push(result.email);
+        } else {
+          failedEmails.push({ email: result.email, reason: result.reason || "Unknown error" });
+        }
+      }
+
+      // Keep a full two seconds between batches to avoid Resend rate limits.
+      if (i + BROADCAST_BATCH_SIZE < recipientRows.length) {
+        await wait(BROADCAST_BATCH_DELAY_MS);
       }
     }
 
     // Log the broadcast
     await pool.query(
-      `INSERT INTO broadcast_email_logs (admin_id, subject, target, total_recipients, sent_count, failed_count, failed_emails)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [user.id, subject, target, recipientRows.length, sentEmails.length, failedEmails.length, JSON.stringify(failedEmails)]
+      `INSERT INTO broadcast_email_logs (admin_id, subject, target, total_recipients, sent_count, failed_count, retried_count, failed_emails)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [user.id, subject, target, recipientRows.length, sentEmails.length, failedEmails.length, retriedCount, JSON.stringify(failedEmails)]
     );
 
     res.json({
@@ -4955,6 +5022,7 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
       totalRecipients: recipientRows.length,
       sentCount: sentEmails.length,
       failedCount: failedEmails.length,
+      retriedCount,
       failedEmails,
     });
   } catch (err) {

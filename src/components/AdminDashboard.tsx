@@ -273,7 +273,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
   const [broadcastSubject, setBroadcastSubject] = React.useState("");
   const [broadcastHtml, setBroadcastHtml] = React.useState("");
   const [broadcastSending, setBroadcastSending] = React.useState(false);
-  const [broadcastResult, setBroadcastResult] = React.useState<{ totalRecipients: number; sentCount: number; failedCount: number; failedEmails: { email: string; reason: string }[] } | null>(null);
+  const [broadcastResult, setBroadcastResult] = React.useState<{ totalRecipients: number; sentCount: number; failedCount: number; retriedCount: number; failedEmails: { email: string; reason: string }[] } | null>(null);
   const [broadcastError, setBroadcastError] = React.useState("");
   const [broadcastLogs, setBroadcastLogs] = React.useState<any[]>([]);
   const [broadcastLogsLoading, setBroadcastLogsLoading] = React.useState(false);
@@ -3914,8 +3914,11 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
                           <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
-                            <MailCheck className="h-3.5 w-3.5" /> {log.sentCount} sent
+                            <MailCheck className="h-3.5 w-3.5" /> {log.sentCount} delivered
                           </span>
+                          {log.retriedCount > 0 && (
+                            <span className="text-[11px] font-bold text-amber-600">{log.retriedCount} retried</span>
+                          )}
                           {log.failedCount > 0 && (
                             <span className="flex items-center gap-1 text-[11px] font-bold text-red-500">
                               <MailX className="h-3.5 w-3.5" /> {log.failedCount} failed
@@ -4053,9 +4056,8 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                   <div className="flex flex-wrap gap-4 text-xs">
                     <span className="font-semibold text-slate-600">Total recipients: <strong>{broadcastResult.totalRecipients}</strong></span>
                     <span className="font-semibold text-emerald-600">Delivered: <strong>{broadcastResult.sentCount}</strong></span>
-                    {broadcastResult.failedCount > 0 && (
-                      <span className="font-semibold text-red-500">Failed: <strong>{broadcastResult.failedCount}</strong></span>
-                    )}
+                    <span className="font-semibold text-amber-600">Retried: <strong>{broadcastResult.retriedCount}</strong></span>
+                    <span className="font-semibold text-red-500">Failed: <strong>{broadcastResult.failedCount}</strong></span>
                   </div>
                   {broadcastResult.failedEmails.length > 0 && (
                     <details className="mt-2">
@@ -4074,7 +4076,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
 
               {/* Submit */}
               <div className="flex items-center justify-between gap-4 pt-1">
-                <p className="text-[10px] text-slate-400">Emails are sent in batches of 10 via Resend. The admin panel stays responsive throughout.</p>
+                <p className="text-[10px] text-slate-400">Emails are sent in batches of 10 with a 2-second pause between batches. Rate-limited deliveries retry up to 3 times automatically.</p>
                 <button
                   type="submit"
                   disabled={broadcastSending}
