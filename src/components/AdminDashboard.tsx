@@ -124,7 +124,21 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
     tasksCount: 0,
     totalEarned: 0,
     pendingWithdrawals: 0,
-    totalDeposited: 0
+    completedWithdrawals: 0,
+    totalDeposited: 0,
+    todayNewUsers: 0,
+    emailService: {
+      configured: false,
+      emailsSentToday: 0,
+      failedEmails: 0,
+      lastEmailSent: null as string | null,
+      lastEmailRecipient: null as string | null,
+    },
+    trends: {
+      registrations: { labels: [] as string[], values: [] as number[] },
+      deposits: { labels: [] as string[], values: [] as number[] },
+      withdrawals: { labels: [] as string[], values: [] as number[] },
+    },
   });
 
   // Owner earnings states
@@ -462,7 +476,21 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
           tasksCount: data.tasksCount,
           totalEarned: data.totalEarned,
           pendingWithdrawals: data.pendingWithdrawals,
-          totalDeposited: data.totalDeposited
+          completedWithdrawals: data.completedWithdrawals ?? 0,
+          totalDeposited: data.totalDeposited,
+          todayNewUsers: data.todayNewUsers ?? 0,
+          emailService: data.emailService ?? {
+            configured: false,
+            emailsSentToday: 0,
+            failedEmails: 0,
+            lastEmailSent: null,
+            lastEmailRecipient: null,
+          },
+          trends: data.trends ?? {
+            registrations: { labels: [], values: [] },
+            deposits: { labels: [], values: [] },
+            withdrawals: { labels: [], values: [] },
+          },
         });
         if (data.settings) setSettings(data.settings);
         if (Array.isArray(data.recentUsers)) setRecentUsers(data.recentUsers);
@@ -471,6 +499,9 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
     } catch (e) {}
     fetchPlatformStats();
   };
+
+  // Dashboard chart metric selector
+  const [chartMetric, setChartMetric] = React.useState<"registrations"|"deposits"|"withdrawals">("registrations");
 
   const [resettingDepositStat, setResettingDepositStat] = React.useState(false);
   const [depositStatResetMsg, setDepositStatResetMsg] = React.useState("");
@@ -1610,33 +1641,49 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
               </div>
             </div>
 
-            {/* ── 2. Detailed Stat Cards ───────────────────────────────────── */}
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* ── 2. Business Analytics Cards ──────────────────────────────── */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                { label: "Earner Payouts", value: `₦${stats.totalEarned.toLocaleString()}`, icon: <ArrowUpCircle className="h-5 w-5" />, bg: "bg-gradient-to-br from-emerald-50 to-teal-50", border: "border-emerald-100", iconBg: "bg-emerald-100", iconColor: "text-emerald-600", valueColor: "text-emerald-700", sub: "Total earnings paid" },
-                { label: "Advertiser Deposits", value: `₦${stats.totalDeposited.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: <ArrowDownCircle className="h-5 w-5" />, bg: "bg-gradient-to-br from-blue-50 to-indigo-50", border: "border-blue-100", iconBg: "bg-blue-100", iconColor: "text-blue-600", valueColor: "text-blue-700", sub: "All-time deposits", isDeposit: true },
-                { label: "Platform Revenue", value: `₦${platformStats.totalPlatformRevenue.toLocaleString()}`, icon: <TrendingUp className="h-5 w-5" />, bg: "bg-gradient-to-br from-violet-50 to-purple-50", border: "border-violet-100", iconBg: "bg-violet-100", iconColor: "text-violet-600", valueColor: "text-violet-700", sub: "Commission & fees" },
-                { label: "Monthly Revenue", value: `₦${platformStats.thisMonthRevenue.toLocaleString()}`, icon: <Percent className="h-5 w-5" />, bg: "bg-gradient-to-br from-amber-50 to-orange-50", border: "border-amber-100", iconBg: "bg-amber-100", iconColor: "text-amber-600", valueColor: "text-amber-700", sub: "This month" },
-                { label: "Today's Revenue", value: `₦${platformStats.todayRevenue.toLocaleString()}`, icon: <Coins className="h-5 w-5" />, bg: "bg-gradient-to-br from-sky-50 to-cyan-50", border: "border-sky-100", iconBg: "bg-sky-100", iconColor: "text-sky-600", valueColor: "text-sky-700", sub: "Today's earnings" },
-                { label: "Withdrawal Queue", value: `₦${stats.pendingWithdrawals.toLocaleString()}`, icon: <Clock className="h-5 w-5" />, bg: "bg-gradient-to-br from-rose-50 to-pink-50", border: "border-rose-100", iconBg: "bg-rose-100", iconColor: "text-rose-500", valueColor: "text-rose-600", sub: "Pending approvals" },
-                { label: "Withdrawal Fees", value: `₦${platformStats.totalWithdrawalFees.toLocaleString()}`, icon: <BadgePercent className="h-5 w-5" />, bg: "bg-gradient-to-br from-slate-50 to-gray-50", border: "border-slate-100", iconBg: "bg-slate-100", iconColor: "text-slate-500", valueColor: "text-slate-700", sub: "Total fees collected" },
-                { label: "Commission Earned", value: `₦${platformStats.totalCommission.toLocaleString()}`, icon: <Share2 className="h-5 w-5" />, bg: "bg-gradient-to-br from-indigo-50 to-blue-50", border: "border-indigo-100", iconBg: "bg-indigo-100", iconColor: "text-indigo-600", valueColor: "text-indigo-700", sub: "Task commissions" },
+                { label: "Total Earners", value: stats.earnersCount.toLocaleString(), icon: <Users className="h-4 w-4" />, bg: "bg-gradient-to-br from-emerald-50 to-teal-50", border: "border-emerald-100", iconBg: "bg-emerald-100", iconColor: "text-emerald-600", valueColor: "text-emerald-700", sub: "Registered earners" },
+                { label: "Total Advertisers", value: stats.advertisersCount.toLocaleString(), icon: <Megaphone className="h-4 w-4" />, bg: "bg-gradient-to-br from-violet-50 to-purple-50", border: "border-violet-100", iconBg: "bg-violet-100", iconColor: "text-violet-600", valueColor: "text-violet-700", sub: "Active advertisers" },
+                { label: "Total Tasks", value: stats.tasksCount.toLocaleString(), icon: <Briefcase className="h-4 w-4" />, bg: "bg-gradient-to-br from-amber-50 to-orange-50", border: "border-amber-100", iconBg: "bg-amber-100", iconColor: "text-amber-600", valueColor: "text-amber-700", sub: "All campaigns" },
+                { label: "Today's New Users", value: stats.todayNewUsers.toLocaleString(), icon: <UserCircle2 className="h-4 w-4" />, bg: "bg-gradient-to-br from-sky-50 to-cyan-50", border: "border-sky-100", iconBg: "bg-sky-100", iconColor: "text-sky-600", valueColor: "text-sky-700", sub: "Joined today" },
               ].map((card: any, i: number) => (
-                <div key={i} className={`group relative rounded-2xl border ${card.border} ${card.bg} p-4 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5`}>
-                  <div className="flex items-center justify-between mb-3">
+                <div key={i} className={`group relative rounded-2xl border ${card.border} ${card.bg} p-3.5 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5`}>
+                  <div className={`${card.iconBg} rounded-xl p-2 w-fit mb-2`}>
+                    <span className={card.iconColor}>{card.icon}</span>
+                  </div>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-0.5">{card.label}</p>
+                  <p className={`font-mono text-lg font-black ${card.valueColor}`}>{card.value}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{card.sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* ── 2b. Financial KPIs ───────────────────────────────────────── */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Pending Withdrawals", value: `₦${stats.pendingWithdrawals.toLocaleString()}`, icon: <Clock className="h-4 w-4" />, bg: "bg-gradient-to-br from-rose-50 to-pink-50", border: "border-rose-100", iconBg: "bg-rose-100", iconColor: "text-rose-500", valueColor: "text-rose-600", sub: "Awaiting approval", action: () => setActiveTab("withdrawals") },
+                { label: "Completed Withdrawals", value: `₦${stats.completedWithdrawals.toLocaleString()}`, icon: <CheckCheck className="h-4 w-4" />, bg: "bg-gradient-to-br from-teal-50 to-emerald-50", border: "border-teal-100", iconBg: "bg-teal-100", iconColor: "text-teal-600", valueColor: "text-teal-700", sub: "All-time approved", action: null },
+                { label: "Total Deposits", value: `₦${stats.totalDeposited.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: <ArrowDownCircle className="h-4 w-4" />, bg: "bg-gradient-to-br from-blue-50 to-indigo-50", border: "border-blue-100", iconBg: "bg-blue-100", iconColor: "text-blue-600", valueColor: "text-blue-700", sub: "Advertiser deposits", isDeposit: true, action: null },
+                { label: "Total Revenue", value: `₦${platformStats.totalPlatformRevenue.toLocaleString()}`, icon: <TrendingUp className="h-4 w-4" />, bg: "bg-gradient-to-br from-violet-50 to-purple-50", border: "border-violet-100", iconBg: "bg-violet-100", iconColor: "text-violet-600", valueColor: "text-violet-700", sub: "Commission & fees", action: () => setActiveTab("platform-earnings") },
+              ].map((card: any, i: number) => (
+                <div key={i} onClick={card.action || undefined}
+                  className={`group relative rounded-2xl border ${card.border} ${card.bg} p-3.5 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 ${card.action ? "cursor-pointer" : ""}`}>
+                  <div className="flex items-center justify-between mb-2">
                     <div className={`${card.iconBg} rounded-xl p-2`}>
                       <span className={card.iconColor}>{card.icon}</span>
                     </div>
                     {card.isDeposit && (
-                      <button type="button" onClick={handleResetDepositStat} disabled={resettingDepositStat}
+                      <button type="button" onClick={e => { e.stopPropagation(); handleResetDepositStat(); }} disabled={resettingDepositStat}
                         title="Reset display stat to ₦0 — does not affect actual transactions"
                         className="text-[9px] font-bold text-blue-400 hover:text-blue-600 uppercase tracking-wider disabled:opacity-50">
                         {resettingDepositStat ? "…" : "Reset"}
                       </button>
                     )}
                   </div>
-                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">{card.label}</p>
-                  <p className={`font-mono text-base md:text-lg font-black ${card.valueColor}`}>{card.value}</p>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-0.5">{card.label}</p>
+                  <p className={`font-mono text-lg font-black ${card.valueColor}`}>{card.value}</p>
                   <p className="text-[10px] text-gray-400 mt-0.5">{card.sub}</p>
                   {card.isDeposit && depositStatResetMsg && (
                     <span className="block text-[10px] font-semibold text-emerald-600 mt-1">{depositStatResetMsg}</span>
@@ -1650,152 +1697,263 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
               <h3 className="font-display text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
                 <PlusCircle className="h-4 w-4 text-blue-500" /> Quick Actions
               </h3>
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+              <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-2.5">
                 {([
-                  { label: "Broadcast Email", icon: <Mail className="h-6 w-6" />, tab: "broadcast", bg: "from-blue-500 to-indigo-600", shadow: "shadow-blue-200" },
-                  { label: "Manage Users", icon: <Users className="h-6 w-6" />, tab: "users", bg: "from-emerald-500 to-teal-600", shadow: "shadow-emerald-200" },
-                  { label: "Campaigns", icon: <Briefcase className="h-6 w-6" />, tab: "campaigns", bg: "from-violet-500 to-purple-600", shadow: "shadow-violet-200" },
-                  { label: "Withdrawals", icon: <CreditCard className="h-6 w-6" />, tab: "withdrawals", bg: "from-rose-500 to-pink-600", shadow: "shadow-rose-200" },
-                  { label: "Reports", icon: <TrendingUp className="h-6 w-6" />, tab: "reports", bg: "from-amber-500 to-orange-500", shadow: "shadow-amber-200" },
-                  { label: "Settings", icon: <Settings className="h-6 w-6" />, tab: "settings", bg: "from-slate-600 to-gray-700", shadow: "shadow-slate-200" },
+                  { label: "Create Task", icon: <ListTodo className="h-5 w-5" />, tab: "admin-tasks", bg: "from-teal-500 to-emerald-600", shadow: "shadow-teal-200" },
+                  { label: "Broadcast Email", icon: <Mail className="h-5 w-5" />, tab: "broadcast", bg: "from-blue-500 to-indigo-600", shadow: "shadow-blue-200" },
+                  { label: "Approve Withdrawals", icon: <CreditCard className="h-5 w-5" />, tab: "withdrawals", bg: "from-rose-500 to-pink-600", shadow: "shadow-rose-200" },
+                  { label: "Manage Users", icon: <Users className="h-5 w-5" />, tab: "users", bg: "from-emerald-500 to-teal-600", shadow: "shadow-emerald-200" },
+                  { label: "Announcement", icon: <Megaphone className="h-5 w-5" />, tab: "announcements", bg: "from-amber-500 to-orange-500", shadow: "shadow-amber-200" },
+                  { label: "Campaigns", icon: <Briefcase className="h-5 w-5" />, tab: "campaigns", bg: "from-violet-500 to-purple-600", shadow: "shadow-violet-200" },
+                  { label: "Reports", icon: <TrendingUp className="h-5 w-5" />, tab: "reports", bg: "from-sky-500 to-cyan-500", shadow: "shadow-sky-200" },
+                  { label: "Settings", icon: <Settings className="h-5 w-5" />, tab: "settings", bg: "from-slate-600 to-gray-700", shadow: "shadow-slate-200" },
                 ] as const).map((action, i) => (
                   <button key={i} onClick={() => setActiveTab(action.tab as AdminTab)}
-                    className={`group flex flex-col items-center gap-2.5 rounded-2xl bg-gradient-to-br ${action.bg} p-4 md:p-5 text-white shadow-lg ${action.shadow} hover:shadow-xl hover:scale-[1.04] active:scale-[0.98] transition-all duration-200`}>
-                    <div className="rounded-2xl bg-white/20 p-2.5 group-hover:bg-white/30 transition-colors">
+                    className={`group flex flex-col items-center gap-2 rounded-2xl bg-gradient-to-br ${action.bg} p-3 md:p-4 text-white shadow-lg ${action.shadow} hover:shadow-xl hover:scale-[1.04] active:scale-[0.98] transition-all duration-200`}>
+                    <div className="rounded-xl bg-white/20 p-2 group-hover:bg-white/30 transition-colors">
                       {action.icon}
                     </div>
-                    <span className="text-[10px] font-bold text-center leading-tight">{action.label}</span>
+                    <span className="text-[9px] font-bold text-center leading-tight">{action.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* ── 4. Chart + System Health ─────────────────────────────────── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-              {/* Deposits bar chart */}
-              <div className="lg:col-span-2 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-display text-sm font-bold text-slate-800 flex items-center gap-2">
-                    <ArrowDownCircle className="h-4 w-4 text-blue-500" /> Deposit Activity
-                  </h3>
-                  <span className="text-[10px] text-slate-400 bg-blue-50 px-2 py-1 rounded-full font-bold text-blue-500">{depositsList.length} records</span>
-                </div>
-                {depositsList.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-36 gap-2">
-                    <TrendingUp className="h-10 w-10 text-slate-200" />
-                    <p className="text-xs text-slate-400">No deposit data yet</p>
-                    <p className="text-[10px] text-slate-300">Deposits will appear here once advertisers fund their wallets</p>
+            {/* ── 4. 7-Day Trend Charts ────────────────────────────────────── */}
+            {(() => {
+              const trend = stats.trends[chartMetric];
+              const hasData = trend.values.some(v => v > 0);
+              const max = Math.max(...trend.values, 1);
+              const metaMap = {
+                registrations: { label: "Daily Registrations", color: "from-emerald-500 to-teal-400", barBg: "from-emerald-500 to-emerald-400", pillBg: "bg-emerald-100 text-emerald-700", fmt: (v: number) => v.toLocaleString() },
+                deposits:      { label: "Daily Deposits (₦)",  color: "from-blue-500 to-indigo-400",   barBg: "from-blue-500 to-blue-400",   pillBg: "bg-blue-100 text-blue-700",    fmt: (v: number) => `₦${v.toLocaleString()}` },
+                withdrawals:   { label: "Daily Withdrawals (₦)", color: "from-rose-500 to-pink-400",  barBg: "from-rose-500 to-rose-400",   pillBg: "bg-rose-100 text-rose-700",    fmt: (v: number) => `₦${v.toLocaleString()}` },
+              };
+              const meta = metaMap[chartMetric];
+              return (
+                <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                    <h3 className="font-display text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-blue-500" /> 7-Day Trend Analysis
+                    </h3>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {(["registrations", "deposits", "withdrawals"] as const).map(m => (
+                        <button key={m} onClick={() => setChartMetric(m)}
+                          className={`rounded-full px-3 py-1.5 text-[10px] font-bold capitalize transition-all ${chartMetric === m ? `${metaMap[m].pillBg} shadow-sm` : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                          {m}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                ) : (() => {
-                  const items = depositsList.slice(0, 14);
-                  const max = Math.max(...items.map((d: any) => Number(d.amount) || 0), 1);
-                  const total = items.reduce((s: number, d: any) => s + (Number(d.amount) || 0), 0);
-                  return (
-                    <div className="space-y-4">
-                      {/* Summary row */}
-                      <div className="grid grid-cols-3 gap-3">
-                        {[
-                          { label: "Shown", value: items.length },
-                          { label: "Total (shown)", value: `₦${total.toLocaleString()}` },
-                          { label: "Avg Deposit", value: `₦${Math.round(total / items.length).toLocaleString()}` },
-                        ].map((s, i) => (
-                          <div key={i} className="rounded-xl bg-blue-50 px-3 py-2 text-center">
-                            <p className="font-mono text-sm font-black text-blue-700">{s.value}</p>
-                            <p className="text-[9px] text-blue-400 font-bold uppercase tracking-wider mt-0.5">{s.label}</p>
-                          </div>
-                        ))}
-                      </div>
-                      {/* Bars */}
-                      <div className="flex items-end gap-1 h-28 px-1">
-                        {items.map((dep: any, i: number) => {
-                          const pct = Math.max(6, ((Number(dep.amount) || 0) / max) * 100);
+                  {!hasData ? (
+                    <div className="flex flex-col items-center justify-center h-32 gap-2">
+                      <TrendingUp className="h-10 w-10 text-slate-200" />
+                      <p className="text-xs text-slate-400">No data yet for this period</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-end gap-1.5 h-32 px-1">
+                        {trend.values.map((val, i) => {
+                          const pct = Math.max(4, (val / max) * 100);
                           return (
                             <div key={i} className="group relative flex-1 flex flex-col items-center justify-end h-full">
-                              <div className="absolute bottom-full mb-2 hidden group-hover:flex z-10 flex-col items-center pointer-events-none">
+                              <div className="absolute bottom-full mb-1.5 hidden group-hover:flex z-10 flex-col items-center pointer-events-none">
                                 <div className="rounded-lg bg-slate-800 px-2.5 py-1.5 text-[9px] text-white whitespace-nowrap shadow-xl">
-                                  <p className="font-bold">₦{Number(dep.amount).toLocaleString()}</p>
-                                  <p className="text-slate-300 truncate max-w-[100px]">{dep.userName}</p>
+                                  <p className="font-bold">{meta.fmt(val)}</p>
+                                  <p className="text-slate-300">{trend.labels[i]}</p>
                                 </div>
                                 <div className="h-1.5 w-1.5 rotate-45 bg-slate-800 -mt-0.5" />
                               </div>
-                              <div
-                                className="w-full rounded-t-lg bg-gradient-to-t from-blue-600 to-blue-400 hover:from-blue-700 hover:to-blue-500 transition-colors cursor-default"
-                                style={{ height: `${pct}%` }}
-                              />
+                              <div className={`w-full rounded-t-lg bg-gradient-to-t ${meta.barBg} opacity-90 hover:opacity-100 transition-opacity cursor-default`}
+                                style={{ height: `${pct}%` }} />
                             </div>
                           );
                         })}
                       </div>
-                      <div className="flex justify-between text-[9px] text-slate-300 font-bold uppercase tracking-wider px-1">
-                        <span>Oldest</span><span>Most Recent</span>
-                      </div>
-                      {/* Mini legend */}
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 pt-2 border-t border-gray-50 max-h-24 overflow-hidden">
-                        {items.slice(0, 6).map((dep: any, i: number) => (
-                          <div key={i} className="flex items-center justify-between text-[10px]">
-                            <span className="text-slate-500 truncate">{dep.userName}</span>
-                            <span className="font-mono font-bold text-blue-600 ml-2 shrink-0">₦{Number(dep.amount).toLocaleString()}</span>
-                          </div>
+                      <div className="flex justify-between text-[9px] text-slate-400 font-medium px-1 border-t border-gray-50 pt-2">
+                        {trend.labels.map((l, i) => (
+                          <span key={i} className="truncate text-center" style={{ width: `${100 / trend.labels.length}%` }}>{l}</span>
                         ))}
                       </div>
+                    </div>
+                  )}
+                  <div className="flex gap-4 mt-4 pt-4 border-t border-gray-50">
+                    <div className="text-center">
+                      <p className="font-mono text-sm font-black text-slate-800">{meta.fmt(trend.values.reduce((a,b)=>a+b,0))}</p>
+                      <p className="text-[9px] text-slate-400 uppercase tracking-wide font-bold">7-Day Total</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-mono text-sm font-black text-slate-800">{meta.fmt(Math.round(trend.values.reduce((a,b)=>a+b,0) / Math.max(1, trend.values.filter(v=>v>0).length)))}</p>
+                      <p className="text-[9px] text-slate-400 uppercase tracking-wide font-bold">Daily Avg</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-mono text-sm font-black text-slate-800">{meta.fmt(Math.max(...trend.values))}</p>
+                      <p className="text-[9px] text-slate-400 uppercase tracking-wide font-bold">Peak Day</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── 5. Recent Activity + Admin Notifications Panel ───────────── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+              {/* Enhanced Recent Activity Feed */}
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <h3 className="font-display text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <BellRing className="h-4 w-4 text-blue-500" /> Recent Activity
+                </h3>
+                {(() => {
+                  const txActivity = recentTransactions.map((t: any) => ({
+                    time: new Date(t.createdAt),
+                    label: t.type === "Deposit"
+                      ? `₦${Number(t.amount).toLocaleString()} deposit received`
+                      : `₦${Number(t.amount).toLocaleString()} withdrawal ${t.status === "Approved" ? "approved" : "requested"}`,
+                    sub: t.type === "Deposit" ? `${t.userName || "Advertiser"} funded wallet` : `${t.userName || "Earner"} · ${t.status}`,
+                    type: t.type === "Deposit" ? "deposit" : (t.status === "Approved" ? "withdrawal-done" : "withdrawal"),
+                  }));
+                  const userActivity = recentUsers.map((u: any) => ({
+                    time: new Date(u.createdAt),
+                    label: `${u.name} joined as ${u.role}`,
+                    sub: u.email,
+                    type: "user",
+                  }));
+                  const activity = [...txActivity, ...userActivity]
+                    .sort((a, b) => b.time.getTime() - a.time.getTime())
+                    .slice(0, 10);
+
+                  if (activity.length === 0) return (
+                    <div className="flex flex-col items-center justify-center py-10 gap-2">
+                      <Clock className="h-10 w-10 text-slate-200" />
+                      <p className="text-xs text-slate-400">No recent activity</p>
+                    </div>
+                  );
+
+                  const colorMap: Record<string, string> = {
+                    user: "bg-emerald-100 text-emerald-600",
+                    deposit: "bg-blue-100 text-blue-600",
+                    withdrawal: "bg-rose-100 text-rose-500",
+                    "withdrawal-done": "bg-teal-100 text-teal-600",
+                  };
+                  const iconMap: Record<string, React.ReactNode> = {
+                    user: <UserCircle2 className="h-3.5 w-3.5" />,
+                    deposit: <ArrowDownCircle className="h-3.5 w-3.5" />,
+                    withdrawal: <ArrowUpCircle className="h-3.5 w-3.5" />,
+                    "withdrawal-done": <CheckCheck className="h-3.5 w-3.5" />,
+                  };
+                  const timeAgo = (d: Date) => {
+                    const diff = Date.now() - d.getTime();
+                    const m = Math.floor(diff / 60000);
+                    if (m < 60) return `${m}m ago`;
+                    const h = Math.floor(m / 60);
+                    if (h < 24) return `${h}h ago`;
+                    return d.toLocaleDateString();
+                  };
+                  return (
+                    <div className="space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
+                      {activity.map((item, i) => (
+                        <div key={i} className="flex items-center gap-3 rounded-xl bg-gray-50 hover:bg-gray-100/70 transition-colors px-3 py-2.5">
+                          <div className={`${colorMap[item.type] || "bg-gray-100 text-gray-500"} rounded-full p-1.5 shrink-0`}>
+                            {iconMap[item.type] || <Clock className="h-3.5 w-3.5" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-800 truncate">{item.label}</p>
+                            <p className="text-[10px] text-slate-400 truncate">{item.sub}</p>
+                          </div>
+                          <span className="text-[9px] text-slate-400 shrink-0 whitespace-nowrap">{timeAgo(item.time)}</span>
+                        </div>
+                      ))}
                     </div>
                   );
                 })()}
               </div>
 
-              {/* System Health */}
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm flex flex-col gap-4">
-                <h3 className="font-display text-sm font-bold text-slate-800 flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-emerald-500" /> System Health
-                </h3>
-                <div className="space-y-2.5">
-                  {([
-                    { label: "Database", ok: true, status: "Online", detail: "PostgreSQL connected" },
-                    { label: "Server", ok: true, status: "Running", detail: "Express · Port 5000" },
-                    { label: "WebSocket", ok: true, status: wsConnected ? "Live" : "Polling", detail: wsConnected ? "Real-time active" : "HTTP fallback mode" },
-                    { label: "Email Service", ok: false, status: "Not configured", detail: "Set RESEND_API_KEY to enable" },
-                    { label: "Storage", ok: true, status: "Active", detail: "Database-backed storage" },
-                  ] as const).map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 rounded-xl bg-gray-50 hover:bg-gray-100/70 transition-colors px-3 py-2.5">
-                      <div className={`h-2 w-2 rounded-full shrink-0 ${item.ok ? "bg-emerald-400" : "bg-amber-400"}`} style={{ boxShadow: item.ok ? "0 0 6px #34d399" : "0 0 6px #fbbf24" }} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-slate-700">{item.label}</p>
-                        <p className="text-[10px] text-slate-400 truncate">{item.detail}</p>
-                      </div>
-                      <span className={`text-[10px] font-bold shrink-0 ${item.ok ? "text-emerald-600" : "text-amber-600"}`}>{item.status}</span>
-                    </div>
-                  ))}
+              {/* Admin Notifications Panel */}
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-display text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-amber-500" /> Admin Notifications
+                    {unreadCount > 0 && (
+                      <span className="rounded-full bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5">{unreadCount}</span>
+                    )}
+                  </h3>
+                  <button onClick={() => setActiveTab("notifications")}
+                    className="text-[11px] font-bold text-blue-500 hover:text-blue-700 transition-colors">View All →</button>
                 </div>
 
-                {/* Pending actions callout */}
+                {/* Pending Actions Callout */}
                 {(stats.pendingWithdrawals > 0 || submissionsList.filter(s => s.status === "Pending").length > 0) && (
-                  <div className="rounded-xl bg-amber-50 border border-amber-100 p-3.5 space-y-2">
+                  <div className="rounded-xl bg-amber-50 border border-amber-100 p-3 space-y-2">
                     <p className="text-[10px] font-black text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
-                      <Bell className="h-3 w-3" /> Pending Actions
+                      <Bell className="h-3 w-3" /> Needs Your Attention
                     </p>
                     {stats.pendingWithdrawals > 0 && (
                       <button onClick={() => setActiveTab("withdrawals")}
                         className="w-full text-left text-[11px] text-amber-700 font-semibold hover:text-amber-900 flex items-center justify-between gap-2 group">
-                        <span>₦{stats.pendingWithdrawals.toLocaleString()} in withdrawals</span>
+                        <span>₦{stats.pendingWithdrawals.toLocaleString()} in pending withdrawals</span>
                         <span className="text-amber-400 group-hover:translate-x-0.5 transition-transform">→</span>
                       </button>
                     )}
                     {submissionsList.filter(s => s.status === "Pending").length > 0 && (
                       <button onClick={() => setActiveTab("audits")}
                         className="w-full text-left text-[11px] text-amber-700 font-semibold hover:text-amber-900 flex items-center justify-between gap-2 group">
-                        <span>{submissionsList.filter(s => s.status === "Pending").length} submissions to review</span>
+                        <span>{submissionsList.filter(s => s.status === "Pending").length} submissions awaiting review</span>
                         <span className="text-amber-400 group-hover:translate-x-0.5 transition-transform">→</span>
                       </button>
                     )}
                   </div>
                 )}
 
+                {/* Recent Notifications List */}
+                <div className="space-y-1.5 flex-1 max-h-48 overflow-y-auto pr-1">
+                  {notifications.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 gap-2">
+                      <Bell className="h-8 w-8 text-slate-200" />
+                      <p className="text-xs text-slate-400">No notifications yet</p>
+                    </div>
+                  ) : notifications.slice(0, 8).map((n, i) => (
+                    <button key={i} onClick={() => handleNotificationClick(n)}
+                      className={`w-full text-left flex items-start gap-2.5 rounded-xl px-3 py-2.5 transition-colors ${n.read ? "bg-gray-50 hover:bg-gray-100/70" : "bg-blue-50 hover:bg-blue-100/70"}`}>
+                      <div className={`h-2 w-2 rounded-full shrink-0 mt-1.5 ${n.read ? "bg-gray-300" : "bg-blue-500"}`} style={n.read ? {} : { boxShadow: "0 0 6px #3b82f6" }} />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs font-semibold truncate ${n.read ? "text-slate-600" : "text-slate-900"}`}>{n.title}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{n.body}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Email Service Status */}
+                <div className={`rounded-xl border p-3 ${stats.emailService.configured ? "bg-emerald-50 border-emerald-100" : "bg-amber-50 border-amber-100"}`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <Mail className={`h-3.5 w-3.5 ${stats.emailService.configured ? "text-emerald-600" : "text-amber-600"}`} />
+                      <p className={`text-[10px] font-black uppercase tracking-wider ${stats.emailService.configured ? "text-emerald-700" : "text-amber-700"}`}>Email Service</p>
+                    </div>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${stats.emailService.configured ? "bg-emerald-200 text-emerald-800" : "bg-amber-200 text-amber-800"}`}>
+                      {stats.emailService.configured ? "Connected" : "Not Configured"}
+                    </span>
+                  </div>
+                  {stats.emailService.configured ? (
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                      <p className="text-[10px] text-emerald-600">Sent today: <strong>{stats.emailService.emailsSentToday}</strong></p>
+                      <p className="text-[10px] text-rose-500">Failed: <strong>{stats.emailService.failedEmails}</strong></p>
+                      {stats.emailService.lastEmailSent && (
+                        <p className="col-span-2 text-[10px] text-emerald-600 truncate">
+                          Last: {new Date(stats.emailService.lastEmailSent).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-amber-600">Set RESEND_API_KEY in Secrets to enable email delivery.</p>
+                  )}
+                </div>
+
                 {/* Platform earnings CTA */}
                 <button onClick={() => setActiveTab("platform-earnings")}
                   className="w-full flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-white hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg group">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-blue-200">Available</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-blue-200">Available Balance</p>
                     <p className="font-mono text-base font-black">₦{platformStats.availableBalance.toLocaleString()}</p>
                   </div>
                   <div className="flex flex-col items-end gap-0.5">
@@ -1806,65 +1964,8 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
               </div>
             </div>
 
-            {/* ── 5. Recent Activity + Recent Users ────────────────────────── */}
+            {/* ── 6. Recent Registrations + Recent Deposits ────────────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-              {/* Recent Activity Feed */}
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-                <h3 className="font-display text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-                  <BellRing className="h-4 w-4 text-blue-500" /> Recent Activity
-                </h3>
-                {(() => {
-                  const txActivity = recentTransactions.slice(0, 5).map((t: any) => ({
-                    time: new Date(t.createdAt),
-                    label: t.type === "Deposit" ? `Deposit ₦${Number(t.amount).toLocaleString()}` : `Withdrawal ₦${Number(t.amount).toLocaleString()}`,
-                    sub: t.type === "Deposit" ? "Advertiser funded wallet" : `Status: ${t.status}`,
-                    type: t.type === "Deposit" ? "deposit" : "withdrawal",
-                  }));
-                  const userActivity = recentUsers.slice(0, 5).map((u: any) => ({
-                    time: new Date(u.createdAt),
-                    label: `${u.name} registered`,
-                    sub: `New ${u.role} account`,
-                    type: "user",
-                  }));
-                  const activity = [...txActivity, ...userActivity]
-                    .sort((a, b) => b.time.getTime() - a.time.getTime())
-                    .slice(0, 8);
-
-                  if (activity.length === 0) return (
-                    <div className="flex flex-col items-center justify-center py-12 gap-2">
-                      <Clock className="h-10 w-10 text-slate-200" />
-                      <p className="text-xs text-slate-400">No recent activity</p>
-                    </div>
-                  );
-
-                  const colorMap: Record<string, string> = { user: "bg-emerald-100 text-emerald-600", deposit: "bg-blue-100 text-blue-600", withdrawal: "bg-rose-100 text-rose-500" };
-                  const iconMap: Record<string, React.ReactNode> = {
-                    user: <Users className="h-3.5 w-3.5" />,
-                    deposit: <ArrowDownCircle className="h-3.5 w-3.5" />,
-                    withdrawal: <ArrowUpCircle className="h-3.5 w-3.5" />,
-                  };
-                  return (
-                    <div className="space-y-2">
-                      {activity.map((item, i) => (
-                        <div key={i} className="flex items-center gap-3 rounded-xl bg-gray-50 hover:bg-gray-100/70 transition-colors px-3 py-2.5">
-                          <div className={`${colorMap[item.type] || "bg-gray-100 text-gray-500"} rounded-full p-1.5 shrink-0`}>
-                            {iconMap[item.type] || <Clock className="h-3.5 w-3.5" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-slate-800 truncate">{item.label}</p>
-                            <p className="text-[10px] text-slate-400">{item.sub}</p>
-                          </div>
-                          <span className="text-[9px] text-slate-400 shrink-0 whitespace-nowrap">
-                            {item.time.toLocaleDateString()}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </div>
-
               {/* Recent Users Table */}
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
@@ -1877,15 +1978,15 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                   </button>
                 </div>
                 {recentUsers.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 gap-2">
+                  <div className="flex flex-col items-center justify-center py-10 gap-2">
                     <Users className="h-10 w-10 text-slate-200" />
                     <p className="text-xs text-slate-400">No recent registrations</p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {recentUsers.slice(0, 6).map((u: any, i: number) => (
+                  <div className="space-y-1.5">
+                    {recentUsers.slice(0, 8).map((u: any, i: number) => (
                       <div key={i} className="flex items-center gap-3 rounded-xl hover:bg-gray-50 transition-colors px-2 py-2 cursor-default">
-                        <div className="h-9 w-9 rounded-full flex items-center justify-center text-[11px] font-black text-white shrink-0"
+                        <div className="h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-black text-white shrink-0"
                           style={{ background: u.role === "Earner" ? "linear-gradient(135deg,#10b981,#0891b2)" : "linear-gradient(135deg,#7c3aed,#4f46e5)" }}>
                           {(u.name || "?").charAt(0).toUpperCase()}
                         </div>
@@ -1904,48 +2005,29 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* ── 6. Financial Ledgers ─────────────────────────────────────── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Recent Deposits Panel */}
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-3">
-                <h3 className="font-display text-xs font-bold text-gray-900 flex items-center gap-1.5 uppercase tracking-wider">
-                  <ArrowDownCircle className="h-4 w-4 text-blue-500" /> Recent Cash Deposits (₦)
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-display text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                    <ArrowDownCircle className="h-4 w-4 text-blue-500" /> Recent Deposits
+                  </h3>
+                  <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">{depositsList.length} records</span>
+                </div>
                 {depositsList.length === 0 ? (
-                  <p className="text-center py-4 text-xs text-gray-400">No deposits registered.</p>
-                ) : (
-                  <div className="space-y-2.5 max-h-64 overflow-y-auto">
-                    {depositsList.slice(0, 10).map((dep: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center text-xs border-b border-gray-50 pb-2">
-                        <div>
-                          <p className="font-bold text-gray-800">{dep.userName}</p>
-                          <p className="text-[10px] text-gray-400">{dep.reference} · {new Date(dep.createdAt).toLocaleDateString()}</p>
-                        </div>
-                        <span className="font-mono font-bold text-blue-600">+₦{Number(dep.amount).toLocaleString()}</span>
-                      </div>
-                    ))}
+                  <div className="flex flex-col items-center justify-center py-8 gap-2">
+                    <ArrowDownCircle className="h-8 w-8 text-slate-200" />
+                    <p className="text-xs text-slate-400">No deposits registered yet</p>
                   </div>
-                )}
-              </div>
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-3">
-                <h3 className="font-display text-xs font-bold text-gray-900 flex items-center gap-1.5 uppercase tracking-wider">
-                  <BadgePercent className="h-4 w-4 text-indigo-500" /> Recent Referral Connections
-                </h3>
-                {referralsList.length === 0 ? (
-                  <p className="text-center py-4 text-xs text-gray-400">No referrals recorded.</p>
                 ) : (
-                  <div className="space-y-2.5 max-h-64 overflow-y-auto">
-                    {referralsList.slice(0, 10).map((ref: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center text-xs border-b border-gray-50 pb-2">
-                        <div>
-                          <p className="font-bold text-gray-800">Invited: {ref.refereeName}</p>
-                          <p className="text-[10px] text-gray-400">{ref.refereeEmail}</p>
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                    {depositsList.slice(0, 10).map((dep: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center rounded-xl bg-gray-50 hover:bg-gray-100/70 transition-colors px-3 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-gray-800 truncate">{dep.userName}</p>
+                          <p className="text-[10px] text-gray-400">{new Date(dep.createdAt).toLocaleDateString()}</p>
                         </div>
-                        <div className="text-right">
-                          <span className="font-mono font-bold text-blue-600">+₦{ref.rewardEarned}</span>
-                          <span className="block text-[9px] text-gray-400 mt-0.5">Credited to Referrer</span>
-                        </div>
+                        <span className="font-mono font-bold text-blue-600 ml-3 shrink-0">+₦{Number(dep.amount).toLocaleString()}</span>
                       </div>
                     ))}
                   </div>
@@ -3323,6 +3405,37 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                   Save Core System Rules
                 </button>
               </form>
+            </div>
+
+            {/* ── System Status ──────────────────────────────────────────────── */}
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <h3 className="font-display text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-emerald-500" /> System Status
+              </h3>
+              <div className="space-y-2.5 mb-5">
+                {[
+                  { label: "Database", ok: true, status: "Online", detail: "PostgreSQL connected & serving" },
+                  { label: "Server", ok: true, status: "Running", detail: "Express · Port 5000" },
+                  { label: "WebSocket", ok: wsConnected, status: wsConnected ? "Live" : "Polling", detail: wsConnected ? "Real-time notifications active" : "HTTP polling fallback mode" },
+                  { label: "Email Service", ok: stats.emailService.configured, status: stats.emailService.configured ? "Connected" : "Not configured", detail: stats.emailService.configured ? `${stats.emailService.emailsSentToday} sent today · ${stats.emailService.failedEmails} failed` : "Set RESEND_API_KEY in Secrets to enable" },
+                  { label: "Storage", ok: true, status: "Active", detail: "Database-backed file & data storage" },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-xl bg-gray-50 hover:bg-gray-100/70 transition-colors px-4 py-3">
+                    <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${item.ok ? "bg-emerald-400" : "bg-amber-400"}`}
+                      style={{ boxShadow: item.ok ? "0 0 8px #34d399" : "0 0 8px #fbbf24" }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-700">{item.label}</p>
+                      <p className="text-[10px] text-slate-400 truncate">{item.detail}</p>
+                    </div>
+                    <span className={`text-[10px] font-bold shrink-0 px-2 py-0.5 rounded-full ${item.ok ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"}`}>{item.status}</span>
+                  </div>
+                ))}
+              </div>
+              {stats.emailService.configured && stats.emailService.lastEmailSent && (
+                <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">
+                  <span className="font-bold">Last email sent:</span> {new Date(stats.emailService.lastEmailSent).toLocaleString()}{stats.emailService.lastEmailRecipient ? ` → ${stats.emailService.lastEmailRecipient}` : ""}
+                </div>
+              )}
             </div>
           </div>
         )}
