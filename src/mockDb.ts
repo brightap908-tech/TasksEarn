@@ -582,10 +582,12 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
       }
 
       if (endpoint === "/api/public/stats") {
-        const earnersCount = db.users.filter(u => u.role === UserRole.EARNER).length;
-        const tasksCount = db.tasks.length;
+        const earnersCount = db.users.filter(u => u.role !== UserRole.ADMIN).length;
+        const advertisersCount = db.tasks.filter(t => Boolean(t.advertiserId)).map(t => t.advertiserId).filter((id, index, all) => all.indexOf(id) === index).length;
+        const tasksCompleted = db.submissions.filter(s => s.status === SubmissionStatus.APPROVED).length;
+        const successfulWithdrawals = db.transactions.filter(t => t.type === TransactionType.WITHDRAWAL && [TransactionStatus.SUCCESS, TransactionStatus.PAID].includes(t.status)).length;
         const totalPaidOut = db.transactions
-          .filter(t => t.type === TransactionType.WITHDRAWAL && t.status === TransactionStatus.SUCCESS)
+          .filter(t => t.type === TransactionType.WITHDRAWAL && [TransactionStatus.SUCCESS, TransactionStatus.PAID].includes(t.status))
           .reduce((sum, t) => sum + t.amount, 0);
 
         const latestWithdrawalTx = db.transactions
@@ -598,8 +600,12 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
 
         resolve({
           earnersCount,
-          tasksCount,
+          advertisersCount,
+          tasksCompleted,
+          successfulWithdrawals,
           totalPaidOut,
+          tasksCount: db.tasks.length,
+          launchDate: "1st July, 2026",
           latestWithdrawal: latestWithdrawalTx ? {
             userName: latestWithdrawalTx.userName,
             bankName: latestWithdrawalTx.bankDetails?.bankName || "Commercial Bank",

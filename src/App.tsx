@@ -75,9 +75,14 @@ export default function App() {
   const [announcements, setAnnouncements] = React.useState<Announcement[]>([]);
   const [pagesContent, setPagesContent] = React.useState<{ [key: string]: { title: string; content: string } }>({});
   const [publicStats, setPublicStats] = React.useState({
-    earnersCount: 12485,
-    tasksCount: 346,
-    totalPaidOut: 3875560,
+    earnersCount: 0,
+    advertisersCount: 0,
+    tasksCompleted: 0,
+    successfulWithdrawals: 0,
+    totalPaidOut: 0,
+    // Kept for the existing home-page activity strip.
+    tasksCount: 0,
+    launchDate: "1st July, 2026",
     latestWithdrawal: null as { userName: string; bankName: string; amount: number } | null,
     latestCampaign: null as { title: string; cost: number } | null
   });
@@ -298,9 +303,13 @@ export default function App() {
       const s = await apiFetch("/api/public/stats");
       if (s && !s.error) {
         setPublicStats({
-          earnersCount: s.earnersCount !== undefined ? s.earnersCount : 12485,
-          tasksCount: s.tasksCount !== undefined ? s.tasksCount : 346,
-          totalPaidOut: s.totalPaidOut !== undefined ? s.totalPaidOut : 3875560,
+          earnersCount: s.earnersCount ?? 0,
+          advertisersCount: s.advertisersCount ?? 0,
+          tasksCompleted: s.tasksCompleted ?? 0,
+          successfulWithdrawals: s.successfulWithdrawals ?? 0,
+          totalPaidOut: s.totalPaidOut ?? 0,
+          tasksCount: s.tasksCount ?? 0,
+          launchDate: s.launchDate || "1st July, 2026",
           latestWithdrawal: s.latestWithdrawal,
           latestCampaign: s.latestCampaign
         });
@@ -1387,12 +1396,12 @@ export default function App() {
         } />
 
         {/* CMS STATIC AND REGULATORY PAGES */}
-        <Route path="/about" element={<><BackButton fallback="/" /><PublicPages view="about" pagesContent={pagesContent} settings={settings} onNavigate={setCurrentView} /></>} />
-        <Route path="/faq" element={<><BackButton fallback="/" /><PublicPages view="faq" pagesContent={pagesContent} settings={settings} onNavigate={setCurrentView} /></>} />
-        <Route path="/contact" element={<><BackButton fallback="/" /><PublicPages view="contact" pagesContent={pagesContent} settings={settings} onNavigate={setCurrentView} /></>} />
-        <Route path="/how-it-works" element={<><BackButton fallback="/" /><PublicPages view="how-it-works" pagesContent={pagesContent} settings={settings} onNavigate={setCurrentView} /></>} />
-        <Route path="/terms" element={<><BackButton fallback="/" /><PublicPages view="terms" pagesContent={pagesContent} settings={settings} onNavigate={setCurrentView} /></>} />
-        <Route path="/privacy" element={<><BackButton fallback="/" /><PublicPages view="privacy" pagesContent={pagesContent} settings={settings} onNavigate={setCurrentView} /></>} />
+        <Route path="/about" element={<><BackButton fallback="/" /><PublicPages view="about" pagesContent={pagesContent} settings={settings} publicStats={publicStats} onNavigate={setCurrentView} /></>} />
+        <Route path="/faq" element={<><BackButton fallback="/" /><PublicPages view="faq" pagesContent={pagesContent} settings={settings} publicStats={publicStats} onNavigate={setCurrentView} /></>} />
+        <Route path="/contact" element={<><BackButton fallback="/" /><PublicPages view="contact" pagesContent={pagesContent} settings={settings} publicStats={publicStats} onNavigate={setCurrentView} /></>} />
+        <Route path="/how-it-works" element={<><BackButton fallback="/" /><PublicPages view="how-it-works" pagesContent={pagesContent} settings={settings} publicStats={publicStats} onNavigate={setCurrentView} /></>} />
+        <Route path="/terms" element={<><BackButton fallback="/" /><PublicPages view="terms" pagesContent={pagesContent} settings={settings} publicStats={publicStats} onNavigate={setCurrentView} /></>} />
+        <Route path="/privacy" element={<><BackButton fallback="/" /><PublicPages view="privacy" pagesContent={pagesContent} settings={settings} publicStats={publicStats} onNavigate={setCurrentView} /></>} />
 
         {/* Legacy earner/advertiser URL redirects */}
         <Route path="/earner/*" element={<Navigate to="/dashboard/overview" replace />} />

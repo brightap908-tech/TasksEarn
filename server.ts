@@ -1425,11 +1425,25 @@ app.get("/api/public/settings", async (_req, res) => {
 
 app.get("/api/public/stats", async (_req, res) => {
   try {
-    const earnersCount = await pool.query("SELECT COUNT(*) FROM users WHERE role != 'Admin'");
-    const tasksCount = await pool.query("SELECT COUNT(*) FROM tasks");
-    const totalPaidOut = await pool.query(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'Withdrawal' AND status = 'Success'"
-    );
+    const [
+      earnersCount,
+      advertisersCount,
+      tasksCount,
+      tasksCompleted,
+      successfulWithdrawals,
+      totalPaidOut,
+    ] = await Promise.all([
+      pool.query("SELECT COUNT(*) FROM users WHERE role != 'Admin'"),
+      // Unified accounts can earn and advertise. Count accounts that have
+      // launched at least one campaign as registered advertisers.
+      pool.query("SELECT COUNT(DISTINCT advertiser_id) FROM tasks WHERE advertiser_id IS NOT NULL"),
+      pool.query("SELECT COUNT(*) FROM tasks"),
+      pool.query("SELECT COUNT(*) FROM submissions WHERE status = 'Approved'"),
+      pool.query("SELECT COUNT(*) FROM transactions WHERE type = 'Withdrawal' AND status IN ('Success', 'Paid')"),
+      pool.query(
+        "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'Withdrawal' AND status IN ('Success', 'Paid')"
+      ),
+    ]);
     const latestWithdrawalTx = await pool.query(
       "SELECT * FROM transactions WHERE type = 'Withdrawal' ORDER BY created_at DESC LIMIT 1"
     );
@@ -1439,19 +1453,14 @@ app.get("/api/public/stats", async (_req, res) => {
     const lw = latestWithdrawalTx.rows[0] ? mapTransaction(latestWithdrawalTx.rows[0]) : null;
     const lc = latestCampaign.rows[0] ? mapTask(latestCampaign.rows[0]) : null;
 
-    // Use demo minimum values until real data surpasses them
-    const DEMO_MIN_EARNERS   = 12485;
-    const DEMO_MIN_TASKS     = 346;
-    const DEMO_MIN_PAID_OUT  = 3875560;
-
-    const dbEarners  = parseInt(earnersCount.rows[0].count);
-    const dbTasks    = parseInt(tasksCount.rows[0].count);
-    const dbPaidOut  = parseFloat(totalPaidOut.rows[0].total);
-
     res.json({
-      earnersCount: Math.max(dbEarners, DEMO_MIN_EARNERS),
-      tasksCount:   Math.max(dbTasks, DEMO_MIN_TASKS),
-      totalPaidOut: Math.max(dbPaidOut, DEMO_MIN_PAID_OUT),
+      earnersCount: parseInt(earnersCount.rows[0].count),
+      advertisersCount: parseInt(advertisersCount.rows[0].count),
+      tasksCount: parseInt(tasksCount.rows[0].count),
+      tasksCompleted: parseInt(tasksCompleted.rows[0].count),
+      successfulWithdrawals: parseInt(successfulWithdrawals.rows[0].count),
+      totalPaidOut: parseFloat(totalPaidOut.rows[0].total),
+      launchDate: "1st July, 2026",
       latestWithdrawal: lw ? { userName: lw.userName, bankName: lw.bankDetails?.bankName || "Commercial Bank", amount: lw.amount } : null,
       latestCampaign: lc ? { title: lc.title, cost: lc.totalSlots * lc.costPerSlot } : null
     });

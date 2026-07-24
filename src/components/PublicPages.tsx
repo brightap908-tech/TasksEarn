@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import PlatformIcon from "./PlatformIcon";
 import SEO from "./SEO";
+import AboutPage, { AboutPageStats } from "./AboutPage";
 
 interface PublicPagesProps {
   view: string;
@@ -16,6 +17,7 @@ interface PublicPagesProps {
     telegramChannel?: string;
     whatsappGroup?: string;
   };
+  publicStats: AboutPageStats;
   onNavigate?: (view: string) => void;
 }
 
@@ -78,7 +80,7 @@ const PAGE_SEO: Record<string, { title: string; description: string; path: strin
 };
 
 /* ─── About Page ─────────────────────────────────────────────── */
-function AboutPage({ onNavigate }: { onNavigate?: (v: string) => void }) {
+function LegacyAboutPage({ onNavigate }: { onNavigate?: (v: string) => void }) {
   const features = [
     {
       icon: <Lock className="h-5 w-5" style={{ color: "#2563EB" }} />,
@@ -606,7 +608,7 @@ function FAQPage() {
 }
 
 /* ─── Main Component ─────────────────────────────────────────── */
-export default function PublicPages({ view, pagesContent, settings, onNavigate }: PublicPagesProps) {
+export default function PublicPages({ view, pagesContent, settings, publicStats, onNavigate }: PublicPagesProps) {
   const page = pagesContent[view] || {
     title: view.toUpperCase(),
     content: "Content is loading or not yet configured...",
@@ -725,7 +727,7 @@ export default function PublicPages({ view, pagesContent, settings, onNavigate }
         {isWide ? (
           /* ── Full-width layout for About / How It Works ── */
           <div>
-            {view === "about" && <AboutPage onNavigate={onNavigate} />}
+            {view === "about" && <AboutPage onNavigate={onNavigate} publicStats={publicStats} />}
             {view === "how-it-works" && <HowItWorksPage onNavigate={onNavigate} />}
           </div>
         ) : (
