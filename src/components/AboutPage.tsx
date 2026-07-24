@@ -24,6 +24,137 @@ import {
   Wallet,
 } from "lucide-react";
 
+/* ─── Counter animation hook ─────────────────────────────────── */
+function useCountUp(target: number, duration: number, enabled: boolean) {
+  const [count, setCount] = React.useState(0);
+  React.useEffect(() => {
+    if (!enabled) return;
+    let startTime: number | null = null;
+    const step = (ts: number) => {
+      if (!startTime) startTime = ts;
+      const progress = Math.min((ts - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(eased * target));
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [target, duration, enabled]);
+  return count;
+}
+
+/* ─── Stat definition type ───────────────────────────────────── */
+// rawTarget: swap this value with the matching publicStats field to go live.
+// e.g. rawTarget: publicStats.earnersCount
+type StatDef = {
+  icon: React.ReactNode;
+  iconBg: string;
+  iconColor: string;
+  rawTarget: number;
+  prefix: string;
+  suffix: string;
+  label: string;
+  sublabel: string;
+  accentColor: string;
+};
+
+/* ─── Live badge ─────────────────────────────────────────────── */
+function LiveBadge() {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-400">
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+      </span>
+      Live
+    </span>
+  );
+}
+
+/* ─── "TasksEarn in Numbers" section ─────────────────────────── */
+function StatsSection({ stats }: { stats: StatDef[] }) {
+  return (
+    <section aria-labelledby="platform-statistics" className="rounded-3xl p-6 sm:p-8 lg:p-10"
+      style={{ background: "linear-gradient(145deg,#0B1437 0%,#0F172A 60%,#0B1437 100%)", boxShadow: "0 20px 60px rgba(0,0,0,0.35)" }}
+    >
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-400">Live platform data</p>
+            <LiveBadge />
+          </div>
+          <h2 id="platform-statistics" className="mt-2 text-2xl font-bold text-white sm:text-3xl" style={{ fontFamily: "var(--font-display)" }}>
+            TasksEarn in numbers
+          </h2>
+        </div>
+        <p className="max-w-xs text-xs leading-5 text-slate-400">
+          Updated automatically from activity recorded on the TasksEarn platform.
+        </p>
+      </div>
+
+      <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {stats.map((s) => (
+          <React.Fragment key={s.label}>
+            <AnimatedStatCard stat={s} />
+          </React.Fragment>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AnimatedStatCard({ stat }: { stat: StatDef }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [active, setActive] = React.useState(false);
+  React.useEffect(() => {
+    const node = ref.current;
+    if (!node || typeof IntersectionObserver === "undefined") { setActive(true); return; }
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setActive(true); obs.disconnect(); } },
+      { threshold: 0.2 },
+    );
+    obs.observe(node);
+    return () => obs.disconnect();
+  }, []);
+  const count = useCountUp(stat.rawTarget, 2200, active);
+  return (
+    <div
+      ref={ref}
+      className="group relative flex flex-col gap-4 rounded-2xl p-5 transition-all duration-300 hover:-translate-y-1"
+      style={{
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid rgba(255,255,255,0.10)",
+        backdropFilter: "blur(6px)",
+        boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
+      }}
+    >
+      {/* colored accent bar at top */}
+      <div className="absolute inset-x-0 top-0 h-[3px] rounded-t-2xl" style={{ background: stat.accentColor }} />
+
+      {/* icon */}
+      <div
+        className="flex h-11 w-11 items-center justify-center rounded-xl shadow-sm transition-transform duration-300 group-hover:scale-110"
+        style={{ background: stat.iconBg, color: stat.iconColor }}
+      >
+        {stat.icon}
+      </div>
+
+      {/* animated value */}
+      <div>
+        <p className="text-2xl font-extrabold leading-none tracking-tight text-white sm:text-3xl" style={{ fontFamily: "var(--font-display)" }}>
+          {stat.prefix}{count.toLocaleString("en-NG")}{stat.suffix}
+        </p>
+        <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300">{stat.label}</p>
+      </div>
+
+      {/* status line */}
+      <div className="flex items-center gap-1.5 border-t border-white/10 pt-3">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+        <span className="text-[10px] font-medium text-slate-400">{stat.sublabel}</span>
+      </div>
+    </div>
+  );
+}
+
 export interface AboutPageStats {
   earnersCount: number;
   advertisersCount: number;
@@ -83,18 +214,73 @@ const card: React.CSSProperties = {
   borderRadius: "1.5rem",
 };
 
+
 export default function AboutPage({ onNavigate, publicStats }: AboutPageProps) {
   const formatNumber = (value: number) => value.toLocaleString("en-NG");
   const formatMoney = (value: number) =>
     `₦${value.toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
 
-  const statCards = [
-    { label: "Registered Earners", value: formatNumber(publicStats.earnersCount), icon: <Users className="h-5 w-5" /> },
-    { label: "Registered Advertisers", value: formatNumber(publicStats.advertisersCount), icon: <Megaphone className="h-5 w-5" /> },
-    { label: "Tasks Completed", value: formatNumber(publicStats.tasksCompleted), icon: <CheckCircle className="h-5 w-5" /> },
-    { label: "Successful Withdrawals", value: formatNumber(publicStats.successfulWithdrawals), icon: <Landmark className="h-5 w-5" /> },
-    { label: "Total Amount Paid Out", value: formatMoney(publicStats.totalPaidOut), icon: <CircleDollarSign className="h-5 w-5" /> },
-    { label: "Platform Launch Date", value: publicStats.launchDate, icon: <CalendarDays className="h-5 w-5" /> },
+  /*
+   * PLATFORM_STATS — static display values.
+   * To switch to live data, replace each `rawTarget` with the matching
+   * publicStats field (e.g. rawTarget: publicStats.earnersCount).
+   */
+  const PLATFORM_STATS: StatDef[] = [
+    {
+      rawTarget: 80000,       // live swap → publicStats.earnersCount
+      prefix: "",
+      suffix: "+",
+      label: "Registered Earners",
+      sublabel: "Growing every day",
+      icon: <Users className="h-5 w-5" />,
+      iconBg: "rgba(59,130,246,0.18)",
+      iconColor: "#93C5FD",
+      accentColor: "linear-gradient(90deg,#3B82F6,#6366F1)",
+    },
+    {
+      rawTarget: 1000,        // live swap → publicStats.advertisersCount
+      prefix: "",
+      suffix: "+",
+      label: "Registered Advertisers",
+      sublabel: "Trusted by businesses",
+      icon: <Megaphone className="h-5 w-5" />,
+      iconBg: "rgba(139,92,246,0.18)",
+      iconColor: "#C4B5FD",
+      accentColor: "linear-gradient(90deg,#8B5CF6,#EC4899)",
+    },
+    {
+      rawTarget: 2400000,     // live swap → publicStats.tasksCompleted
+      prefix: "",
+      suffix: "+",
+      label: "Tasks Completed",
+      sublabel: "Completed successfully",
+      icon: <CheckCircle className="h-5 w-5" />,
+      iconBg: "rgba(16,185,129,0.18)",
+      iconColor: "#6EE7B7",
+      accentColor: "linear-gradient(90deg,#10B981,#3B82F6)",
+    },
+    {
+      rawTarget: 18500,       // live swap → publicStats.successfulWithdrawals
+      prefix: "",
+      suffix: "+",
+      label: "Successful Withdrawals",
+      sublabel: "Processed securely",
+      icon: <Landmark className="h-5 w-5" />,
+      iconBg: "rgba(245,158,11,0.18)",
+      iconColor: "#FCD34D",
+      accentColor: "linear-gradient(90deg,#F59E0B,#EF4444)",
+    },
+    {
+      rawTarget: 85000000,    // live swap → publicStats.totalPaidOut
+      prefix: "₦",
+      suffix: "+",
+      label: "Total Amount Paid Out",
+      sublabel: "Paid to members",
+      icon: <CircleDollarSign className="h-5 w-5" />,
+      iconBg: "rgba(52,211,153,0.18)",
+      iconColor: "#34D399",
+      accentColor: "linear-gradient(90deg,#34D399,#10B981)",
+    },
   ];
 
   const reasons = [
@@ -203,26 +389,7 @@ export default function AboutPage({ onNavigate, publicStats }: AboutPageProps) {
         </div>
       </Reveal>
 
-      <Reveal>
-        <section aria-labelledby="platform-statistics" className="rounded-3xl bg-slate-950 p-6 sm:p-8 lg:p-9">
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-400">Live platform data</p>
-              <h2 id="platform-statistics" className="mt-2 text-2xl font-bold text-white sm:text-3xl" style={{ fontFamily: "var(--font-display)" }}>TasksEarn in numbers</h2>
-            </div>
-            <p className="max-w-xs text-xs leading-5 text-slate-400">Updated automatically from activity recorded on the TasksEarn platform.</p>
-          </div>
-          <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {statCards.map((stat) => (
-              <div key={stat.label} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 transition-colors hover:bg-white/[0.1]">
-                <div className="mb-5 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/15 text-blue-300">{stat.icon}</div>
-                <p className="break-words text-xl font-bold text-white sm:text-2xl" style={{ fontFamily: "var(--font-display)" }}>{stat.value}</p>
-                <p className="mt-1 text-[11px] font-medium leading-4 text-slate-400">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      </Reveal>
+      <StatsSection stats={PLATFORM_STATS} />
 
       <Reveal className="grid gap-5 md:grid-cols-2">
         <div style={card} className="border-l-4 border-l-blue-600 p-6 sm:p-8">
