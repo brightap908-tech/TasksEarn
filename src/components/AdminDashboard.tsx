@@ -52,7 +52,13 @@ import {
   ShieldCheck,
   UserX,
   UserCircle2,
-  ChevronDown
+  ChevronDown,
+  Mail,
+  Send,
+  MailCheck,
+  MailX,
+  RefreshCw,
+  History
 } from "lucide-react";
 import AdminTaskPricing from "./AdminTaskPricing";
 import AdminSocialPlatforms from "./AdminSocialPlatforms";
@@ -68,8 +74,8 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMode = false, colorMode = "light" }: AdminDashboardProps) {
-  type AdminTab = "stats" | "users" | "advertisers" | "campaigns" | "admin-tasks" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings" | "commissions" | "notifications" | "reports" | "profile" | "demo-accounts";
-  const VALID_ADMIN_TABS: AdminTab[] = ["stats", "users", "advertisers", "campaigns", "admin-tasks", "withdrawals", "audits", "announcements", "cms", "settings", "pricing", "platforms", "platform-earnings", "commissions", "notifications", "reports", "profile", "demo-accounts"];
+  type AdminTab = "stats" | "users" | "advertisers" | "campaigns" | "admin-tasks" | "withdrawals" | "audits" | "announcements" | "cms" | "settings" | "pricing" | "platforms" | "platform-earnings" | "commissions" | "notifications" | "reports" | "profile" | "demo-accounts" | "broadcast";
+  const VALID_ADMIN_TABS: AdminTab[] = ["stats", "users", "advertisers", "campaigns", "admin-tasks", "withdrawals", "audits", "announcements", "cms", "settings", "pricing", "platforms", "platform-earnings", "commissions", "notifications", "reports", "profile", "demo-accounts", "broadcast"];
   const { section } = useParams<{ section?: string }>();
   const navigate = useNavigate();
   const activeTab: AdminTab = (VALID_ADMIN_TABS.includes(section as AdminTab) ? section : "stats") as AdminTab;
@@ -262,6 +268,66 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
   const [adminTaskFormError, setAdminTaskFormError] = React.useState("");
   const [adminTaskFormSuccess, setAdminTaskFormSuccess] = React.useState("");
   const [adminTaskSubmitting, setAdminTaskSubmitting] = React.useState(false);
+
+  // Broadcast Email state
+  const [broadcastTarget, setBroadcastTarget] = React.useState<"earners" | "advertisers" | "all" | "selected">("earners");
+  const [broadcastSubject, setBroadcastSubject] = React.useState("");
+  const [broadcastHtml, setBroadcastHtml] = React.useState("");
+  const [broadcastSending, setBroadcastSending] = React.useState(false);
+  const [broadcastResult, setBroadcastResult] = React.useState<{ totalRecipients: number; sentCount: number; failedCount: number; failedEmails: { email: string; reason: string }[] } | null>(null);
+  const [broadcastError, setBroadcastError] = React.useState("");
+  const [broadcastLogs, setBroadcastLogs] = React.useState<any[]>([]);
+  const [broadcastLogsLoading, setBroadcastLogsLoading] = React.useState(false);
+  const [broadcastSelectedUsers, setBroadcastSelectedUsers] = React.useState<string[]>([]);
+  const [broadcastUserSearch, setBroadcastUserSearch] = React.useState("");
+  const [showBroadcastHistory, setShowBroadcastHistory] = React.useState(false);
+
+  const fetchBroadcastLogs = async () => {
+    setBroadcastLogsLoading(true);
+    try {
+      const data = await apiFetch("/api/admin/broadcast-email/logs");
+      if (Array.isArray(data)) setBroadcastLogs(data);
+    } catch (e) {} finally {
+      setBroadcastLogsLoading(false);
+    }
+  };
+
+  const handleSendBroadcast = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!broadcastSubject.trim() || !broadcastHtml.trim()) {
+      setBroadcastError("Subject and email body are required.");
+      return;
+    }
+    if (broadcastTarget === "selected" && broadcastSelectedUsers.length === 0) {
+      setBroadcastError("Please select at least one user.");
+      return;
+    }
+    setBroadcastSending(true);
+    setBroadcastError("");
+    setBroadcastResult(null);
+    try {
+      const data = await apiFetch("/api/admin/broadcast-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target: broadcastTarget,
+          userIds: broadcastTarget === "selected" ? broadcastSelectedUsers : undefined,
+          subject: broadcastSubject,
+          html: broadcastHtml,
+        }),
+      });
+      if (data.error) {
+        setBroadcastError(data.error);
+      } else {
+        setBroadcastResult(data);
+        fetchBroadcastLogs();
+      }
+    } catch {
+      setBroadcastError("Failed to send broadcast. Please try again.");
+    } finally {
+      setBroadcastSending(false);
+    }
+  };
 
   const fetchPlatformStats = async () => {
     try {
@@ -494,6 +560,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
     if (activeTab === "advertisers") fetchUsers();
     if (activeTab === "notifications") { /* notifications already fetched on mount */ }
     if (activeTab === "reports") { fetchStats(); fetchDepositsAndReferrals(); fetchAudits(); }
+    if (activeTab === "broadcast") fetchBroadcastLogs();
   }, [activeTab]);
 
   React.useEffect(() => {
@@ -1442,6 +1509,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
           { tab: "notifications" as AdminTab, icon: <Bell className="h-4 w-4 text-slate-400" />, label: `Notifications (${unreadCount})` },
           { tab: "reports" as AdminTab, icon: <TrendingUp className="h-4 w-4 text-slate-400" />, label: "Reports" },
           { tab: "settings" as AdminTab, icon: <Settings className="h-4 w-4 text-slate-400" />, label: "Site Settings" },
+          { tab: "broadcast" as AdminTab, icon: <Mail className="h-4 w-4 text-slate-400" />, label: "Broadcast Email" },
           { tab: "profile" as AdminTab, icon: <FolderSync className="h-4 w-4 text-slate-400" />, label: "Profile" },
           { tab: "demo-accounts" as AdminTab, icon: <ShieldAlert className="h-4 w-4 text-slate-400" />, label: "Demo Accounts" },
         ] as { tab: AdminTab; icon: React.ReactNode; label: string }[]).map(({ tab, icon, label }) => (
@@ -3808,6 +3876,226 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
 
               </div>
             </div>
+          </div>
+        )}
+
+        {/* BROADCAST EMAIL TAB */}
+        {activeTab === "broadcast" && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h2 className="font-display text-lg font-black text-slate-900 flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-blue-500" /> Broadcast Email
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">Send emails to earners, advertisers, or selected users in batches via Resend.</p>
+              </div>
+              <button
+                onClick={() => { setShowBroadcastHistory(v => !v); if (!showBroadcastHistory) fetchBroadcastLogs(); }}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+              >
+                <History className="h-4 w-4" /> {showBroadcastHistory ? "Hide" : "Show"} History
+              </button>
+            </div>
+
+            {/* History panel */}
+            {showBroadcastHistory && (
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-3">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="font-display text-sm font-bold text-slate-800 flex items-center gap-2"><History className="h-4 w-4 text-slate-400" /> Past Broadcasts</h3>
+                  <button onClick={fetchBroadcastLogs} disabled={broadcastLogsLoading} className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 disabled:opacity-40">
+                    <RefreshCw className={`h-3.5 w-3.5 ${broadcastLogsLoading ? "animate-spin" : ""}`} /> Refresh
+                  </button>
+                </div>
+                {broadcastLogs.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-4">No broadcasts sent yet.</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {broadcastLogs.map(log => (
+                      <div key={log.id} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">{log.subject}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            Target: <span className="capitalize font-semibold text-slate-600">{log.target}</span>
+                            {" · "}{new Date(log.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
+                            <MailCheck className="h-3.5 w-3.5" /> {log.sentCount} sent
+                          </span>
+                          {log.failedCount > 0 && (
+                            <span className="flex items-center gap-1 text-[11px] font-bold text-red-500">
+                              <MailX className="h-3.5 w-3.5" /> {log.failedCount} failed
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-400">{log.totalRecipients} total</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Compose form */}
+            <form onSubmit={handleSendBroadcast} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm space-y-5">
+              <h3 className="font-display text-sm font-bold text-slate-800 flex items-center gap-2"><Send className="h-4 w-4 text-blue-500" /> Compose Broadcast</h3>
+
+              {/* Target selector */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Recipients</label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {(["earners", "advertisers", "all", "selected"] as const).map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => { setBroadcastTarget(t); setBroadcastSelectedUsers([]); setBroadcastUserSearch(""); }}
+                      className={`rounded-xl border px-3 py-2.5 text-xs font-bold transition-all capitalize ${
+                        broadcastTarget === t
+                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-gray-200 bg-white text-slate-500 hover:border-slate-300"
+                      }`}
+                    >
+                      {t === "all" ? "All Users" : t === "selected" ? "Select Users" : `All ${t.charAt(0).toUpperCase() + t.slice(1)}s`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* User picker for "selected" target */}
+              {broadcastTarget === "selected" && (
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Search & Select Users</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search name or email…"
+                      value={broadcastUserSearch}
+                      onChange={e => setBroadcastUserSearch(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-8 pr-3 py-2 text-xs focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div className="max-h-40 overflow-y-auto rounded-xl border border-gray-100 divide-y divide-gray-50">
+                    {usersList
+                      .filter(u => u.role !== "Admin" && (
+                        u.name?.toLowerCase().includes(broadcastUserSearch.toLowerCase()) ||
+                        u.email?.toLowerCase().includes(broadcastUserSearch.toLowerCase())
+                      ))
+                      .slice(0, 30)
+                      .map(u => (
+                        <label key={u.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-blue-50/50 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={broadcastSelectedUsers.includes(u.id)}
+                            onChange={e => {
+                              if (e.target.checked) setBroadcastSelectedUsers(prev => [...prev, u.id]);
+                              else setBroadcastSelectedUsers(prev => prev.filter(id => id !== u.id));
+                            }}
+                            className="rounded accent-blue-600"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-800 truncate">{u.name}</p>
+                            <p className="text-[10px] text-slate-400 truncate">{u.email}</p>
+                          </div>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${u.role === "Earner" ? "bg-emerald-50 text-emerald-600" : "bg-purple-50 text-purple-600"}`}>{u.role}</span>
+                        </label>
+                      ))}
+                    {usersList.filter(u => u.role !== "Admin").length === 0 && (
+                      <p className="text-xs text-slate-400 text-center py-4">No users found. Load the Users tab first.</p>
+                    )}
+                  </div>
+                  {broadcastSelectedUsers.length > 0 && (
+                    <p className="text-[11px] font-bold text-blue-600">{broadcastSelectedUsers.length} user{broadcastSelectedUsers.length !== 1 ? "s" : ""} selected</p>
+                  )}
+                </div>
+              )}
+
+              {/* Subject */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subject</label>
+                <input
+                  type="text"
+                  value={broadcastSubject}
+                  onChange={e => setBroadcastSubject(e.target.value)}
+                  placeholder="e.g. Important update from TasksEarn"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"
+                  required
+                />
+              </div>
+
+              {/* Body */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Email Body <span className="normal-case text-slate-300">(HTML supported)</span></label>
+                <textarea
+                  value={broadcastHtml}
+                  onChange={e => setBroadcastHtml(e.target.value)}
+                  rows={8}
+                  placeholder={`<p>Hello,</p>\n<p>We have an exciting update for you...</p>`}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs font-mono focus:outline-none focus:border-blue-400 resize-y"
+                  required
+                />
+              </div>
+
+              {/* Preview strip */}
+              {broadcastHtml.trim() && (
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Preview</label>
+                  <div
+                    className="rounded-xl border border-dashed border-blue-200 bg-blue-50/30 p-4 text-sm overflow-auto max-h-48"
+                    dangerouslySetInnerHTML={{ __html: broadcastHtml }}
+                  />
+                </div>
+              )}
+
+              {/* Error */}
+              {broadcastError && (
+                <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-xs font-bold text-red-600">{broadcastError}</div>
+              )}
+
+              {/* Result */}
+              {broadcastResult && (
+                <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-4 space-y-2">
+                  <p className="text-xs font-black text-emerald-700 flex items-center gap-2"><MailCheck className="h-4 w-4" /> Broadcast sent successfully!</p>
+                  <div className="flex flex-wrap gap-4 text-xs">
+                    <span className="font-semibold text-slate-600">Total recipients: <strong>{broadcastResult.totalRecipients}</strong></span>
+                    <span className="font-semibold text-emerald-600">Delivered: <strong>{broadcastResult.sentCount}</strong></span>
+                    {broadcastResult.failedCount > 0 && (
+                      <span className="font-semibold text-red-500">Failed: <strong>{broadcastResult.failedCount}</strong></span>
+                    )}
+                  </div>
+                  {broadcastResult.failedEmails.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="text-[10px] font-bold text-red-500 cursor-pointer">View failed deliveries ({broadcastResult.failedEmails.length})</summary>
+                      <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                        {broadcastResult.failedEmails.map((f, i) => (
+                          <div key={i} className="text-[10px] text-red-600 bg-red-50 rounded px-2 py-1">
+                            <span className="font-mono">{f.email}</span> — {f.reason}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              )}
+
+              {/* Submit */}
+              <div className="flex items-center justify-between gap-4 pt-1">
+                <p className="text-[10px] text-slate-400">Emails are sent in batches of 10 via Resend. The admin panel stays responsive throughout.</p>
+                <button
+                  type="submit"
+                  disabled={broadcastSending}
+                  className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-xs font-bold px-6 py-2.5 shadow-sm transition-all cursor-pointer disabled:cursor-not-allowed"
+                >
+                  {broadcastSending ? (
+                    <><RefreshCw className="h-4 w-4 animate-spin" /> Sending…</>
+                  ) : (
+                    <><Send className="h-4 w-4" /> Send Broadcast</>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         )}
 

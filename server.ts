@@ -825,6 +825,20 @@ async function bootstrapTables() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS broadcast_email_logs (
+        id SERIAL PRIMARY KEY,
+        admin_id VARCHAR(50) NOT NULL,
+        subject TEXT NOT NULL,
+        target VARCHAR(50) NOT NULL,
+        total_recipients INT NOT NULL DEFAULT 0,
+        sent_count INT NOT NULL DEFAULT 0,
+        failed_count INT NOT NULL DEFAULT 0,
+        failed_emails JSONB NOT NULL DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
   } catch (err) {
@@ -4829,6 +4843,124 @@ app.post("/api/admin/notifications/:id/read", async (req, res) => {
     const result = await pool.query("UPDATE notifications SET read=true WHERE id=$1 RETURNING *", [req.params.id]);
     res.json({ success: true, notification: result.rows.length > 0 ? mapNotification(result.rows[0]) : null });
   } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// ─── Broadcast Email ─────────────────────────────────────────────────────────
+
+app.get("/api/admin/broadcast-email/logs", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query(
+      "SELECT * FROM broadcast_email_logs ORDER BY created_at DESC LIMIT 50"
+    );
+    res.json(result.rows.map(r => ({
+      id: r.id,
+      adminId: r.admin_id,
+      subject: r.subject,
+      target: r.target,
+      totalRecipients: r.total_recipients,
+      sentCount: r.sent_count,
+      failedCount: r.failed_count,
+      failedEmails: r.failed_emails,
+      createdAt: r.created_at,
+    })));
+  } catch (err) {
+    console.error("Broadcast logs error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.post("/api/admin/broadcast-email", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { target, userIds, subject, html } = req.body as {
+      target: "earners" | "advertisers" | "all" | "selected";
+      userIds?: string[];
+      subject: string;
+      html: string;
+    };
+
+    if (!subject?.trim()) return res.status(400).json({ error: "Subject is required" });
+    if (!html?.trim()) return res.status(400).json({ error: "Email body is required" });
+    if (!["earners", "advertisers", "all", "selected"].includes(target))
+      return res.status(400).json({ error: "Invalid target" });
+
+    // Fetch recipients
+    let recipientRows: { id: string; email: string; name: string }[] = [];
+
+    if (target === "selected") {
+      if (!userIds || userIds.length === 0) return res.status(400).json({ error: "No users selected" });
+      const result = await pool.query(
+        "SELECT id, email, name FROM users WHERE id = ANY($1::text[]) AND email IS NOT NULL",
+        [userIds]
+      );
+      recipientRows = result.rows;
+    } else if (target === "earners") {
+      const result = await pool.query(
+        "SELECT id, email, name FROM users WHERE role = 'Earner' AND email IS NOT NULL ORDER BY created_at DESC"
+      );
+      recipientRows = result.rows;
+    } else if (target === "advertisers") {
+      const result = await pool.query(
+        "SELECT id, email, name FROM users WHERE role = 'Advertiser' AND email IS NOT NULL ORDER BY created_at DESC"
+      );
+      recipientRows = result.rows;
+    } else {
+      // all (non-admin)
+      const result = await pool.query(
+        "SELECT id, email, name FROM users WHERE role != 'Admin' AND email IS NOT NULL ORDER BY created_at DESC"
+      );
+      recipientRows = result.rows;
+    }
+
+    if (recipientRows.length === 0) {
+      return res.status(400).json({ error: "No recipients found for the selected target" });
+    }
+
+    const BATCH_SIZE = 10;
+    const sentEmails: string[] = [];
+    const failedEmails: { email: string; reason: string }[] = [];
+
+    for (let i = 0; i < recipientRows.length; i += BATCH_SIZE) {
+      const batch = recipientRows.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        batch.map(async (recipient) => {
+          try {
+            await sendEmail({ to: recipient.email, subject, html });
+            sentEmails.push(recipient.email);
+          } catch (err: any) {
+            failedEmails.push({ email: recipient.email, reason: err?.message || "Unknown error" });
+          }
+        })
+      );
+      // Small delay between batches to respect rate limits
+      if (i + BATCH_SIZE < recipientRows.length) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
+
+    // Log the broadcast
+    await pool.query(
+      `INSERT INTO broadcast_email_logs (admin_id, subject, target, total_recipients, sent_count, failed_count, failed_emails)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [user.id, subject, target, recipientRows.length, sentEmails.length, failedEmails.length, JSON.stringify(failedEmails)]
+    );
+
+    res.json({
+      success: true,
+      totalRecipients: recipientRows.length,
+      sentCount: sentEmails.length,
+      failedCount: failedEmails.length,
+      failedEmails,
+    });
+  } catch (err) {
+    console.error("Broadcast email error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // ─── WebSocket & Notification Broadcasting ────────────────────────────────────

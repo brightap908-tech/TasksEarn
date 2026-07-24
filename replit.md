@@ -43,7 +43,7 @@ The server starts on port **5000** and serves both the Express API and the Vite 
 | `DATABASE_URL` | Fallback | Auto-injected by Replit PostgreSQL; used only if `NEON_DATABASE_URL` is absent |
 | `SESSION_SECRET` | Yes | Already set as Replit Secret |
 | `PORT` | Set to 5000 | Required for Replit webview |
-| `RESEND_API_KEY` + `RESEND_FROM` | Optional | Email via Resend (for email verification) |
+| `RESEND_API_KEY` + `RESEND_FROM` | Optional | Email via Resend (for email verification and admin broadcast emails) |
 | `SMTP_HOST/PORT/USER/PASSWORD/FROM` | Optional | Email via SMTP (fallback to Resend) |
 | `PAYSTACK_SECRET_KEY` | Optional | Required to accept real deposits |
 | `GEMINI_API_KEY` | Optional | AI features |
