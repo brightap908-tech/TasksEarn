@@ -306,6 +306,10 @@ function mapNotification(row) {
     type: row.type,
     message: row.message,
     referenceId: row.reference_id,
+    earnerName: row.earner_name || void 0,
+    taskTitle: row.task_title || void 0,
+    submittedAt: row.submitted_at instanceof Date ? row.submitted_at.toISOString() : row.submitted_at || (row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at),
+    reviewUrl: row.review_url || void 0,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     read: row.read === true || row.read === "true"
   };
@@ -594,9 +598,24 @@ async function bootstrapTables() {
         type VARCHAR(50) NOT NULL,
         message TEXT NOT NULL,
         reference_id VARCHAR(50) NOT NULL,
+        dedupe_key VARCHAR(150) NULL,
+        earner_name VARCHAR(150) NULL,
+        task_title VARCHAR(255) NULL,
+        submitted_at TIMESTAMP NULL,
+        review_url TEXT NULL,
         read BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+    await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS dedupe_key VARCHAR(150) NULL`);
+    await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS earner_name VARCHAR(150) NULL`);
+    await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS task_title VARCHAR(255) NULL`);
+    await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP NULL`);
+    await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS review_url TEXT NULL`);
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS notifications_dedupe_key_idx
+      ON notifications (dedupe_key)
+      WHERE dedupe_key IS NOT NULL
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS earner_notifications (
@@ -1826,7 +1845,16 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         resubmittedAt
       ]);
       await client.query("COMMIT");
-      notifyAdmin({ type: "submission", message: `Task resubmission from ${user.name} for "${task2.title}"`, referenceId: existing.id });
+      await notifyAdmin({
+        type: "submission",
+        message: `${user.name} submitted a task for review.`,
+        referenceId: existing.id,
+        dedupeKey: `submission-resubmission:${existing.id}:${resubmittedAt.toISOString()}`,
+        earnerName: user.name,
+        taskTitle: task2.title,
+        submittedAt: resubmittedAt,
+        reviewUrl: `/admin/audits?submission=${encodeURIComponent(existing.id)}`
+      });
       const subRes2 = await pool.query("SELECT * FROM submissions WHERE id = $1", [existing.id]);
       return res.status(200).json({ success: true, message: "Task resubmitted successfully", submission: mapSubmission(subRes2.rows[0]) });
     }
@@ -1839,6 +1867,16 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       return res.status(404).json({ error: "Task is not active or not found" });
     }
     const task = mapTask(taskRes.rows[0]);
+    const concurrentSub = await client.query(
+      "SELECT id, status FROM submissions WHERE task_id = $1 AND earner_id = $2",
+      [taskId, user.id]
+    );
+    if (concurrentSub.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        error: concurrentSub.rows[0].status === "Pending" /* PENDING */ ? "Your submission is already pending review. Please wait for the advertiser's decision." : "You have already successfully completed this task."
+      });
+    }
     const occupiedRes = await client.query(
       "SELECT COUNT(*) FROM submissions WHERE task_id=$1 AND status IN ('Pending','Rejected')",
       [taskId]
@@ -1849,12 +1887,22 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       return res.status(400).json({ error: "This task has reached its submission limit" });
     }
     const subId = "sub-" + Math.random().toString(36).substr(2, 9);
+    const submittedAt = /* @__PURE__ */ new Date();
     await client.query(`
       INSERT INTO submissions (id, task_id, task_title, category, earner_id, earner_name, proof_text, proof_screenshot, status, reward, submitted_at)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Pending',$9,$10)
-    `, [subId, taskId, task.title, task.category, user.id, user.name, finalProofText, screenshot, task.earningPerSlot, /* @__PURE__ */ new Date()]);
+    `, [subId, taskId, task.title, task.category, user.id, user.name, finalProofText, screenshot, task.earningPerSlot, submittedAt]);
     await client.query("COMMIT");
-    notifyAdmin({ type: "submission", message: `New task submission from ${user.name} for "${task.title}"`, referenceId: subId });
+    await notifyAdmin({
+      type: "submission",
+      message: `${user.name} submitted a task for review.`,
+      referenceId: subId,
+      dedupeKey: `submission:${subId}`,
+      earnerName: user.name,
+      taskTitle: task.title,
+      submittedAt,
+      reviewUrl: `/admin/audits?submission=${encodeURIComponent(subId)}`
+    });
     const subRes = await pool.query("SELECT * FROM submissions WHERE id = $1", [subId]);
     res.status(201).json({ success: true, message: "Task submitted successfully", submission: mapSubmission(subRes.rows[0]) });
   } catch (err) {
@@ -4745,20 +4793,45 @@ async function notifyEarners(task) {
 async function notifyAdmin(notification) {
   const id = "notif-" + Math.random().toString(36).substr(2, 9);
   const now = /* @__PURE__ */ new Date();
+  const dedupeKey = notification.dedupeKey || `${notification.type}:${notification.referenceId}`;
+  let persistedNotification = null;
   try {
-    await pool.query(
-      "INSERT INTO notifications (id, type, message, reference_id, read, created_at) VALUES ($1,$2,$3,$4,false,$5)",
-      [id, notification.type, notification.message, notification.referenceId, now]
+    const result = await pool.query(
+      `INSERT INTO notifications
+        (id, type, message, reference_id, dedupe_key, earner_name, task_title, submitted_at, review_url, read, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,false,$10)
+       ON CONFLICT (dedupe_key) DO NOTHING
+       RETURNING *`,
+      [
+        id,
+        notification.type,
+        notification.message,
+        notification.referenceId,
+        dedupeKey,
+        notification.earnerName || null,
+        notification.taskTitle || null,
+        notification.submittedAt || now,
+        notification.reviewUrl || null,
+        now
+      ]
     );
-    await pool.query("DELETE FROM notifications WHERE id NOT IN (SELECT id FROM notifications ORDER BY created_at DESC LIMIT 100)");
+    persistedNotification = result.rows[0] || null;
+    if (persistedNotification) {
+      await pool.query("DELETE FROM notifications WHERE id NOT IN (SELECT id FROM notifications ORDER BY created_at DESC LIMIT 100)");
+    }
   } catch (err) {
     console.error("[Notify] Failed to persist notification:", err);
   }
+  if (!persistedNotification) return;
   const newNotif = {
-    id,
+    id: persistedNotification.id,
     type: notification.type,
     message: notification.message,
     referenceId: notification.referenceId,
+    earnerName: notification.earnerName,
+    taskTitle: notification.taskTitle,
+    submittedAt: notification.submittedAt?.toISOString() || now.toISOString(),
+    reviewUrl: notification.reviewUrl,
     createdAt: now.toISOString(),
     read: false
   };
