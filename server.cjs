@@ -3018,27 +3018,108 @@ app.get("/api/admin/dashboard", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
-    const [earners, advertisers, tasks, totalEarned, pendingWd, totalDep, recentUsers, recentTx, settings] = await Promise.all([
-      pool.query("SELECT COUNT(*) FROM users WHERE role != 'Admin'"),
-      pool.query("SELECT COUNT(*) FROM users WHERE role != 'Admin'"),
+    const todayStart = /* @__PURE__ */ new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayIso = todayStart.toISOString();
+    const [
+      earners,
+      advertisers,
+      tasks,
+      totalEarned,
+      pendingWd,
+      completedWd,
+      totalDep,
+      recentUsers,
+      recentTx,
+      todayUsers,
+      emailHistoryToday,
+      emailHistoryFailed,
+      lastEmailSent,
+      settings,
+      trendRegs,
+      trendDeps,
+      trendWds
+    ] = await Promise.all([
+      pool.query("SELECT COUNT(*) FROM users WHERE role = 'User'"),
+      pool.query("SELECT COUNT(DISTINCT advertiser_id) FROM tasks WHERE advertiser_id IS NOT NULL"),
       pool.query("SELECT COUNT(*) FROM tasks"),
       pool.query("SELECT COALESCE(SUM(reward),0) AS total FROM submissions WHERE status='Approved'"),
       pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE type='Withdrawal' AND status='Pending'"),
+      pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE type='Withdrawal' AND status='Approved'"),
       pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE type='Deposit' AND status='Success'"),
-      pool.query("SELECT * FROM users ORDER BY created_at DESC LIMIT 5"),
-      pool.query("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 5"),
-      getSettings()
+      pool.query("SELECT * FROM users ORDER BY created_at DESC LIMIT 10"),
+      pool.query("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 10"),
+      pool.query("SELECT COUNT(*) FROM users WHERE created_at >= $1", [todayIso]),
+      // Email stats — graceful if table doesn't exist
+      pool.query("SELECT COUNT(*) FROM email_logs WHERE created_at >= $1 AND status='sent'", [todayIso]).catch(() => ({ rows: [{ count: 0 }] })),
+      pool.query("SELECT COUNT(*) FROM email_logs WHERE status='failed'").catch(() => ({ rows: [{ count: 0 }] })),
+      pool.query("SELECT created_at, recipient FROM email_logs WHERE status='sent' ORDER BY created_at DESC LIMIT 1").catch(() => ({ rows: [] })),
+      getSettings(),
+      // 7-day daily registration trend
+      pool.query(`
+        SELECT DATE(created_at) AS day, COUNT(*) AS count
+        FROM users
+        WHERE created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY day ORDER BY day ASC
+      `),
+      // 7-day daily deposit trend
+      pool.query(`
+        SELECT DATE(created_at) AS day, COALESCE(SUM(amount),0) AS total
+        FROM transactions
+        WHERE type='Deposit' AND status='Success' AND created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY day ORDER BY day ASC
+      `),
+      // 7-day daily withdrawal trend
+      pool.query(`
+        SELECT DATE(created_at) AS day, COALESCE(SUM(amount),0) AS total
+        FROM transactions
+        WHERE type='Withdrawal' AND status='Approved' AND created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY day ORDER BY day ASC
+      `)
     ]);
     const rawTotalDeposited = parseFloat(totalDep.rows[0].total);
     const depositStatOffset = settings?.depositStatOffset || 0;
     const displayedTotalDeposited = Math.max(0, rawTotalDeposited - depositStatOffset);
+    const buildTrend = (rows, valueKey) => {
+      const map = {};
+      for (const r of rows) {
+        const d = new Date(r.day);
+        const label = d.toLocaleDateString("en-NG", { month: "short", day: "numeric" });
+        map[label] = parseFloat(r[valueKey]) || 0;
+      }
+      const labels = [];
+      const values = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = /* @__PURE__ */ new Date();
+        d.setDate(d.getDate() - i);
+        const label = d.toLocaleDateString("en-NG", { month: "short", day: "numeric" });
+        labels.push(label);
+        values.push(map[label] || 0);
+      }
+      return { labels, values };
+    };
+    const emailServiceConfigured = !!(process.env.RESEND_API_KEY || process.env.SMTP_HOST && process.env.SMTP_USER);
     res.json({
       earnersCount: parseInt(earners.rows[0].count),
       advertisersCount: parseInt(advertisers.rows[0].count),
       tasksCount: parseInt(tasks.rows[0].count),
       totalEarned: parseFloat(totalEarned.rows[0].total),
       pendingWithdrawals: parseFloat(pendingWd.rows[0].total),
+      completedWithdrawals: parseFloat(completedWd.rows[0].total),
       totalDeposited: displayedTotalDeposited,
+      todayNewUsers: parseInt(todayUsers.rows[0].count),
+      emailService: {
+        configured: emailServiceConfigured,
+        emailsSentToday: parseInt(emailHistoryToday.rows[0]?.count || "0"),
+        failedEmails: parseInt(emailHistoryFailed.rows[0]?.count || "0"),
+        lastEmailSent: lastEmailSent.rows[0]?.created_at || null,
+        lastEmailRecipient: lastEmailSent.rows[0]?.recipient || null
+      },
+      trends: {
+        registrations: buildTrend(trendRegs.rows, "count"),
+        deposits: buildTrend(trendDeps.rows, "total"),
+        withdrawals: buildTrend(trendWds.rows, "total")
+      },
       recentUsers: recentUsers.rows.map((r) => {
         const u = mapUser(r);
         const { password: _, verificationCode: __, verificationCodeExpires: ___, verificationCodeLastSent: ____, ...safe } = u;
