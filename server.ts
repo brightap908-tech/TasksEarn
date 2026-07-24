@@ -4945,11 +4945,11 @@ app.get("/api/admin/email-history", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-    // Auto-delete records that were already viewed on a previous page load
-    await pool.query("DELETE FROM broadcast_email_logs WHERE viewed = TRUE");
-
+    // Only return records that have NOT been viewed yet.
+    // Viewed records are excluded from this view on every subsequent load,
+    // giving the "auto-disappear after viewing" UX without destroying data.
     const result = await pool.query(
-      "SELECT id, admin_id, subject, html_content, target, total_recipients, sent_count, failed_count, retried_count, status, viewed, created_at FROM broadcast_email_logs ORDER BY created_at DESC"
+      "SELECT id, admin_id, subject, html_content, target, total_recipients, sent_count, failed_count, retried_count, status, viewed, created_at FROM broadcast_email_logs WHERE viewed = FALSE ORDER BY created_at DESC"
     );
     res.json(result.rows.map(r => ({
       id: r.id,
