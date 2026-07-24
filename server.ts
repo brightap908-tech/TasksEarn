@@ -840,6 +840,10 @@ async function bootstrapTables() {
       )
     `);
     await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS retried_count INT NOT NULL DEFAULT 0`);
+    await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS html_content TEXT NOT NULL DEFAULT ''`);
+    await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS sent_emails JSONB NOT NULL DEFAULT '[]'`);
+    await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS viewed BOOLEAN NOT NULL DEFAULT FALSE`);
+    await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'Completed'`);
 
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
@@ -4932,6 +4936,81 @@ app.get("/api/admin/broadcast-email/logs", async (req, res) => {
   }
 });
 
+// ─── Email History (view-once, auto-clean) ────────────────────────────────────
+
+// GET /api/admin/email-history
+// On each call: delete already-viewed records, then return all remaining ones.
+app.get("/api/admin/email-history", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    // Auto-delete records that were already viewed on a previous page load
+    await pool.query("DELETE FROM broadcast_email_logs WHERE viewed = TRUE");
+
+    const result = await pool.query(
+      "SELECT id, admin_id, subject, html_content, target, total_recipients, sent_count, failed_count, retried_count, status, viewed, created_at FROM broadcast_email_logs ORDER BY created_at DESC"
+    );
+    res.json(result.rows.map(r => ({
+      id: r.id,
+      adminId: r.admin_id,
+      subject: r.subject,
+      htmlContent: r.html_content,
+      target: r.target,
+      totalRecipients: r.total_recipients,
+      sentCount: r.sent_count,
+      failedCount: r.failed_count,
+      retriedCount: Number(r.retried_count ?? 0),
+      status: r.status || "Completed",
+      viewed: r.viewed,
+      createdAt: r.created_at,
+    })));
+  } catch (err) {
+    console.error("Email history error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// GET /api/admin/email-history/:id
+// Returns full detail (sent_emails + failed_emails) and marks the record as viewed.
+app.get("/api/admin/email-history/:id", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { id } = req.params;
+    const result = await pool.query(
+      "SELECT * FROM broadcast_email_logs WHERE id = $1",
+      [id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "Record not found" });
+
+    // Mark as viewed
+    await pool.query("UPDATE broadcast_email_logs SET viewed = TRUE WHERE id = $1", [id]);
+
+    const r = result.rows[0];
+    res.json({
+      id: r.id,
+      adminId: r.admin_id,
+      subject: r.subject,
+      htmlContent: r.html_content,
+      target: r.target,
+      totalRecipients: r.total_recipients,
+      sentCount: r.sent_count,
+      failedCount: r.failed_count,
+      retriedCount: Number(r.retried_count ?? 0),
+      status: r.status || "Completed",
+      viewed: true,
+      createdAt: r.created_at,
+      sentEmails: Array.isArray(r.sent_emails) ? r.sent_emails : [],
+      failedEmails: Array.isArray(r.failed_emails) ? r.failed_emails : [],
+    });
+  } catch (err) {
+    console.error("Email history detail error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 app.post("/api/admin/broadcast-email", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
@@ -5011,10 +5090,11 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
     }
 
     // Log the broadcast
+    const broadcastStatus = failedEmails.length === 0 ? "Completed" : sentEmails.length === 0 ? "Failed" : "Partial";
     await pool.query(
-      `INSERT INTO broadcast_email_logs (admin_id, subject, target, total_recipients, sent_count, failed_count, retried_count, failed_emails)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [user.id, subject, target, recipientRows.length, sentEmails.length, failedEmails.length, retriedCount, JSON.stringify(failedEmails)]
+      `INSERT INTO broadcast_email_logs (admin_id, subject, html_content, target, total_recipients, sent_count, failed_count, retried_count, sent_emails, failed_emails, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [user.id, subject, html, target, recipientRows.length, sentEmails.length, failedEmails.length, retriedCount, JSON.stringify(sentEmails), JSON.stringify(failedEmails), broadcastStatus]
     );
 
     res.json({

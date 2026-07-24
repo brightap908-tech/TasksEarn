@@ -281,6 +281,38 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
   const [broadcastUserSearch, setBroadcastUserSearch] = React.useState("");
   const [showBroadcastHistory, setShowBroadcastHistory] = React.useState(false);
 
+  // Email History state
+  const [emailHistory, setEmailHistory] = React.useState<any[]>([]);
+  const [emailHistoryLoading, setEmailHistoryLoading] = React.useState(false);
+  const [emailHistoryDetail, setEmailHistoryDetail] = React.useState<any | null>(null);
+  const [emailHistoryDetailLoading, setEmailHistoryDetailLoading] = React.useState(false);
+  const [emailHistoryFilter, setEmailHistoryFilter] = React.useState<"all" | "sent" | "failed">("all");
+
+  const fetchEmailHistory = async () => {
+    setEmailHistoryLoading(true);
+    try {
+      const data = await apiFetch("/api/admin/email-history");
+      if (Array.isArray(data)) setEmailHistory(data);
+    } catch (e) {} finally {
+      setEmailHistoryLoading(false);
+    }
+  };
+
+  const viewEmailHistoryDetail = async (id: number) => {
+    setEmailHistoryDetailLoading(true);
+    setEmailHistoryDetail(null);
+    try {
+      const data = await apiFetch(`/api/admin/email-history/${id}`);
+      if (data && !data.error) {
+        setEmailHistoryDetail(data);
+        // Mark as viewed locally so the UI reflects it immediately
+        setEmailHistory(prev => prev.map(h => h.id === id ? { ...h, viewed: true } : h));
+      }
+    } catch (e) {} finally {
+      setEmailHistoryDetailLoading(false);
+    }
+  };
+
   const fetchBroadcastLogs = async () => {
     setBroadcastLogsLoading(true);
     try {
@@ -560,6 +592,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
     if (activeTab === "notifications") { /* notifications already fetched on mount */ }
     if (activeTab === "reports") { fetchStats(); fetchDepositsAndReferrals(); fetchAudits(); }
     if (activeTab === "broadcast") fetchBroadcastLogs();
+    if (activeTab === "email-history") fetchEmailHistory();
   }, [activeTab]);
 
   React.useEffect(() => {
@@ -4090,6 +4123,215 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {activeTab === "email-history" && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h2 className="font-display text-lg font-black text-slate-900 flex items-center gap-2">
+                  <History className="h-5 w-5 text-blue-500" /> Email Broadcast History
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Records auto-delete after you view them. Unread records stay until opened.
+                </p>
+              </div>
+              <button
+                onClick={fetchEmailHistory}
+                disabled={emailHistoryLoading}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-40"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${emailHistoryLoading ? "animate-spin" : ""}`} /> Refresh
+              </button>
+            </div>
+
+            {/* Detail Modal */}
+            {(emailHistoryDetail || emailHistoryDetailLoading) && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+                <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-gray-100 bg-white shadow-2xl p-6 space-y-5">
+                  <button
+                    onClick={() => setEmailHistoryDetail(null)}
+                    className="absolute top-4 right-4 rounded-full p-1.5 hover:bg-gray-100 transition-colors"
+                  >
+                    <X className="h-4 w-4 text-gray-500" />
+                  </button>
+
+                  {emailHistoryDetailLoading && (
+                    <div className="flex items-center justify-center py-12">
+                      <RefreshCw className="h-6 w-6 text-blue-400 animate-spin" />
+                    </div>
+                  )}
+
+                  {emailHistoryDetail && !emailHistoryDetailLoading && (
+                    <>
+                      {/* Title */}
+                      <div className="pr-8">
+                        <h3 className="font-display text-base font-black text-slate-900">{emailHistoryDetail.subject}</h3>
+                        <div className="flex flex-wrap gap-3 mt-1.5 text-[10px] text-slate-400">
+                          <span>Target: <span className="font-semibold text-slate-600 capitalize">{emailHistoryDetail.target}</span></span>
+                          <span>{new Date(emailHistoryDetail.createdAt).toLocaleString()}</span>
+                          <span className={`font-bold px-2 py-0.5 rounded-full ${
+                            emailHistoryDetail.status === "Completed" ? "bg-emerald-50 text-emerald-600" :
+                            emailHistoryDetail.status === "Failed" ? "bg-red-50 text-red-600" :
+                            "bg-amber-50 text-amber-600"
+                          }`}>{emailHistoryDetail.status}</span>
+                        </div>
+                      </div>
+
+                      {/* Counters */}
+                      <div className="grid grid-cols-3 gap-3">
+                        {[
+                          { label: "Total", value: emailHistoryDetail.totalRecipients, color: "text-slate-700" },
+                          { label: "Delivered", value: emailHistoryDetail.sentCount, color: "text-emerald-600" },
+                          { label: "Failed", value: emailHistoryDetail.failedCount, color: "text-red-500" },
+                        ].map(c => (
+                          <div key={c.label} className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-center">
+                            <span className={`block text-lg font-black ${c.color}`}>{c.value}</span>
+                            <span className="block text-[10px] text-gray-400 mt-0.5">{c.label}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Email body preview */}
+                      {emailHistoryDetail.htmlContent && (
+                        <details className="rounded-xl border border-dashed border-blue-200 bg-blue-50/30 p-3">
+                          <summary className="text-[10px] font-bold text-blue-500 cursor-pointer">Preview Email Body</summary>
+                          <div
+                            className="mt-3 text-sm overflow-auto max-h-40"
+                            dangerouslySetInnerHTML={{ __html: emailHistoryDetail.htmlContent }}
+                          />
+                        </details>
+                      )}
+
+                      {/* Filter tabs */}
+                      <div className="flex gap-2">
+                        {(["all", "sent", "failed"] as const).map(f => (
+                          <button
+                            key={f}
+                            onClick={() => setEmailHistoryFilter(f)}
+                            className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all capitalize ${
+                              emailHistoryFilter === f
+                                ? "bg-blue-600 text-white"
+                                : "bg-gray-100 text-slate-500 hover:bg-gray-200"
+                            }`}
+                          >
+                            {f === "all" ? `All Recipients (${emailHistoryDetail.totalRecipients})` :
+                             f === "sent" ? `Delivered (${emailHistoryDetail.sentCount})` :
+                             `Failed (${emailHistoryDetail.failedCount})`}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Recipient lists */}
+                      <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+                        {/* Sent */}
+                        {(emailHistoryFilter === "all" || emailHistoryFilter === "sent") && emailHistoryDetail.sentEmails.map((email: string, i: number) => (
+                          <div key={`sent-${i}`} className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2">
+                            <MailCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                            <span className="text-xs font-mono text-emerald-800 truncate">{email}</span>
+                            <span className="ml-auto text-[9px] font-bold text-emerald-500 shrink-0">Delivered</span>
+                          </div>
+                        ))}
+                        {/* Failed */}
+                        {(emailHistoryFilter === "all" || emailHistoryFilter === "failed") && emailHistoryDetail.failedEmails.map((f: { email: string; reason: string }, i: number) => (
+                          <div key={`fail-${i}`} className="rounded-lg bg-red-50 border border-red-100 px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <MailX className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                              <span className="text-xs font-mono text-red-700 truncate">{f.email}</span>
+                              <span className="ml-auto text-[9px] font-bold text-red-400 shrink-0">Failed</span>
+                            </div>
+                            {f.reason && (
+                              <p className="mt-1 ml-5 text-[10px] text-red-500 italic">{f.reason}</p>
+                            )}
+                          </div>
+                        ))}
+                        {/* Empty state */}
+                        {emailHistoryFilter === "sent" && emailHistoryDetail.sentEmails.length === 0 && (
+                          <p className="text-xs text-slate-400 text-center py-4">No delivered emails.</p>
+                        )}
+                        {emailHistoryFilter === "failed" && emailHistoryDetail.failedEmails.length === 0 && (
+                          <p className="text-xs text-slate-400 text-center py-4">No failed emails — all delivered!</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* History table */}
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+              {emailHistoryLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <RefreshCw className="h-6 w-6 text-blue-400 animate-spin" />
+                </div>
+              ) : emailHistory.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                  <Mail className="h-10 w-10 text-slate-200" />
+                  <p className="text-sm font-bold text-slate-400">No broadcast history</p>
+                  <p className="text-xs text-slate-300 max-w-xs">Records appear here after a broadcast is sent. They are removed after you view them.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-100 bg-gray-50">
+                        <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subject</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sent At</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Recipients</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Delivered</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Failed</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {emailHistory.map(log => (
+                        <tr key={log.id} className={`hover:bg-gray-50/70 transition-colors ${log.viewed ? "opacity-60" : ""}`}>
+                          <td className="px-4 py-3">
+                            <p className="font-semibold text-slate-800 truncate max-w-[220px]">{log.subject}</p>
+                            <p className="text-[10px] text-slate-400 capitalize mt-0.5">Target: {log.target}</p>
+                          </td>
+                          <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
+                            {new Date(log.createdAt).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-center font-mono font-bold text-slate-700">{log.totalRecipients}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="font-bold text-emerald-600">{log.sentCount}</span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`font-bold ${log.failedCount > 0 ? "text-red-500" : "text-slate-300"}`}>{log.failedCount}</span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                              log.status === "Completed" ? "bg-emerald-50 text-emerald-600" :
+                              log.status === "Failed" ? "bg-red-50 text-red-500" :
+                              "bg-amber-50 text-amber-600"
+                            }`}>
+                              {log.status || "Completed"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => { setEmailHistoryFilter("all"); viewEmailHistoryDetail(log.id); }}
+                              className="flex items-center gap-1.5 mx-auto rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 text-[11px] font-bold px-3 py-1.5 transition-colors"
+                            >
+                              <Eye className="h-3.5 w-3.5" /> View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <p className="text-[10px] text-slate-400 text-center">
+              Viewing a record marks it as read. All read records are automatically removed on next page load.
+            </p>
           </div>
         )}
 

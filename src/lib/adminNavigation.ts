@@ -4,6 +4,7 @@ import {
   Coins,
   CreditCard,
   FolderSync,
+  History,
   LayoutGrid,
   ListTodo,
   Mail,
@@ -35,7 +36,8 @@ export type AdminTab =
   | "reports"
   | "profile"
   | "demo-accounts"
-  | "broadcast";
+  | "broadcast"
+  | "email-history";
 
 export interface AdminNavigationItem {
   tab: AdminTab;
@@ -63,6 +65,7 @@ export const ADMIN_NAV_ITEMS: readonly AdminNavigationItem[] = [
   { tab: "audits", icon: ShieldAlert, label: "Submission Audits" },
   { tab: "announcements", icon: Megaphone, label: "Popup Messages" },
   { tab: "broadcast", icon: Mail, label: "Broadcast Email", accent: true },
+  { tab: "email-history", icon: History, label: "Email History" },
   { tab: "notifications", icon: Bell, label: "Notifications" },
   { tab: "reports", icon: TrendingUp, label: "Reports" },
   { tab: "cms", icon: FolderSync, label: "Content Editor" },
