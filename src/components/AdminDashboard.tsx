@@ -1,5 +1,5 @@
 import React from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { 
   User, 
   Task, 
@@ -77,6 +77,7 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMode = false, colorMode = "light" }: AdminDashboardProps) {
   const { section } = useParams<{ section?: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const activeTab: AdminTab = (ADMIN_NAV_TABS.includes(section as AdminTab) ? section : "stats") as AdminTab;
   const setActiveTab = (tab: AdminTab) => navigate(`/admin/${tab}`);
@@ -214,6 +215,15 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
   const seenNotificationIdsRef = React.useRef<Set<string>>(new Set());
   const activeTabRef = React.useRef(activeTab);
   const notificationSocketRef = React.useRef<WebSocket | null>(null);
+
+  // Browser Push Notification states
+  const [pushEnabled, setPushEnabled] = React.useState(false);
+  const [pushLoading, setPushLoading] = React.useState(false);
+  const [pushStatusMsg, setPushStatusMsg] = React.useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
+  const pushSubscriptionRef = React.useRef<PushSubscription | null>(null);
+
+  // Highlighted submission (from SW notification click → ?submission=<id> query param)
+  const [highlightedSubmissionId] = React.useState<string | null>(() => searchParams.get("submission"));
   
   // CMS Content State
   const [pagesCMS, setPagesCMS] = React.useState<{ [key: string]: { title: string; content: string } }>({});
@@ -647,6 +657,178 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
   React.useEffect(() => {
     activeTabRef.current = activeTab;
   }, [activeTab]);
+
+  // ─── Browser Push Notification Helpers ──────────────────────────────────────
+
+  /** Convert URL-safe base64 string to Uint8Array for VAPID public key. */
+  function urlBase64ToUint8Array(base64String: string): Uint8Array {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const rawData = window.atob(base64);
+    return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
+  }
+
+  /** Register the service worker and subscribe to Web Push. Returns the subscription or null. */
+  async function registerPushSubscription(): Promise<PushSubscription | null> {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
+
+    let reg = await navigator.serviceWorker.getRegistration("/");
+    if (!reg) {
+      reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    }
+    // Wait until the SW is active
+    if (reg.installing) {
+      await new Promise<void>((resolve) => {
+        reg!.installing!.addEventListener("statechange", function handler(e) {
+          if ((e.target as ServiceWorker).state === "activated") {
+            this.removeEventListener("statechange", handler);
+            resolve();
+          }
+        });
+      });
+    }
+
+    const keyData = await apiFetch("/api/notifications/vapid-public-key");
+    if (!keyData?.publicKey) throw new Error("VAPID public key unavailable");
+
+    const applicationServerKey = urlBase64ToUint8Array(keyData.publicKey);
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey
+    });
+    return sub;
+  }
+
+  /** Check whether this browser already has an active admin push subscription. */
+  const checkPushStatus = React.useCallback(async () => {
+    try {
+      // Quick local check first
+      if ("serviceWorker" in navigator && "PushManager" in window) {
+        const reg = await navigator.serviceWorker.getRegistration("/");
+        if (reg) {
+          const existing = await reg.pushManager.getSubscription();
+          if (existing) {
+            pushSubscriptionRef.current = existing;
+            // Verify it's still active on the server
+            const status = await apiFetch("/api/admin/notifications/push/status");
+            setPushEnabled(status?.subscribed === true);
+            return;
+          }
+        }
+      }
+      setPushEnabled(false);
+    } catch {
+      setPushEnabled(false);
+    }
+  }, [apiFetch]);
+
+  /** Request permission and subscribe this browser to admin Web Push. */
+  const enablePushNotifications = React.useCallback(async () => {
+    if (!("Notification" in window)) {
+      setPushStatusMsg({ type: "error", text: "Your browser does not support notifications." });
+      return;
+    }
+    setPushLoading(true);
+    setPushStatusMsg(null);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setPushStatusMsg({
+          type: "error",
+          text: "Browser notifications were blocked. Please enable them in your browser settings and try again."
+        });
+        setPushLoading(false);
+        return;
+      }
+
+      const sub = await registerPushSubscription();
+      if (!sub) {
+        setPushStatusMsg({ type: "error", text: "Failed to register push subscription. Try again." });
+        setPushLoading(false);
+        return;
+      }
+      pushSubscriptionRef.current = sub;
+
+      const subJson = sub.toJSON();
+      await apiFetch("/api/admin/notifications/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endpoint: subJson.endpoint,
+          p256dh: subJson.keys?.p256dh,
+          auth: subJson.keys?.auth
+        })
+      });
+
+      // Persist preference in localStorage for quick UI restoration on next load
+      localStorage.setItem("admin_push_enabled", "true");
+      setPushEnabled(true);
+      setPushStatusMsg({ type: "success", text: "Browser notifications enabled. You'll be alerted even when the tab is in the background." });
+    } catch (err: any) {
+      console.error("[AdminPush] Enable error:", err);
+      setPushStatusMsg({ type: "error", text: err?.message || "Failed to enable push notifications." });
+    } finally {
+      setPushLoading(false);
+    }
+  }, [apiFetch]);
+
+  /** Unsubscribe this browser from admin Web Push. */
+  const disablePushNotifications = React.useCallback(async () => {
+    setPushLoading(true);
+    setPushStatusMsg(null);
+    try {
+      // Unsubscribe from the browser's push manager
+      const reg = await navigator.serviceWorker.getRegistration("/");
+      if (reg) {
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          const endpoint = sub.endpoint;
+          await sub.unsubscribe();
+          // Tell the server to deactivate this specific endpoint
+          await apiFetch("/api/admin/notifications/push/unsubscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint })
+          });
+        }
+      }
+      pushSubscriptionRef.current = null;
+      localStorage.removeItem("admin_push_enabled");
+      setPushEnabled(false);
+      setPushStatusMsg({ type: "info", text: "Browser notifications disabled for this device." });
+    } catch (err: any) {
+      console.error("[AdminPush] Disable error:", err);
+      setPushStatusMsg({ type: "error", text: "Failed to disable push notifications." });
+    } finally {
+      setPushLoading(false);
+    }
+  }, [apiFetch]);
+
+  // Check push status once on mount
+  React.useEffect(() => {
+    checkPushStatus();
+  }, [checkPushStatus]);
+
+  // Auto-dismiss push status messages after 6 seconds
+  React.useEffect(() => {
+    if (!pushStatusMsg) return;
+    const t = setTimeout(() => setPushStatusMsg(null), 6000);
+    return () => clearTimeout(t);
+  }, [pushStatusMsg]);
+
+  // If admin opened the page via a push notification click (?submission=<id>),
+  // auto-navigate to the Audits tab and open the notification dropdown to highlight it.
+  React.useEffect(() => {
+    if (!highlightedSubmissionId) return;
+    // Navigate to audits tab if not already there
+    if (activeTab !== "audits") {
+      setActiveTab("audits");
+    }
+    // Open the notification dropdown briefly so the highlighted entry is visible
+    setShowNotifDropdown(true);
+  // Only run once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Real-Time Notification Stream Hook & Helpers
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -1572,7 +1754,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
           {showNotifDropdown && (
             <div
               className="absolute right-0 top-full mt-2 z-50 rounded-2xl border border-slate-100 bg-white p-4 shadow-2xl space-y-3"
-              style={{ width: "18rem", maxWidth: "calc(100vw - 1.5rem)" }}
+              style={{ width: "20rem", maxWidth: "calc(100vw - 1.5rem)" }}
             >
               <div className="flex justify-between items-center border-b border-slate-50 pb-2.5">
                 <div>
@@ -1586,6 +1768,45 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                   >
                     <CheckCheck className="h-3 w-3" /> Mark all read
                   </button>
+                )}
+              </div>
+
+              {/* Browser Push Notification Controls */}
+              <div className="border border-slate-100 rounded-xl p-2.5 bg-slate-50/60 space-y-2">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Background Alerts</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={enablePushNotifications}
+                    disabled={pushEnabled || pushLoading}
+                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[10px] font-bold transition-all cursor-pointer ${
+                      pushEnabled
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
+                        : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                    }`}
+                  >
+                    <Bell className="h-3 w-3" />
+                    {pushEnabled ? "✓ Enabled" : pushLoading ? "Enabling…" : "🔔 Enable Browser Notifications"}
+                  </button>
+                  <button
+                    onClick={disablePushNotifications}
+                    disabled={!pushEnabled || pushLoading}
+                    className="flex-none flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-[10px] font-bold bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-700 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-default"
+                    title="Disable Browser Notifications"
+                  >
+                    <BellRing className="h-3 w-3 line-through" />
+                    🔕
+                  </button>
+                </div>
+
+                {/* Push status message */}
+                {pushStatusMsg && (
+                  <div className={`rounded-lg px-2.5 py-2 text-[10px] font-medium leading-tight ${
+                    pushStatusMsg.type === "success" ? "bg-emerald-50 text-emerald-800 border border-emerald-100" :
+                    pushStatusMsg.type === "error" ? "bg-rose-50 text-rose-800 border border-rose-100" :
+                    "bg-blue-50 text-blue-800 border border-blue-100"
+                  }`}>
+                    {pushStatusMsg.text}
+                  </div>
                 )}
               </div>
 
@@ -1604,7 +1825,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                       onClick={() => handleNotificationClick(notif)}
                       className={`py-2.5 px-2 rounded-xl transition-all flex gap-2.5 cursor-pointer text-left items-start ${
                         notif.read ? "hover:bg-slate-50/50" : "bg-blue-50/40 hover:bg-blue-50"
-                      }`}
+                      } ${highlightedSubmissionId && notif.referenceId === highlightedSubmissionId ? "ring-2 ring-blue-400 bg-blue-50" : ""}`}
                     >
                       <div className={`rounded-full p-1.5 shrink-0 ${
                         notif.type === "submission" ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600"

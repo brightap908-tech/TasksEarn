@@ -736,11 +736,27 @@ async function bootstrapTables() {
       )
     `);
 
-    // 22b. Browser Push Notification Subscriptions (Web Push / VAPID)
+    // 22b. Browser Push Notification Subscriptions (Web Push / VAPID) — earners
     await client.query(`
       CREATE TABLE IF NOT EXISTS notification_subscriptions (
         id           VARCHAR(50) PRIMARY KEY,
         user_id      VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        endpoint     TEXT NOT NULL,
+        p256dh_key   TEXT NOT NULL,
+        auth_key     TEXT NOT NULL,
+        active       BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE(user_id, endpoint)
+      )
+    `);
+
+    // 22c. Admin Browser Push Subscriptions — separate table so admin-only push
+    //      is not confused with earner subscriptions; allows multi-device admin alerts.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS admin_push_subscriptions (
+        id           TEXT PRIMARY KEY,
+        user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         endpoint     TEXT NOT NULL,
         p256dh_key   TEXT NOT NULL,
         auth_key     TEXT NOT NULL,
@@ -2439,6 +2455,87 @@ app.post("/api/notifications/unsubscribe", async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error("[Push] Unsubscribe error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Admin Push Subscription Endpoints ────────────────────────────────────────
+
+// GET /api/admin/notifications/push/status — check if admin has an active push subscription
+app.get("/api/admin/notifications/push/status", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const result = await pool.query(
+      "SELECT created_at FROM admin_push_subscriptions WHERE user_id=$1 AND active=true ORDER BY created_at DESC LIMIT 1",
+      [user.id]
+    );
+    if (result.rows.length > 0) {
+      res.json({ subscribed: true, lastSubscribed: result.rows[0].created_at });
+    } else {
+      res.json({ subscribed: false });
+    }
+  } catch (err) {
+    console.error("[AdminPush] Status check error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// POST /api/admin/notifications/push/subscribe — save admin browser push subscription
+app.post("/api/admin/notifications/push/subscribe", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { endpoint, p256dh, auth } = req.body;
+    if (!endpoint || !p256dh || !auth) {
+      return res.status(400).json({ error: "Missing subscription fields: endpoint, p256dh, auth" });
+    }
+
+    const id = "aps-" + Math.random().toString(36).substr(2, 9);
+    const now = new Date();
+
+    // Upsert: reactivate & update keys if (user, endpoint) already exists
+    await pool.query(`
+      INSERT INTO admin_push_subscriptions (id, user_id, endpoint, p256dh_key, auth_key, active, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, true, $6, $6)
+      ON CONFLICT (user_id, endpoint)
+      DO UPDATE SET p256dh_key=$4, auth_key=$5, active=true, updated_at=$6
+    `, [id, user.id, endpoint, p256dh, auth, now]);
+
+    console.log(`[AdminPush] Subscription saved for admin ${user.name} (${user.id})`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[AdminPush] Subscribe error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// POST /api/admin/notifications/push/unsubscribe — deactivate admin push subscription
+app.post("/api/admin/notifications/push/unsubscribe", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { endpoint } = req.body;
+    if (endpoint) {
+      // Deactivate just this specific endpoint (single device)
+      await pool.query(
+        "UPDATE admin_push_subscriptions SET active=false, updated_at=NOW() WHERE user_id=$1 AND endpoint=$2",
+        [user.id, endpoint]
+      );
+    } else {
+      // Deactivate all endpoints for this admin
+      await pool.query(
+        "UPDATE admin_push_subscriptions SET active=false, updated_at=NOW() WHERE user_id=$1",
+        [user.id]
+      );
+    }
+    console.log(`[AdminPush] Subscription deactivated for admin ${user.name} (${user.id})`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[AdminPush] Unsubscribe error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -5316,6 +5413,43 @@ server.on("upgrade", (request, socket, head) => {
  * Sends a Web Push notification to every earner with an active subscription.
  * Returns the count of successful deliveries.
  */
+/**
+ * Sends a Web Push notification to every admin with an active push subscription.
+ * Returns the count of successful deliveries.
+ */
+async function sendBrowserPushToAdmins(payloadJson: string): Promise<number> {
+  if (!vapidPublicKey || !vapidPrivateKey) return 0;
+  try {
+    const subs = await pool.query(
+      "SELECT id, user_id, endpoint, p256dh_key, auth_key FROM admin_push_subscriptions WHERE active=true"
+    );
+    let sent = 0;
+    for (const row of subs.rows) {
+      const pushSubscription = {
+        endpoint: row.endpoint,
+        keys: { p256dh: row.p256dh_key, auth: row.auth_key }
+      };
+      try {
+        await webpush.sendNotification(pushSubscription, payloadJson, { TTL: 86400 });
+        sent++;
+      } catch (err: any) {
+        // 410 Gone / 404 Not Found means this subscription is no longer valid
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          await pool.query(
+            "UPDATE admin_push_subscriptions SET active=false, updated_at=NOW() WHERE id=$1",
+            [row.id]
+          );
+        }
+        console.warn(`[AdminPush] Failed to deliver to endpoint for user ${row.user_id}:`, err.message || err);
+      }
+    }
+    return sent;
+  } catch (err) {
+    console.error("[AdminPush] sendBrowserPushToAdmins error:", err);
+    return 0;
+  }
+}
+
 async function sendBrowserPushToAllEarners(payloadJson: string): Promise<number> {
   if (!vapidPublicKey || !vapidPrivateKey) return 0;
 
@@ -5535,10 +5669,44 @@ async function notifyAdmin(notification: {
     read: false
   };
 
-  const payload = JSON.stringify({ type: "notification", notification: newNotif });
+  const wsPayload = JSON.stringify({ type: "notification", notification: newNotif });
   adminClients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) client.send(payload);
+    if (client.readyState === WebSocket.OPEN) client.send(wsPayload);
   });
+
+  // Also send a Web Push to every admin browser that has subscribed, so
+  // background tabs / minimised browsers / locked phones all receive the alert.
+  const submittedTime = new Date(newNotif.submittedAt || newNotif.createdAt);
+  const timeStr = submittedTime.toLocaleString("en-NG", {
+    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"
+  });
+  const pushTitle = notification.type === "submission"
+    ? "📥 New Task Submission"
+    : notification.type === "withdrawal"
+    ? "💸 Withdrawal Request"
+    : "💳 New Deposit";
+  const pushBody = notification.type === "submission"
+    ? `${notification.earnerName || "An earner"} submitted "${notification.taskTitle || "a task"}" for review · ${timeStr}`
+    : notification.message;
+  const pushUrl = notification.reviewUrl || (
+    notification.type === "submission" ? "/admin/audits"
+    : notification.type === "withdrawal" ? "/admin/withdrawals"
+    : "/admin/stats"
+  );
+  const pushPayload = JSON.stringify({
+    title: pushTitle,
+    body: pushBody,
+    icon: "/icon-192.png",
+    badge: "/icon-72.png",
+    tag: `tasksearn-admin-${notification.type}-${notification.referenceId}`,
+    url: pushUrl,
+    role: "admin"
+  });
+  sendBrowserPushToAdmins(pushPayload)
+    .then((sent) => {
+      if (sent > 0) console.log(`[AdminPush] Push delivered to ${sent} admin device(s) for ${notification.type} ${notification.referenceId}`);
+    })
+    .catch(() => {});
 }
 
 // ─── Vite / Static Server ─────────────────────────────────────────────────────

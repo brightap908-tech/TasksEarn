@@ -1,7 +1,5 @@
 // TasksEarn Service Worker — Browser Push Notification Support
-// Version: 4.0
-
-const PRODUCTION_TASKS_URL = "https://tasksearn.name.ng/tasks";
+// Version: 5.0 — Admin + Earner push support
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -19,29 +17,40 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data.json();
   } catch {
-    data = { title: "📢 New Task Available", body: event.data.text() };
+    data = { title: "📢 New Notification", body: event.data.text() };
   }
 
-  const title = data.title || "📢 New Task Available";
-  const tag   = data.tag  || "tasksearn-general";
-  const url   = data.url  || PRODUCTION_TASKS_URL;
+  const isAdmin = data.role === "admin";
 
-  // Action label based on notification type
+  // Default fallback URLs by role
+  const defaultUrl = isAdmin ? "/admin/audits" : "/earner/tasks";
+
+  const title = data.title || (isAdmin ? "📥 New Task Submission" : "📢 New Task Available");
+  const tag   = data.tag  || (isAdmin ? "tasksearn-admin-notification" : "tasksearn-general");
+  const url   = data.url  || defaultUrl;
+
+  // Action label
   let viewLabel = "View";
-  if (tag === "tasksearn-new-task")    viewLabel = "View Tasks";
-  else if (tag === "tasksearn-announcement") viewLabel = "View Announcement";
-  else if (tag === "tasksearn-account")      viewLabel = "View Account";
+  if (isAdmin) {
+    viewLabel = "Review Now";
+  } else if (tag === "tasksearn-new-task") {
+    viewLabel = "View Tasks";
+  } else if (tag === "tasksearn-announcement") {
+    viewLabel = "View Announcement";
+  } else if (tag === "tasksearn-account") {
+    viewLabel = "View Account";
+  }
 
   const options = {
-    body:    data.body  || "You have a new notification from TasksEarn.",
-    icon:    data.icon  || "/icon-192.png",   // full-size icon shown beside notification
-    badge:   data.badge || "/icon-72.png",    // small monochrome badge (Android status bar)
+    body:    data.body  || (isAdmin ? "A new task submission awaits your review." : "You have a new notification from TasksEarn."),
+    icon:    data.icon  || "/icon-192.png",
+    badge:   data.badge || "/icon-72.png",
     tag,
-    renotify: true,             // play sound/vibrate even if same tag replaces old notification
-    requireInteraction: false,
-    silent: false,              // use device default notification sound
+    renotify: true,
+    requireInteraction: isAdmin, // Keep admin notifications visible until dismissed
+    silent: false,
     vibrate: [200, 100, 200],
-    data: { url },
+    data: { url, role: data.role || "earner" },
     actions: [
       { action: "open",    title: viewLabel },
       { action: "dismiss", title: "Dismiss"  }
@@ -57,28 +66,33 @@ self.addEventListener("notificationclick", (event) => {
 
   if (event.action === "dismiss") return;
 
-  // Prefer the URL carried in the notification data; fall back to production tasks page
-  const targetUrl =
-    (event.notification.data && event.notification.data.url) ||
-    PRODUCTION_TASKS_URL;
+  const notifData = event.notification.data || {};
+  const role = notifData.role || "earner";
+
+  // Resolve target URL from notification data, fall back by role
+  const targetUrl = notifData.url ||
+    (role === "admin" ? "/admin/audits" : "/earner/tasks");
+
+  // Build absolute target URL using the service worker's own origin
+  const absoluteTarget = targetUrl.startsWith("http")
+    ? targetUrl
+    : self.location.origin + targetUrl;
 
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clientList) => {
-        // Focus and navigate an existing app tab if available
+        // Try to focus an existing tab that belongs to this origin
         for (const client of clientList) {
-          const isSameOrigin =
-            client.url.startsWith(self.location.origin) ||
-            client.url.includes("tasksearn");
-          if (isSameOrigin && "focus" in client) {
-            client.navigate(targetUrl);
+          if (client.url.startsWith(self.location.origin) && "focus" in client) {
+            // Navigate existing tab to target and focus it
+            client.navigate(absoluteTarget);
             return client.focus();
           }
         }
-        // No existing tab — open a new window at the target URL
+        // No existing tab — open a new window
         if (self.clients.openWindow) {
-          return self.clients.openWindow(targetUrl);
+          return self.clients.openWindow(absoluteTarget);
         }
       })
   );
