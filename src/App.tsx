@@ -52,7 +52,9 @@ import {
   Megaphone,
   ArrowRight,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Users,
+  CircleDollarSign
 } from "lucide-react";
 
 export default function App() {
@@ -923,18 +925,39 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* ── Platform statistics ── */}
                   <div
-                    className="grid grid-cols-3 gap-2 pt-4 text-center"
-                    style={{ borderTop: "1px solid #E2E8F0", fontFamily: "var(--font-mono)" }}
+                    className="grid grid-cols-3 gap-2 pt-4"
+                    style={{ borderTop: "1px solid #E2E8F0" }}
                   >
-                    {[
-                      { val: publicStats.earnersCount > 0 ? publicStats.earnersCount.toLocaleString() : "0", label: "Earners" },
-                      { val: publicStats.tasksCount > 0 ? publicStats.tasksCount.toLocaleString() : "0", label: "Campaigns" },
-                      { val: `₦${publicStats.totalPaidOut > 0 ? (publicStats.totalPaidOut / 1000000).toFixed(1) + "M" : "0"}`, label: "Paid Out" },
-                    ].map((s, i) => (
-                      <div key={i}>
-                        <p className="text-base font-black text-slate-900">{s.val}</p>
-                        <p className="mt-0.5 text-[10px]" style={{ color: "#475569" }}>{s.label}</p>
+                    {([
+                      { icon: <Users className="h-4 w-4" />,           val: "80,000+",      label: "REGISTERED EARNERS" },
+                      { icon: <Megaphone className="h-4 w-4" />,       val: "1,000+",       label: "REGISTERED ADVERTISERS" },
+                      { icon: <CircleDollarSign className="h-4 w-4" />, val: "₦85,000,000+", label: "TOTAL AMOUNT PAID OUT" },
+                    ] as { icon: React.ReactNode; val: string; label: string }[]).map((s, i) => (
+                      <div
+                        key={i}
+                        className="flex flex-col items-center gap-1.5 rounded-xl p-2.5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                        style={{ background: "rgba(37,99,235,0.05)", border: "1px solid rgba(37,99,235,0.10)" }}
+                      >
+                        <span
+                          className="flex h-7 w-7 items-center justify-center rounded-lg"
+                          style={{ background: "rgba(37,99,235,0.12)", color: "#2563EB" }}
+                        >
+                          {s.icon}
+                        </span>
+                        <p
+                          className="font-black leading-none text-slate-900"
+                          style={{ fontFamily: "var(--font-display)", fontSize: "clamp(0.7rem, 2vw, 1rem)" }}
+                        >
+                          {s.val}
+                        </p>
+                        <p
+                          className="font-bold uppercase leading-tight"
+                          style={{ color: "#64748B", fontSize: "0.55rem", letterSpacing: "0.06em" }}
+                        >
+                          {s.label}
+                        </p>
                       </div>
                     ))}
                   </div>
