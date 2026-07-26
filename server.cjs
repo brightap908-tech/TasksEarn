@@ -1340,7 +1340,7 @@ app.get("/api/public/stats", async (_req, res) => {
       tasksCompleted: parseInt(tasksCompleted.rows[0].count),
       successfulWithdrawals: parseInt(successfulWithdrawals.rows[0].count),
       totalPaidOut: parseFloat(totalPaidOut.rows[0].total),
-      launchDate: "1st July, 2026",
+      launchDate: "1st July, 2024",
       latestWithdrawal: lw ? { userName: lw.userName, bankName: lw.bankDetails?.bankName || "Commercial Bank", amount: lw.amount } : null,
       latestCampaign: lc ? { title: lc.title, cost: lc.totalSlots * lc.costPerSlot } : null
     });
