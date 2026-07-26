@@ -379,12 +379,12 @@ export default function AboutPage({ onNavigate, publicStats }: AboutPageProps) {
           <div>
             <div className="mb-5 inline-flex rounded-xl bg-white p-3 text-blue-600 shadow-sm"><CalendarDays className="h-5 w-5" /></div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Our journey begins</p>
-            <p className="mt-2 text-3xl font-bold text-slate-900" style={{ fontFamily: "var(--font-display)" }}>1st July, 2026</p>
+            <p className="mt-2 text-3xl font-bold text-slate-900" style={{ fontFamily: "var(--font-display)" }}>1st July, 2024</p>
             <p className="mt-3 text-sm leading-6 text-slate-600">The day TasksEarn launched with a clear commitment to legitimate earning opportunities and meaningful business growth.</p>
           </div>
           <div className="mt-7 flex items-center gap-3 border-t border-blue-200/70 pt-5 text-xs font-semibold text-blue-800">
             <span className="h-2.5 w-2.5 rounded-full bg-blue-600 shadow-[0_0_0_5px_rgba(37,99,235,0.12)]" />
-            Launched on 1st July, 2026
+            Launched on 1st July, 2024
           </div>
         </div>
       </Reveal>

@@ -605,7 +605,7 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
           successfulWithdrawals,
           totalPaidOut,
           tasksCount: db.tasks.length,
-          launchDate: "1st July, 2026",
+          launchDate: "1st July, 2024",
           latestWithdrawal: latestWithdrawalTx ? {
             userName: latestWithdrawalTx.userName,
             bankName: latestWithdrawalTx.bankDetails?.bankName || "Commercial Bank",

@@ -84,7 +84,7 @@ export default function App() {
     totalPaidOut: 0,
     // Kept for the existing home-page activity strip.
     tasksCount: 0,
-    launchDate: "1st July, 2026",
+    launchDate: "1st July, 2024",
     latestWithdrawal: null as { userName: string; bankName: string; amount: number } | null,
     latestCampaign: null as { title: string; cost: number } | null
   });
@@ -311,7 +311,7 @@ export default function App() {
           successfulWithdrawals: s.successfulWithdrawals ?? 0,
           totalPaidOut: s.totalPaidOut ?? 0,
           tasksCount: s.tasksCount ?? 0,
-          launchDate: s.launchDate || "1st July, 2026",
+          launchDate: s.launchDate || "1st July, 2024",
           latestWithdrawal: s.latestWithdrawal,
           latestCampaign: s.latestCampaign
         });
