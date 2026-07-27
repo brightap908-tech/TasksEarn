@@ -5,7 +5,7 @@ import {
   Wallet, ArrowDownCircle, Users, Bell, Settings, LogOut, Menu, X,
   Copy, RefreshCw, Trash2, Play, Pause, ChevronDown, ChevronUp,
   Check, AlertCircle, TrendingUp, TrendingDown, Eye, Plus, ArrowRight,
-  PiggyBank, CreditCard, Shield
+  PiggyBank, CreditCard, Shield, BookOpen
 } from "lucide-react";
 import { User, EarnerNotification, WebsiteSettings } from "../types";
 import { BrowserPushCard } from "./EarnerNotifications";
@@ -313,6 +313,26 @@ export default function UnifiedDashboard({
             </button>
           ))}
         </div>
+
+        {/* ── 4b. Help & Tutorials ── */}
+        <button
+          type="button"
+          onClick={() => navTo("help")}
+          className="flex w-full items-center gap-3 rounded-2xl p-4 text-left transition-all cursor-pointer"
+          style={{
+            background: isDarkMode ? "rgba(37,99,235,0.12)" : "#EFF6FF",
+            border: "1px solid rgba(37,99,235,0.20)",
+          }}
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(37,99,235,0.14)", color: "#2563EB" }}>
+            <BookOpen className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-black" style={{ color: isDarkMode ? "#DBEAFE" : "#1E3A8A" }}>New here?</span>
+            <span className="mt-0.5 block text-xs leading-relaxed" style={{ color: isDarkMode ? "#93C5FD" : "#64748B" }}>Learn how to earn and create campaigns in minutes.</span>
+          </span>
+          <span className="shrink-0 rounded-xl px-3 py-2 text-xs font-bold text-white" style={{ background: "#2563EB" }}>Watch Guide</span>
+        </button>
 
         {/* ── 5. Task Submission Summary ── */}
         {dashData && (

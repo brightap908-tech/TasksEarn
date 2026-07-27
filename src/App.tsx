@@ -22,6 +22,7 @@ import LoginPopupModal from "./components/LoginPopupModal";
 import PublicPages from "./components/PublicPages";
 import SEO from "./components/SEO";
 import UnifiedDashboard from "./components/UnifiedDashboard";
+import HelpTutorialsPage from "./components/HelpTutorialsPage";
 import EarnerTaskSubmitPage from "./components/EarnerTaskSubmitPage";
 import EarnerRejectedTaskResubmitPage from "./components/EarnerRejectedTaskResubmitPage";
 import EarnerRejectedTasksPage from "./components/EarnerRejectedTasksPage";
@@ -1473,6 +1474,11 @@ export default function App() {
         } />
 
         {/* ROLE PROTECTED: UNIFIED DASHBOARD */}
+        <Route path="/dashboard/help" element={
+          user && isRegularUser(user.role) ? (
+            <HelpTutorialsPage isDarkMode={isDarkMode} />
+          ) : user && user.role === UserRole.ADMIN ? (<Navigate to="/admin/stats" replace />) : (<Navigate to="/login" replace />)
+        } />
         <Route path="/dashboard/:section" element={
           user && isRegularUser(user.role) ? (
             <UnifiedDashboard

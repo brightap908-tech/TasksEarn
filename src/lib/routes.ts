@@ -22,6 +22,7 @@ export const VIEW_TO_PATH: Record<string, string> = {
   "dashboard-referrals": "/dashboard/referrals",
   "dashboard-notifications": "/dashboard/notifications",
   "dashboard-profile": "/dashboard/profile",
+  "dashboard-help": "/dashboard/help",
   // Admin pages (kept separate)
   "admin-dashboard": "/admin/stats",
   "admin-users": "/admin/users",
@@ -56,6 +57,7 @@ export function pathToView(pathname: string): string {
   if (pathname === "/dashboard/referrals") return "dashboard-referrals";
   if (pathname === "/dashboard/notifications") return "dashboard-notifications";
   if (pathname === "/dashboard/profile") return "dashboard-profile";
+  if (pathname === "/dashboard/help") return "dashboard-help";
   if (pathname.startsWith("/dashboard/")) return "dashboard-overview";
   // Admin
   if (pathname === "/admin/advertisers") return "admin-advertisers";
