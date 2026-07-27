@@ -40,16 +40,18 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
   const {
     proofScreenshot,
     setProofScreenshot,
+    stagedToken,
     fileName,
     setFileName,
     fileSize,
     setFileSize,
     compressing,
+    uploading,
     uploadError,
     fileInputRef,
     handleFileChange,
     clearScreenshot,
-  } = useScreenshotUpload();
+  } = useScreenshotUpload(apiFetch);
 
   // Fetch the task on mount
   React.useEffect(() => {
@@ -94,6 +96,18 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
       setSubmitError("Please provide verification notes or upload a screenshot.");
       return;
     }
+    // If the user selected a screenshot but the staging upload is still in
+    // progress, block submit rather than sending without the image.
+    if (proofScreenshot && uploading) {
+      setSubmitError("Please wait — screenshot is still uploading to the server.");
+      return;
+    }
+    // If the user selected a screenshot but staging failed (no token, not uploading),
+    // block submit so we don't silently send a submission without the image.
+    if (proofScreenshot && !stagedToken && !proofScreenshot.startsWith("http")) {
+      setSubmitError("Screenshot upload failed. Please remove the image and re-upload it.");
+      return;
+    }
     setSubmitting(true);
     setSubmitError("");
 
@@ -102,16 +116,23 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
       : "See uploaded screenshot proof.";
 
     try {
-      const screenshotPayload = proofScreenshot || "";
+      // Prefer the staged token (file upload path); fall back to inline for
+      // pasted external http:// URLs which bypass the staging endpoint.
+      const useToken  = !!stagedToken;
+      const useInline = !stagedToken && proofScreenshot.startsWith("http");
       console.log(
         "[Submit] Sending proof —",
-        `screenshot: ${screenshotPayload ? `${screenshotPayload.length} chars, prefix="${screenshotPayload.slice(0, 40)}…"` : "(none)"}`,
+        `stagedToken: ${stagedToken || "(none)"}`,
+        `inlineUrl: ${useInline ? proofScreenshot.slice(0, 60) : "(none)"}`,
         `proofText: ${finalProofText.length} chars`,
       );
+      const body: Record<string, string> = { proofText: finalProofText };
+      if (useToken)  body.stagedToken      = stagedToken;
+      if (useInline) body.proofScreenshot  = proofScreenshot;
       const res = await apiFetch(`/api/earner/tasks/${task.id}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proofText: finalProofText, proofScreenshot: screenshotPayload })
+        body: JSON.stringify(body),
       });
 
       if (res && res.error) {
@@ -387,35 +408,50 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
 
           ) : (
             /* ── Preview card ────────────────────────────────────────────── */
-            <div className="rounded-xl border border-gray-200 bg-slate-50/50 p-3 space-y-3">
+            <div className={`rounded-xl border p-3 space-y-3 transition-colors ${uploading ? "border-blue-200 bg-blue-50/40" : "border-gray-200 bg-slate-50/50"}`}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="relative h-11 w-11 rounded-lg border border-gray-200 bg-white overflow-hidden shrink-0">
                     <img src={proofScreenshot} alt="Screenshot Preview" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                    {uploading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-blue-900/40 rounded-lg">
+                        <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                      </div>
+                    )}
                   </div>
                   <div className="min-w-0">
                     <p className="text-[11px] font-bold text-gray-800 truncate">{fileName || "Attached Screenshot"}</p>
-                    <p className="text-[9px] text-gray-400 font-mono mt-0.5">{fileSize || "Image ready"}</p>
+                    {uploading ? (
+                      <p className="text-[9px] text-blue-500 font-bold mt-0.5 flex items-center gap-1">
+                        <span className="inline-block h-2 w-2 rounded-full border border-blue-400 border-t-transparent animate-spin" />
+                        Uploading to server…
+                      </p>
+                    ) : (
+                      <p className="text-[9px] text-gray-400 font-mono mt-0.5">{fileSize || "Image ready"}</p>
+                    )}
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={clearScreenshot}
-                  className="rounded-lg border border-red-100 bg-red-50 hover:bg-red-100 p-2 text-red-600 cursor-pointer transition-all"
+                  disabled={uploading}
+                  className="rounded-lg border border-red-100 bg-red-50 hover:bg-red-100 p-2 text-red-600 cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   title="Remove screenshot"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => window.open(proofScreenshot, "_blank")}
-                  className="text-[10px] font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
-                >
-                  <Eye className="h-3.5 w-3.5" /> View Large Preview
-                </button>
-              </div>
+              {!uploading && (
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => window.open(proofScreenshot, "_blank")}
+                    className="text-[10px] font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <Eye className="h-3.5 w-3.5" /> View Large Preview
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -449,11 +485,11 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
           </button>
           <button
             type="submit"
-            disabled={submitting || compressing}
+            disabled={submitting || compressing || uploading}
             className="flex-1 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 py-3 text-xs font-bold text-white shadow hover:shadow-md transition-all flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Send className="h-3.5 w-3.5" />
-            {submitting ? "Uploading Proof…" : "Upload & Submit Verification"}
+            {submitting ? "Submitting…" : uploading ? "Uploading screenshot…" : "Upload & Submit Verification"}
           </button>
         </div>
 

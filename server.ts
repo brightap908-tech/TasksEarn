@@ -394,6 +394,17 @@ async function sweepOrphanedProofScreenshots() {
   }
 }
 
+async function sweepExpiredStagedProofs() {
+  try {
+    const result = await pool.query("DELETE FROM staged_proofs WHERE expires_at < NOW()");
+    if ((result.rowCount ?? 0) > 0) {
+      console.log(`[StagedProof] Startup sweep: cleared ${result.rowCount} expired staged proof(s).`);
+    }
+  } catch (err) {
+    console.error("[StagedProof] Startup sweep failed:", err);
+  }
+}
+
 async function getSettings(): Promise<ReturnType<typeof mapSettings>> {
   const res = await pool.query("SELECT * FROM settings ORDER BY id ASC LIMIT 1");
   return res.rows.length > 0 ? mapSettings(res.rows[0]) : {
@@ -912,6 +923,22 @@ async function bootstrapTables() {
     await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS sent_emails JSONB NOT NULL DEFAULT '[]'`);
     await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS viewed BOOLEAN NOT NULL DEFAULT FALSE`);
     await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'Completed'`);
+
+    // 35. Staged proofs — temporary holding table for screenshot uploads.
+    //     A proof is staged (uploaded) before the submission is committed so that
+    //     the submit POST body carries only a small token instead of a full base64 blob.
+    //     Rows expire after 30 minutes; the startup sweep and each successful submit
+    //     delete the token. user_id is stored so a token can only be consumed by the
+    //     earner who uploaded it.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS staged_proofs (
+        token      TEXT PRIMARY KEY,
+        user_id    TEXT NOT NULL,
+        data_url   TEXT NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_staged_proofs_expires_at ON staged_proofs (expires_at)`);
 
     // Performance indexes — all idempotent (IF NOT EXISTS).
     // submissions: earner_id is the hottest column (every earner query filters on it).
@@ -2058,6 +2085,58 @@ app.post("/api/earner/tasks/:id/hide", async (req, res) => {
   }
 });
 
+// ── Staged proof upload ──────────────────────────────────────────────────────
+// The earner uploads the screenshot here BEFORE submitting the task form.
+// The server stores the data URL temporarily and returns a short-lived token.
+// The submit endpoint then resolves the token → data URL in one DB lookup,
+// keeping the submission POST body small (no inline base64).
+app.post("/api/earner/proof/stage", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role === UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+
+    const { dataUrl } = req.body;
+    if (!dataUrl || typeof dataUrl !== "string") {
+      return res.status(400).json({ error: "dataUrl is required" });
+    }
+
+    // Must be a data URL of an accepted image format.
+    const mimeMatch = dataUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,/i);
+    if (!mimeMatch) {
+      return res.status(400).json({
+        error: "Invalid image format. Only PNG, JPG, JPEG, WEBP data URLs are accepted.",
+      });
+    }
+
+    // Estimate raw byte size from base64 payload length (~33% overhead).
+    const b64 = dataUrl.split(",")[1] ?? "";
+    const estimatedBytes = Math.floor((b64.length * 3) / 4);
+    const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+    if (estimatedBytes > MAX_BYTES) {
+      return res.status(400).json({
+        error: `Image too large (${(estimatedBytes / 1024 / 1024).toFixed(1)} MB). Maximum is 10 MB.`,
+      });
+    }
+
+    const token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+
+    await pool.query(
+      "INSERT INTO staged_proofs (token, user_id, data_url, expires_at) VALUES ($1, $2, $3, $4)",
+      [token, user.id, dataUrl, expiresAt]
+    );
+
+    // Opportunistically purge expired rows (non-blocking).
+    pool.query("DELETE FROM staged_proofs WHERE expires_at < NOW()").catch(() => {});
+
+    console.log(`[StagedProof] token=${token} user=${user.id} size=~${(estimatedBytes / 1024).toFixed(1)} KB mime=${mimeMatch[1]}`);
+    res.status(201).json({ token });
+  } catch (err: any) {
+    console.error("[StagedProof] Error:", err);
+    res.status(500).json({ error: "Failed to stage screenshot. Please try again." });
+  }
+});
+
 app.post("/api/earner/tasks/:id/submit", async (req, res) => {
   const requestStartedAt = performance.now();
   const requestId = `proof-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -2068,47 +2147,56 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
     if (!user || user.role === UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
     const taskId = req.params.id;
-    const { proofText, proofScreenshot } = req.body;
+    const { proofText, proofScreenshot, stagedToken } = req.body;
 
     // ── Detailed upload logging (frontend/backend handshake diagnostics) ────
     console.log(`[Submit:${requestId}] taskId=${taskId} userId=${user.id} (${user.name}) auth=${Math.round(performance.now() - requestStartedAt)}ms`);
-    console.log(`[Submit:${requestId}] proofText=${proofText ? `${String(proofText).length} chars` : "(none)"}`);
-    if (proofScreenshot) {
+    console.log(`[Submit:${requestId}] proofText=${proofText ? `${String(proofText).length} chars` : "(none)"} stagedToken=${stagedToken || "(none)"}`);
+
+    // ── Resolve screenshot from staged token or inline payload ──────────────
+    let screenshot: string | null = null;
+
+    if (stagedToken) {
+      // Primary path: resolve a pre-uploaded staged proof by token.
+      const stagedRow = await pool.query(
+        "SELECT data_url FROM staged_proofs WHERE token = $1 AND user_id = $2 AND expires_at > NOW()",
+        [stagedToken, user.id]
+      );
+      if (stagedRow.rows.length === 0) {
+        return res.status(400).json({
+          error: "Screenshot upload expired or was not found. Please re-upload your screenshot and try again.",
+        });
+      }
+      screenshot = stagedRow.rows[0].data_url;
+      console.log(`[Submit:${requestId}] staged token resolved — ~${(((screenshot?.split(",")[1]?.length ?? 0) * 3) / 4 / 1024).toFixed(1)} KB`);
+    } else if (proofScreenshot) {
+      // Legacy / external-URL path: inline payload (used for pasted http:// URLs).
       const dataUrl = String(proofScreenshot);
       const isDataUrl = dataUrl.startsWith("data:");
       const mimeMatch = isDataUrl ? dataUrl.match(/^data:([^;,]+)/) : null;
-      const detectedMime = mimeMatch ? mimeMatch[1] : "(not a data URL)";
-      // Estimate raw bytes from base64 length
+      const detectedMime = mimeMatch ? mimeMatch[1] : "(not a data URL / external URL)";
       const base64Part = dataUrl.split(",")[1] ?? "";
       const estimatedBytes = Math.floor((base64Part.length * 3) / 4);
-      console.log(`[Submit:${requestId}] screenshot=${dataUrl.length} chars, ~${(estimatedBytes / 1024).toFixed(1)} KB, mime=${detectedMime}`);
+      console.log(`[Submit:${requestId}] inline screenshot=${dataUrl.length} chars, ~${(estimatedBytes / 1024).toFixed(1)} KB, mime=${detectedMime}`);
 
-      // Validate: must be a proper image data URL
-      if (!isDataUrl || !detectedMime.startsWith("image/")) {
-        console.error(`[Submit:${requestId}] rejected invalid screenshot format (detected: "${detectedMime}")`);
+      if (isDataUrl && !detectedMime.startsWith("image/")) {
+        console.error(`[Submit:${requestId}] rejected invalid inline screenshot format (detected: "${detectedMime}")`);
         return res.status(400).json({
           error: `Invalid screenshot format. Expected an image data URL (data:image/...) but received "${detectedMime}". Please re-select the image and try again.`,
         });
       }
-
-      // Reject known-unsupported types that browsers sometimes pass through
-      const supportedMimes = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
-      if (!supportedMimes.has(detectedMime)) {
-        console.warn(`[Submit:${requestId}] unsupported MIME "${detectedMime}" — storing after frontend validation`);
-      }
+      screenshot = dataUrl;
     } else {
       console.log(`[Submit:${requestId}] screenshot=(none)`);
     }
 
     // Require at least some proof — text, link, or a screenshot
-    if (!proofText && !proofScreenshot) {
+    if (!proofText && !screenshot) {
       return res.status(400).json({ error: "Please provide proof details: notes, a link, or a screenshot." });
     }
 
     await client.query("BEGIN");
     console.log(`[Submit:${requestId}] transaction started at ${Math.round(performance.now() - requestStartedAt)}ms`);
-
-    const screenshot = proofScreenshot || null;
     const finalProofText = proofText || "See uploaded screenshot proof.";
 
     // ── Check for an existing submission FIRST ──────────────────────────────
@@ -2172,6 +2260,8 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
 
       await client.query("COMMIT");
       const submission = mapSubmission(updatedSubRes.rows[0]);
+      // Consume the staged proof token now that it is committed to the DB.
+      if (stagedToken) pool.query("DELETE FROM staged_proofs WHERE token = $1", [stagedToken]).catch(() => {});
       console.log(`[Submit:${requestId}] resubmission committed in ${Math.round(performance.now() - requestStartedAt)}ms`);
       void notifyAdmin({
         type: "submission",
@@ -2236,6 +2326,8 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
 
     await client.query("COMMIT");
     const submission = mapSubmission(insertedSubRes.rows[0]);
+    // Consume the staged proof token now that it is committed to the DB.
+    if (stagedToken) pool.query("DELETE FROM staged_proofs WHERE token = $1", [stagedToken]).catch(() => {});
     console.log(`[Submit:${requestId}] submission committed in ${Math.round(performance.now() - requestStartedAt)}ms`);
 
     void notifyAdmin({
@@ -5913,6 +6005,7 @@ async function ensureVapidKeys() {
     await ensurePlatformsSeeded();
     await ensureVapidKeys();
     await sweepOrphanedProofScreenshots();
+    await sweepExpiredStagedProofs();
     await startServer();
   } catch (err) {
     console.error("FATAL: Failed to start server:", err);

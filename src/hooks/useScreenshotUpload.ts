@@ -12,10 +12,16 @@
  *                 not yet materialised), fall back to:
  *                 fetch(URL.createObjectURL(file)) → blob → FileReader.
  *                 Object URL is always revoked in a finally block.
- *  3. PREPARE   — The original image data URL is made available immediately.
- *                 Canvas recompression is intentionally not part of the
- *                 submit path: decoding/drawing a small screenshot can take
- *                 longer than sending it.
+ *  3. STAGE     — POST data URL to /api/earner/proof/stage.
+ *                 Server stores it temporarily and returns a short-lived token.
+ *                 The submit form sends the token, not the full base64 payload.
+ *
+ * Race-condition safety:
+ *  uploadGenRef is incremented on every new file selection. After each await
+ *  the hook checks whether uploadGenRef.current still matches the generation
+ *  that started the operation. If the user picked a second file while the
+ *  first was still uploading, the stale result is silently discarded and
+ *  state/UI reflect only the most recently selected file.
  *
  * Guarantees:
  *  - Revokes every object URL in a finally block.
@@ -235,13 +241,19 @@ async function readFileToDataUrl(file: File): Promise<string> {
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export interface UseScreenshotUploadReturn {
+  /** Base64 data URL (or external http URL) — used for the local preview only. */
   proofScreenshot:    string;
   setProofScreenshot: React.Dispatch<React.SetStateAction<string>>;
+  /** Server-side token returned by POST /api/earner/proof/stage. Send this on submit. */
+  stagedToken:        string;
   fileName:           string;
   setFileName:        React.Dispatch<React.SetStateAction<string>>;
   fileSize:           string;
   setFileSize:        React.Dispatch<React.SetStateAction<string>>;
+  /** True while the file is being read from disk (local processing). */
   compressing:        boolean;
+  /** True while the data URL is being POSTed to the staging endpoint. */
+  uploading:          boolean;
   uploadError:        string;
   setUploadError:     React.Dispatch<React.SetStateAction<string>>;
   fileInputRef:       React.RefObject<HTMLInputElement>;
@@ -249,37 +261,61 @@ export interface UseScreenshotUploadReturn {
   clearScreenshot:    () => void;
 }
 
-export function useScreenshotUpload(): UseScreenshotUploadReturn {
+type ApiFetch = (endpoint: string, options?: RequestInit) => Promise<any>;
+
+export function useScreenshotUpload(apiFetch: ApiFetch): UseScreenshotUploadReturn {
   const [proofScreenshot, setProofScreenshot] = React.useState("");
+  const [stagedToken,     setStagedToken]     = React.useState("");
   const [fileName,        setFileName]         = React.useState("");
   const [fileSize,        setFileSize]         = React.useState("");
   const [compressing,     setCompressing]      = React.useState(false);
+  const [uploading,       setUploading]        = React.useState(false);
   const [uploadError,     setUploadError]      = React.useState("");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  // Generation counter — incremented on every new file selection.
+  // Any in-flight operation checks this after each await: if the value has
+  // changed, a newer file was selected while it was running, so the stale
+  // result is silently discarded.
+  const uploadGenRef = React.useRef(0);
+
   const resetInput = () => {
-    // Resetting value lets the user pick the same file again without tricks.
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const clearScreenshot = () => {
     setProofScreenshot("");
+    setStagedToken("");
     setFileName("");
     setFileSize("");
     setUploadError("");
+    setCompressing(false);
+    setUploading(false);
     resetInput();
   };
 
   const handleFileChange = async (file: File) => {
+    // Bump the generation before any async work so stale callbacks self-cancel.
+    const gen = ++uploadGenRef.current;
+
     console.log("─────────────────────────────────────────────────────────");
-    console.log("[Upload] File selected");
+    console.log(`[Upload] File selected (gen=${gen})`);
     console.log(`[Upload]   name    : ${file.name}`);
     console.log(`[Upload]   type    : "${file.type || "(empty)"}" — ext: ".${ext(file.name)}"`);
     console.log(`[Upload]   size    : ${fmtBytes(file.size)}`);
     console.log(`[Upload]   modified: ${new Date(file.lastModified).toISOString()}`);
 
+    // Clear any previous result immediately so the UI never shows stale data.
+    setProofScreenshot("");
+    setStagedToken("");
+    setFileName("");
+    setFileSize("");
+    setUploadError("");
+    setUploading(false);
+
     // ── 1. Validate ──────────────────────────────────────────────────────────
     const check = await validate(file);
+    if (uploadGenRef.current !== gen) return; // superseded by a newer selection
     if (check.ok === false) {
       console.warn("[Upload] Validation failed:", check.reason);
       setUploadError(check.reason);
@@ -289,45 +325,97 @@ export function useScreenshotUpload(): UseScreenshotUploadReturn {
     console.log("[Upload] Validation passed ✓");
 
     setFileName(file.name);
-    setUploadError("");
     setCompressing(true);
-    setProofScreenshot("");
 
+    let rawDataUrl = "";
     try {
       // ── 2. Read file to data URL ──────────────────────────────────────────
       console.log("[Upload] Reading file …");
-      const rawDataUrl   = await readFileToDataUrl(file);
-      const rawBytes     = base64Bytes(rawDataUrl);
+      rawDataUrl   = await readFileToDataUrl(file);
+      if (uploadGenRef.current !== gen) return; // superseded
+
+      const rawBytes = base64Bytes(rawDataUrl);
       console.log(`[Upload] File read OK — ${fmtBytes(rawBytes)} as base64`);
       console.log(`[Upload] Data URL prefix: "${rawDataUrl.slice(0, 60)}…"`);
 
-      // ── 3. Make the original bytes available immediately ──────────────────
-      // Re-encoding through canvas can block the browser event loop and offers
-      // no benefit for the small proof images this endpoint accepts.
+      // Show preview immediately from the local data URL.
       const sizeLabel = `${fmtBytes(rawBytes)} (original)`;
       setFileSize(sizeLabel);
       setProofScreenshot(rawDataUrl);
-      console.log("[Upload] Ready immediately ✓", sizeLabel);
+      setCompressing(false);
+      console.log("[Upload] Local preview ready ✓", sizeLabel);
     } catch (err) {
+      if (uploadGenRef.current !== gen) return; // superseded
       const msg = err instanceof Error ? err.message : String(err);
-      console.error("[Upload] Failed:", err);
+      console.error("[Upload] Read failed:", err);
       setUploadError(
         `Could not read this image. ${msg}. Please try a different PNG, JPG, JPEG, or WEBP file.`,
       );
-    } finally {
       setCompressing(false);
       resetInput();
+      return;
+    } finally {
+      // If we returned early above (superseded), make sure compressing is cleared.
+      if (uploadGenRef.current !== gen) {
+        setCompressing(false);
+      }
+    }
+
+    // ── 3. Stage on server ───────────────────────────────────────────────────
+    // POST the data URL to the staging endpoint. The server stores it and
+    // returns a short-lived token that the submit form sends instead of the
+    // full base64 payload.
+    setUploading(true);
+    console.log("[Upload] Staging on server …");
+    try {
+      const res = await apiFetch("/api/earner/proof/stage", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ dataUrl: rawDataUrl }),
+      });
+
+      if (uploadGenRef.current !== gen) return; // superseded
+
+      if (res?.token) {
+        setStagedToken(res.token);
+        console.log(`[Upload] Staged ✓ token=${res.token}`);
+      } else {
+        const errMsg = res?.error || "Server did not return a token.";
+        console.error("[Upload] Staging failed:", errMsg);
+        setUploadError(`Upload failed: ${errMsg} Please try again.`);
+        // Clear the preview so the drop-zone reappears — the screenshot is
+        // not usable without a valid staged token.
+        setProofScreenshot("");
+        setStagedToken("");
+        resetInput();
+      }
+    } catch (err) {
+      if (uploadGenRef.current !== gen) return; // superseded
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[Upload] Staging network error:", err);
+      setUploadError(
+        `Could not upload screenshot to server. ${msg}. Please check your connection and try again.`,
+      );
+      setProofScreenshot("");
+      setStagedToken("");
+      resetInput();
+    } finally {
+      if (uploadGenRef.current === gen) {
+        setUploading(false);
+      }
     }
   };
 
   return {
     proofScreenshot,
     setProofScreenshot,
+    stagedToken,
     fileName,
     setFileName,
     fileSize,
     setFileSize,
     compressing,
+    uploading,
     uploadError,
     setUploadError,
     fileInputRef,
