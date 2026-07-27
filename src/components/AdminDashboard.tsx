@@ -66,6 +66,75 @@ import AdminSocialPlatforms from "./AdminSocialPlatforms";
 import { ColorMode } from "../lib/themes";
 import { ADMIN_NAV_ITEMS, ADMIN_NAV_TABS, AdminTab } from "../lib/adminNavigation";
 
+// ── Screenshot lightbox ────────────────────────────────────────────────────────
+// Renders a base64 data URL in a full-screen overlay.
+// window.open(dataUrl) is blocked by all modern browsers for large payloads;
+// an <img> tag with the same src works perfectly because the data is already
+// in memory and never involves a navigation or a new browsing context.
+
+interface ScreenshotLightboxProps {
+  src: string;
+  onClose: () => void;
+}
+
+function ScreenshotLightbox({ src, onClose }: ScreenshotLightboxProps) {
+  // Close on Escape key
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  // Prevent background scroll while the lightbox is open
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4 md:p-8"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Full-size screenshot viewer"
+    >
+      {/* Close button */}
+      <button
+        type="button"
+        className="absolute top-4 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+        onClick={onClose}
+        aria-label="Close screenshot viewer"
+      >
+        <X className="h-5 w-5" />
+      </button>
+
+      {/* Image — stopPropagation so clicking the image doesn't close the modal */}
+      <div
+        className="relative max-w-full max-h-full overflow-auto rounded-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <img
+          src={src}
+          alt="Full-size task proof screenshot"
+          className="block max-w-[90vw] max-h-[90vh] rounded-xl object-contain shadow-2xl"
+          referrerPolicy="no-referrer"
+          draggable={false}
+        />
+      </div>
+
+      {/* Tap-to-close hint */}
+      <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[11px] text-white/50 select-none pointer-events-none">
+        Tap outside or press Esc to close
+      </p>
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
 
 interface AdminDashboardProps {
   user: User;
@@ -280,6 +349,9 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
   const [auditSearch, setAuditSearch] = React.useState<string>("");
   const [rejectingSubId, setRejectingSubId] = React.useState<string | null>(null);
   const [rejectionFeedback, setRejectionFeedback] = React.useState<string>("");
+  // Screenshot lightbox — holds the data URL of the screenshot being viewed fullscreen.
+  // Null means the lightbox is closed.
+  const [viewingScreenshot, setViewingScreenshot] = React.useState<string | null>(null);
 
   // Commission ledger state
   const [commissionsList, setCommissionsList] = React.useState<any[]>([]);
@@ -3288,12 +3360,15 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                             <div className="space-y-2">
                               <p className="font-bold text-gray-600 uppercase tracking-wide text-[9px]">Uploaded Screenshot Proof:</p>
                               {sub.proofScreenshot ? (
-                                <div className="relative group rounded-xl border border-gray-100 overflow-hidden bg-slate-50 max-h-48 flex justify-center items-center">
-                                  <img 
-                                    src={sub.proofScreenshot} 
-                                    alt="Task Proof" 
-                                    className="max-h-48 max-w-full object-contain cursor-pointer hover:scale-105 transition-transform duration-300"
-                                    onClick={() => window.open(sub.proofScreenshot, "_blank")}
+                                <div
+                                  className="relative group rounded-xl border border-gray-100 overflow-hidden bg-slate-50 max-h-48 flex justify-center items-center cursor-pointer"
+                                  onClick={() => setViewingScreenshot(sub.proofScreenshot!)}
+                                  title="Click to view full-size screenshot"
+                                >
+                                  <img
+                                    src={sub.proofScreenshot}
+                                    alt="Task Proof Screenshot"
+                                    className="max-h-48 max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
                                     referrerPolicy="no-referrer"
                                   />
                                   <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
@@ -3303,8 +3378,13 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                                   </div>
                                 </div>
                               ) : (
-                                <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50/50 py-10 text-center text-gray-400">
-                                  No proof available
+                                <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50/50 py-10 text-center space-y-1">
+                                  <p className="text-[11px] font-semibold text-gray-400">Screenshot unavailable</p>
+                                  <p className="text-[10px] text-gray-300">
+                                    {sub.status === SubmissionStatus.PENDING
+                                      ? "No image was attached to this submission."
+                                      : "Screenshot was removed after review."}
+                                  </p>
                                 </div>
                               )}
                             </div>
@@ -5098,6 +5178,19 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
       </div>
 
     </div>
+
+    {/* ── Screenshot lightbox ─────────────────────────────────────────────
+         Opens when the admin taps a proof thumbnail.
+         Uses an <img> tag with the data URL already in memory — never calls
+         window.open(), which all modern browsers block for large base64 URLs.
+         Closes on backdrop click, the × button, or the Escape key.       */}
+    {viewingScreenshot && (
+      <ScreenshotLightbox
+        src={viewingScreenshot}
+        onClose={() => setViewingScreenshot(null)}
+      />
+    )}
+
   </div>
   );
 }

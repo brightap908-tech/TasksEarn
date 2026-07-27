@@ -389,7 +389,7 @@ export function useScreenshotUpload(): UseScreenshotUploadReturn {
 
     // ── 1. Validate ──────────────────────────────────────────────────────────
     const check = await validate(file);
-    if (!check.ok) {
+    if (check.ok === false) {
       console.warn("[Upload] Validation failed:", check.reason);
       setUploadError(check.reason);
       resetInput();
