@@ -268,6 +268,10 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
   const [withdrawalActionLoading, setWithdrawalActionLoading] = React.useState<string | null>(null);
   const [withdrawalActionMsg, setWithdrawalActionMsg] = React.useState<{ type: "success" | "error"; text: string } | null>(null);
   const [submissionsList, setSubmissionsList] = React.useState<TaskSubmission[]>([]);
+  // On-demand screenshot cache: loaded blobs are stored here keyed by submission id
+  // so they are only fetched once per session and never re-fetched.
+  const [loadedScreenshots, setLoadedScreenshots] = React.useState<Record<string, string>>({});
+  const [loadingScreenshotId, setLoadingScreenshotId] = React.useState<string | null>(null);
   const [depositsList, setDepositsList] = React.useState<Transaction[]>([]);
   const [referralsList, setReferralsList] = React.useState<Referral[]>([]);
   const [recentUsers, setRecentUsers] = React.useState<any[]>([]);
@@ -1317,6 +1321,28 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
         fetchStats();
       }
     } catch (e) {}
+  };
+
+  // Fetch the screenshot blob on demand and open the lightbox.
+  // The submissions list no longer ships blobs; they are loaded only when
+  // the admin explicitly clicks "View Screenshot".
+  const handleViewScreenshot = async (subId: string) => {
+    if (loadedScreenshots[subId]) {
+      setViewingScreenshot(loadedScreenshots[subId]);
+      return;
+    }
+    setLoadingScreenshotId(subId);
+    try {
+      const data = await apiFetch(`/api/admin/submissions/${subId}/screenshot`);
+      if (data && data.proofScreenshot) {
+        setLoadedScreenshots(prev => ({ ...prev, [subId]: data.proofScreenshot }));
+        setViewingScreenshot(data.proofScreenshot);
+      }
+    } catch (e) {
+      // screenshot unavailable — nothing to show
+    } finally {
+      setLoadingScreenshotId(null);
+    }
   };
 
   const handleAddOrEditBankAccount = async (e: React.FormEvent) => {
@@ -3359,24 +3385,41 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
 
                             <div className="space-y-2">
                               <p className="font-bold text-gray-600 uppercase tracking-wide text-[9px]">Uploaded Screenshot Proof:</p>
-                              {sub.proofScreenshot ? (
-                                <div
-                                  className="relative group rounded-xl border border-gray-100 overflow-hidden bg-slate-50 max-h-48 flex justify-center items-center cursor-pointer"
-                                  onClick={() => setViewingScreenshot(sub.proofScreenshot!)}
-                                  title="Click to view full-size screenshot"
-                                >
-                                  <img
-                                    src={sub.proofScreenshot}
-                                    alt="Task Proof Screenshot"
-                                    className="max-h-48 max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
-                                    referrerPolicy="no-referrer"
-                                  />
-                                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
-                                    <span className="bg-white rounded-full px-3 py-1.5 text-[10px] font-bold text-gray-800 flex items-center gap-1 shadow-md">
-                                      <Eye className="h-3.5 w-3.5" /> View Full Image
-                                    </span>
+                              {(sub as any).hasScreenshot ? (
+                                loadedScreenshots[sub.id] ? (
+                                  /* Screenshot already fetched — show thumbnail + lightbox trigger */
+                                  <div
+                                    className="relative group rounded-xl border border-gray-100 overflow-hidden bg-slate-50 max-h-48 flex justify-center items-center cursor-pointer"
+                                    onClick={() => handleViewScreenshot(sub.id)}
+                                    title="Click to view full-size screenshot"
+                                  >
+                                    <img
+                                      src={loadedScreenshots[sub.id]}
+                                      alt="Task Proof Screenshot"
+                                      className="max-h-48 max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                    <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+                                      <span className="bg-white rounded-full px-3 py-1.5 text-[10px] font-bold text-gray-800 flex items-center gap-1 shadow-md">
+                                        <Eye className="h-3.5 w-3.5" /> View Full Image
+                                      </span>
+                                    </div>
                                   </div>
-                                </div>
+                                ) : (
+                                  /* Screenshot exists on server but not yet loaded — show fetch button */
+                                  <div className="rounded-xl border border-dashed border-blue-200 bg-blue-50/50 py-8 text-center space-y-2">
+                                    <p className="text-[11px] font-semibold text-gray-500">Screenshot attached</p>
+                                    <button
+                                      type="button"
+                                      disabled={loadingScreenshotId === sub.id}
+                                      onClick={() => handleViewScreenshot(sub.id)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60 transition-colors"
+                                    >
+                                      <Eye className="h-3.5 w-3.5" />
+                                      {loadingScreenshotId === sub.id ? "Loading…" : "View Screenshot"}
+                                    </button>
+                                  </div>
+                                )
                               ) : (
                                 <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50/50 py-10 text-center space-y-1">
                                   <p className="text-[11px] font-semibold text-gray-400">Screenshot unavailable</p>

@@ -150,6 +150,32 @@ function mapSubmission(row: any) {
   };
 }
 
+// Slim variant used for list endpoints where the screenshot blob must NOT be
+// transferred.  Queries using this mapper must include:
+//   (proof_screenshot IS NOT NULL) AS has_screenshot
+// so the client knows whether a screenshot exists and can fetch it on demand
+// via GET /api/admin/submissions/:id/screenshot.
+function mapSubmissionSlim(row: any) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    taskId: row.task_id,
+    taskTitle: row.task_title,
+    category: row.category,
+    earnerId: row.earner_id,
+    earnerName: row.earner_name,
+    proofText: row.proof_text,
+    proofScreenshot: undefined as undefined,
+    hasScreenshot: row.has_screenshot === true || row.has_screenshot === "t" || row.has_screenshot === "true",
+    status: row.status,
+    feedback: row.feedback || undefined,
+    reward: parseFloat(row.reward) || 0,
+    submittedAt: row.submitted_at instanceof Date ? row.submitted_at.toISOString() : row.submitted_at,
+    approvedAt: row.approved_at ? (row.approved_at instanceof Date ? row.approved_at.toISOString() : row.approved_at) : undefined,
+    rejectedAt: row.rejected_at ? (row.rejected_at instanceof Date ? row.rejected_at.toISOString() : row.rejected_at) : undefined,
+  };
+}
+
 function mapTransaction(row: any) {
   if (!row) return null;
   let bankDetails = row.bank_details;
@@ -886,6 +912,20 @@ async function bootstrapTables() {
     await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS sent_emails JSONB NOT NULL DEFAULT '[]'`);
     await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS viewed BOOLEAN NOT NULL DEFAULT FALSE`);
     await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'Completed'`);
+
+    // Performance indexes — all idempotent (IF NOT EXISTS).
+    // submissions: earner_id is the hottest column (every earner query filters on it).
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_earner_id   ON submissions (earner_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_task_id     ON submissions (task_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_status      ON submissions (status)`);
+    // Composite covers earner dashboard counts (WHERE earner_id=? AND status=?)
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_earner_status ON submissions (earner_id, status)`);
+    // tasks: status='Active' scan is the dominant filter for the available-tasks list
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_status            ON tasks (status)`);
+    // transactions: every wallet/history page filters by user_id
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_transactions_user_id   ON transactions (user_id)`);
+    // earner_notifications: per-earner reads always filter on earner_id
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_earner_notif_earner_id ON earner_notifications (earner_id)`);
 
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
@@ -1889,7 +1929,14 @@ app.get("/api/earner/dashboard", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role === UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-    const subs = await pool.query("SELECT * FROM submissions WHERE earner_id = $1", [user.id]);
+    // Explicitly omit proof_screenshot — the earner dashboard only needs counts
+    // and recent submission metadata; transferring blobs here is wasteful.
+    const subs = await pool.query(
+      `SELECT id, task_id, task_title, category, earner_id, earner_name, proof_text,
+              status, feedback, reward, submitted_at, approved_at, rejected_at
+       FROM submissions WHERE earner_id = $1`,
+      [user.id]
+    );
     const submissions = subs.rows.map(mapSubmission);
     const approved = submissions.filter(s => s.status === SubmissionStatus.APPROVED);
     const pending = submissions.filter(s => s.status === SubmissionStatus.PENDING);
@@ -2222,7 +2269,13 @@ app.get("/api/earner/submissions", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role === UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-    const result = await pool.query("SELECT * FROM submissions WHERE earner_id = $1 ORDER BY submitted_at DESC", [user.id]);
+    // Explicitly omit proof_screenshot — earners never need to receive their own blobs.
+    const result = await pool.query(
+      `SELECT id, task_id, task_title, category, earner_id, earner_name, proof_text,
+              status, feedback, reward, submitted_at, approved_at, rejected_at
+       FROM submissions WHERE earner_id = $1 ORDER BY submitted_at DESC`,
+      [user.id]
+    );
     res.json(result.rows.map(mapSubmission));
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
@@ -3178,11 +3231,16 @@ app.get("/api/advertiser/submissions", async (req, res) => {
     const taskIds = taskRes.rows.map(r => r.id);
     if (taskIds.length === 0) return res.json([]);
 
+    // Omit proof_screenshot blob from the list; include has_screenshot so the
+    // review page can indicate that a screenshot is available.
     const subsRes = await pool.query(
-      "SELECT * FROM submissions WHERE task_id = ANY($1::varchar[]) ORDER BY submitted_at DESC",
+      `SELECT id, task_id, task_title, category, earner_id, earner_name, proof_text,
+              status, feedback, reward, submitted_at, approved_at, rejected_at,
+              (proof_screenshot IS NOT NULL) AS has_screenshot
+       FROM submissions WHERE task_id = ANY($1::varchar[]) ORDER BY submitted_at DESC`,
       [taskIds]
     );
-    res.json(subsRes.rows.map(mapSubmission));
+    res.json(subsRes.rows.map(mapSubmissionSlim));
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
@@ -4135,8 +4193,34 @@ app.get("/api/admin/submissions", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-    const result = await pool.query("SELECT * FROM submissions ORDER BY submitted_at DESC");
-    res.json(result.rows.map(mapSubmission));
+    // Omit proof_screenshot blob from the list; include has_screenshot so the UI
+    // can show a "View Screenshot" button and fetch the blob only on demand via
+    // GET /api/admin/submissions/:id/screenshot.
+    const result = await pool.query(
+      `SELECT id, task_id, task_title, category, earner_id, earner_name, proof_text,
+              status, feedback, reward, submitted_at, approved_at, rejected_at,
+              (proof_screenshot IS NOT NULL) AS has_screenshot
+       FROM submissions ORDER BY submitted_at DESC`
+    );
+    res.json(result.rows.map(mapSubmissionSlim));
+  } catch (err) { res.status(500).json({ error: "Server error" }); }
+});
+
+// Dedicated endpoint that returns ONLY the screenshot for a single submission.
+// The admin list intentionally omits blobs; this endpoint is called on demand
+// when the admin explicitly opens a screenshot for review.
+app.get("/api/admin/submissions/:id/screenshot", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+    const result = await pool.query(
+      "SELECT proof_screenshot FROM submissions WHERE id = $1",
+      [req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "Submission not found" });
+    const screenshot = result.rows[0].proof_screenshot;
+    if (!screenshot) return res.status(404).json({ error: "No screenshot available for this submission" });
+    res.json({ proofScreenshot: screenshot });
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
