@@ -1,36 +1,41 @@
 /**
  * useScreenshotUpload
  * -------------------
- * Shared hook for the screenshot proof upload used in EarnerTaskSubmitPage
+ * Shared hook for screenshot proof upload used in EarnerTaskSubmitPage
  * and EarnerRejectedTaskResubmitPage.
  *
- * Key guarantees:
+ * Architecture (in order):
+ *
+ *  1. VALIDATE  — size + MIME + extension + magic-byte fallback.
+ *  2. READ      — FileReader.readAsDataURL (onloadend, not onload).
+ *                 If that throws NotReadableError (Google Photos / cloud files
+ *                 not yet materialised), fall back to:
+ *                 fetch(URL.createObjectURL(file)) → blob → FileReader.
+ *                 Object URL is always revoked in a finally block.
+ *  3. COMPRESS  — Optional, best-effort only.  The image element is loaded
+ *                 from the data: URL already in memory (never from a blob:
+ *                 URL), so this path is fully reliable on Android.  If canvas
+ *                 is unavailable, produces empty output, or the compressed
+ *                 result is larger than the original, the original is used
+ *                 transparently.  The upload is NEVER blocked by compression.
+ *
+ * Guarantees:
+ *  - Never calls canvas.drawImage before img.onload fires.
+ *  - Revokes every object URL in a finally block.
  *  - Works on Android Chrome, Samsung Internet, Opera, Firefox, iOS Safari,
- *    and desktop browsers.
- *  - File input is reset after every attempt so the same file can be
- *    re-selected without tricks.
- *  - Canvas compression is attempted first with a 15-second timeout;
- *    if it fails (timeout, security restrictions, canvas poisoning, empty
- *    output, createObjectURL error) the original file is read via FileReader
- *    and used as-is — no upload is ever blocked by a compression failure.
- *  - File type is validated by both MIME type AND extension AND magic bytes
- *    because Samsung Internet and some Android WebViews return an empty MIME
- *    type for perfectly valid image files.
- *  - Every stage emits a detailed console log so failures can be diagnosed
- *    from DevTools or Android Logcat without a generic error message.
- *  - The error shown to the user is always the actual failure reason, never
- *    a vague "Failed to process image" catch-all.
+ *    Google Photos, Samsung Gallery, Files by Google, Mi File Manager.
+ *  - Shows the exact error reason — never a generic catch-all message.
+ *  - File input is always reset so the same file can be re-selected.
  */
 
 import React from "react";
 
-// ── Constants ──────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-const MAX_FILE_SIZE      = 10 * 1024 * 1024; // 10 MB
-const MAX_WIDTH          = 1280;
-const JPEG_QUALITY       = 0.72;
-const CANVAS_TIMEOUT_MS  = 15_000; // 15 s — safety net for Android browsers
-                                   // where img.onload / img.onerror never fire
+const MAX_FILE_SIZE     = 10 * 1024 * 1024; // 10 MB
+const MAX_WIDTH         = 1280;
+const JPEG_QUALITY      = 0.72;
+const COMPRESS_TIMEOUT  = 10_000; // ms – canvas img.onload safety net
 
 const VALID_MIME_TYPES = new Set([
   "image/png",
@@ -39,29 +44,24 @@ const VALID_MIME_TYPES = new Set([
   "image/webp",
 ]);
 
-const VALID_EXTENSIONS = new Set([
-  "png",
-  "jpg",
-  "jpeg",
-  "webp",
-]);
+const VALID_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp"]);
 
-// Leading bytes (magic numbers) for the four accepted formats.
-// Checked when the MIME type is missing (common on Samsung Internet / Android
-// file pickers that return type="" for local gallery images).
-const MAGIC: Array<{ label: string; check: (b: Uint8Array) => boolean }> = [
-  {
-    label: "PNG",
-    check: (b) => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47,
-  },
+// Magic-byte signatures for the four accepted formats.
+// Used when the browser (Samsung Internet, Android WebView) returns type="".
+const MAGIC_CHECKS: Array<{ label: string; test: (b: Uint8Array) => boolean }> = [
   {
     label: "JPEG",
-    check: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+    test: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  },
+  {
+    label: "PNG",
+    test: (b) =>
+      b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47,
   },
   {
     label: "WEBP",
-    // RIFF....WEBP
-    check: (b) =>
+    // RIFF????WEBP
+    test: (b) =>
       b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
       b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50,
   },
@@ -69,21 +69,16 @@ const MAGIC: Array<{ label: string; check: (b: Uint8Array) => boolean }> = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function getExtension(name: string): string {
+function ext(name: string): string {
   return (name.split(".").pop() ?? "").toLowerCase();
 }
 
-/**
- * Read the first 12 bytes of the file and return a recognised format label,
- * or null if no known magic bytes are found.
- */
-async function detectMagicBytes(file: File): Promise<string | null> {
+async function sniffMagicBytes(file: File): Promise<string | null> {
   try {
-    const slice = file.slice(0, 12);
-    const buf   = await slice.arrayBuffer();
+    const buf   = await file.slice(0, 12).arrayBuffer();
     const bytes = new Uint8Array(buf);
-    for (const { label, check } of MAGIC) {
-      if (check(bytes)) return label;
+    for (const { label, test } of MAGIC_CHECKS) {
+      if (test(bytes)) return label;
     }
     return null;
   } catch {
@@ -91,161 +86,258 @@ async function detectMagicBytes(file: File): Promise<string | null> {
   }
 }
 
-async function isValidImage(
+async function validate(
   file: File,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   if (file.size > MAX_FILE_SIZE) {
     return {
       ok: false,
-      reason: `File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum allowed size is 10 MB.`,
+      reason: `File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum is 10 MB.`,
     };
   }
 
-  const ext    = getExtension(file.name);
-  const mimeOk = file.type !== "" && VALID_MIME_TYPES.has(file.type);
-  const extOk  = VALID_EXTENSIONS.has(ext);
+  const mimeOk = VALID_MIME_TYPES.has(file.type);
+  const extOk  = VALID_EXTENSIONS.has(ext(file.name));
 
   if (!mimeOk && !extOk) {
-    // Last resort: check magic bytes before rejecting.
-    const magic = await detectMagicBytes(file);
+    // Last resort — inspect raw bytes before rejecting.
+    const magic = await sniffMagicBytes(file);
     if (!magic) {
-      const label = file.type ? `"${file.type}"` : `".${ext || "unknown"}"`;
+      const label = file.type
+        ? `"${file.type}"`
+        : `".${ext(file.name) || "unknown"}"`;
       return {
         ok: false,
-        reason: `${label} is not a supported image type. Please upload a PNG, JPG, JPEG, or WEBP file.`,
+        reason: `${label} is not supported. Please upload a PNG, JPG, JPEG, or WEBP file.`,
       };
     }
-    console.log(`[Upload] MIME/ext check failed but magic bytes match "${magic}" — proceeding.`);
+    console.log(`[Upload] MIME/ext missing but magic bytes = "${magic}" — accepted.`);
   }
 
   return { ok: true };
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+function fmtBytes(n: number): string {
+  return n < 1_048_576
+    ? `${(n / 1024).toFixed(0)} KB`
+    : `${(n / 1_048_576).toFixed(2)} MB`;
 }
 
-function estimateBase64Bytes(dataUrl: string): number {
-  const base64  = dataUrl.split(",")[1] ?? "";
-  const padding = (base64.match(/=+$/) ?? [""])[0].length;
-  return Math.floor((base64.length * 3) / 4) - padding;
+function base64Bytes(dataUrl: string): number {
+  const b64     = dataUrl.split(",")[1] ?? "";
+  const padding = (b64.match(/=+$/) ?? [""])[0].length;
+  return Math.floor((b64.length * 3) / 4) - padding;
 }
+
+// ── Step 2: Read the file reliably ────────────────────────────────────────────
 
 /**
- * Race a promise against a timeout so we never hang indefinitely.
- * Needed on Samsung Internet / Opera Mini where img.onload / img.onerror
- * sometimes never fires.
+ * Read a File/Blob as a base64 data URL using FileReader.
+ *
+ * Uses `onloadend` (not `onload`) so we wait until readyState === DONE before
+ * inspecting the result — avoids the partial-read race seen on some Android
+ * builds.
  */
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`${label} timed out after ${ms / 1000}s`)),
-      ms,
-    );
-    promise.then(
-      (v) => { clearTimeout(timer); resolve(v); },
-      (e) => { clearTimeout(timer); reject(e); },
-    );
+function readerToDataUrl(blob: Blob): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      if (reader.readyState !== FileReader.DONE) {
+        reject(new Error("FileReader did not reach DONE state"));
+        return;
+      }
+      if (reader.error) {
+        reject(
+          new Error(
+            `FileReader error: ${reader.error.message || reader.error.name || "unknown"}`,
+          ),
+        );
+        return;
+      }
+      const result = reader.result;
+      if (typeof result === "string" && result.startsWith("data:") && result.length > 100) {
+        resolve(result);
+      } else {
+        reject(
+          new Error(
+            `FileReader produced an invalid result (length=${
+              typeof result === "string" ? result.length : typeof result
+            })`,
+          ),
+        );
+      }
+    };
+
+    reader.onerror = () => {
+      reject(
+        new Error(
+          `FileReader error: ${reader.error?.message || reader.error?.name || "unknown"}`,
+        ),
+      );
+    };
+
+    reader.readAsDataURL(blob);
   });
 }
 
 /**
- * Compress via Canvas → JPEG.
- * Throws if canvas is unavailable, createObjectURL fails, the image never
- * loads, produces empty output, or the operation exceeds CANVAS_TIMEOUT_MS.
+ * Materialise a cloud-backed file (Google Photos, iCloud, OneDrive) that
+ * FileReader cannot read directly.  Creates an object URL, fetches the
+ * content into a local Blob, then runs FileReader on that Blob.
+ * The object URL is always revoked in a finally block.
  */
-function canvasCompress(file: File): Promise<string> {
-  const inner = new Promise<string>((resolve, reject) => {
-    let objectUrl: string;
-
-    // createObjectURL can throw (SecurityError) in some restricted WebViews.
-    try {
-      objectUrl = URL.createObjectURL(file);
-    } catch (err) {
-      reject(
-        new Error(
-          `createObjectURL failed: ${err instanceof Error ? err.message : String(err)}`,
-        ),
-      );
-      return;
+async function materializeViaFetch(file: File): Promise<string> {
+  let objectUrl: string | null = null;
+  try {
+    objectUrl = URL.createObjectURL(file);
+    console.log("[Upload] fetch-materialise: objectUrl created", objectUrl.slice(0, 60));
+    const response = await fetch(objectUrl);
+    if (!response.ok) {
+      throw new Error(`fetch failed: HTTP ${response.status} ${response.statusText}`);
     }
-
-    const img = new window.Image();
-
-    const cleanup = () => {
+    const blob = await response.blob();
+    console.log(`[Upload] fetch-materialise: got blob size=${blob.size} type="${blob.type}"`);
+    return await readerToDataUrl(blob);
+  } finally {
+    if (objectUrl) {
       try { URL.revokeObjectURL(objectUrl); } catch {}
+    }
+  }
+}
+
+/**
+ * Read the file to a base64 data URL using the most reliable path available.
+ *
+ * Path A: FileReader directly on the File (works for all local files).
+ * Path B: fetch(objectURL) → Blob → FileReader
+ *         (needed for Google Photos / cloud files not yet downloaded).
+ */
+async function readFileToDataUrl(file: File): Promise<string> {
+  // Path A — direct FileReader
+  try {
+    console.log("[Upload] Path A — FileReader.readAsDataURL …");
+    const dataUrl = await readerToDataUrl(file);
+    console.log(`[Upload] Path A succeeded (${fmtBytes(base64Bytes(dataUrl))})`);
+    return dataUrl;
+  } catch (errA) {
+    const msgA = errA instanceof Error ? errA.message : String(errA);
+    console.warn("[Upload] Path A failed:", msgA);
+    console.log("[Upload] Path B — fetch materialise + FileReader …");
+
+    // Path B — materialise then read
+    try {
+      const dataUrl = await materializeViaFetch(file);
+      console.log(`[Upload] Path B succeeded (${fmtBytes(base64Bytes(dataUrl))})`);
+      return dataUrl;
+    } catch (errB) {
+      const msgB = errB instanceof Error ? errB.message : String(errB);
+      console.error("[Upload] Path B also failed:", msgB);
+      // Surface both reasons so there is no ambiguity about what went wrong.
+      throw new Error(`Direct read: ${msgA} | Fetch fallback: ${msgB}`);
+    }
+  }
+}
+
+// ── Step 3: Optional canvas compression (post-read) ───────────────────────────
+
+/**
+ * Attempt to compress a data URL by drawing it onto a canvas.
+ *
+ * The image element is loaded from the data: URL that is already in memory —
+ * NOT from a blob: URL — so this path never touches the file system or
+ * content:// URIs and is fully reliable on Android.
+ *
+ * Returns the compressed data URL, or null if compression fails for any
+ * reason (canvas unavailable, timeout, tainted canvas, output larger than
+ * input, etc.).  The caller always falls back to the original data URL.
+ */
+function compressDataUrl(
+  dataUrl: string,
+  originalBytes: number,
+): Promise<string | null> {
+  return new Promise<string | null>((resolve) => {
+    const img = new window.Image();
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const finish = (result: string | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
     };
 
+    // Safety net — some browsers never fire onload/onerror for large images.
+    timer = setTimeout(() => {
+      console.warn(`[Upload] Canvas compression timed out after ${COMPRESS_TIMEOUT}ms — using original.`);
+      finish(null);
+    }, COMPRESS_TIMEOUT);
+
     img.onload = () => {
-      cleanup();
       try {
         let { width, height } = img;
         if (width === 0 || height === 0) {
-          reject(new Error("Image decoded with zero dimensions"));
+          console.warn("[Upload] Canvas: image decoded with zero dimensions.");
+          finish(null);
           return;
         }
         if (width > MAX_WIDTH) {
           height = Math.round((height * MAX_WIDTH) / width);
           width  = MAX_WIDTH;
         }
+
         const canvas = document.createElement("canvas");
         canvas.width  = width;
         canvas.height = height;
+
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-          reject(new Error("Canvas 2D context unavailable"));
+          console.warn("[Upload] Canvas: 2D context unavailable.");
+          finish(null);
           return;
         }
+
         ctx.drawImage(img, 0, 0, width, height);
-        const result = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
-        if (!result || result === "data:," || result.length < 200) {
-          reject(
-            new Error(
-              "Canvas produced empty or trivial output (possible tainted-canvas or unsupported format)",
-            ),
-          );
+
+        const compressed = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+        if (!compressed || compressed === "data:," || compressed.length < 100) {
+          console.warn("[Upload] Canvas: produced empty output (tainted canvas?).");
+          finish(null);
           return;
         }
-        resolve(result);
+
+        const compressedBytes = base64Bytes(compressed);
+        if (compressedBytes >= originalBytes) {
+          // Compressed is not actually smaller — skip it.
+          console.log(
+            `[Upload] Canvas: compressed (${fmtBytes(compressedBytes)}) ≥ original ` +
+            `(${fmtBytes(originalBytes)}) — keeping original.`,
+          );
+          finish(null);
+          return;
+        }
+
+        console.log(
+          `[Upload] Canvas: ${fmtBytes(originalBytes)} → ${fmtBytes(compressedBytes)} ` +
+          `(saved ${fmtBytes(originalBytes - compressedBytes)}).`,
+        );
+        finish(compressed);
       } catch (err) {
-        reject(err);
+        console.warn("[Upload] Canvas: drawImage / toDataURL threw:", err);
+        finish(null);
       }
     };
 
     img.onerror = (e) => {
-      cleanup();
-      reject(
-        new Error(
-          `HTMLImageElement failed to load the file — the browser may not support this format (${String(e)})`,
-        ),
-      );
+      // This can only happen if the data: URL itself is malformed — should
+      // never occur in practice since we just read it with FileReader.
+      console.warn("[Upload] Canvas: img.onerror on data: URL:", e);
+      finish(null);
     };
 
-    // Assign src AFTER registering handlers to avoid a race on some browsers.
-    img.src = objectUrl;
-  });
-
-  return withTimeout(inner, CANVAS_TIMEOUT_MS, "Canvas compression");
-}
-
-/** Read the original file as a base64 data URL via FileReader (universal fallback). */
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result;
-      if (typeof result === "string" && result.length > 50) {
-        resolve(result);
-      } else {
-        reject(new Error("FileReader returned an empty or invalid result"));
-      }
-    };
-    reader.onerror = () =>
-      reject(
-        new Error(`FileReader error: ${reader.error?.message ?? reader.error?.name ?? "unknown"}`),
-      );
-    reader.readAsDataURL(file);
+    // Load from the in-memory data: URL — never from a blob: URL.
+    img.src = dataUrl;
   });
 }
 
@@ -274,8 +366,8 @@ export function useScreenshotUpload(): UseScreenshotUploadReturn {
   const [uploadError,     setUploadError]      = React.useState("");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  /** Always reset the native file input so the same path can be re-selected. */
   const resetInput = () => {
+    // Resetting value lets the user pick the same file again without tricks.
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -288,96 +380,64 @@ export function useScreenshotUpload(): UseScreenshotUploadReturn {
   };
 
   const handleFileChange = async (file: File) => {
-    console.log(
-      "[Upload] ── File selected ─────────────────────────────────────────────",
-    );
-    console.log("[Upload] name     :", file.name);
-    console.log("[Upload] MIME type:", file.type || "(empty — will check extension + magic bytes)");
-    console.log("[Upload] size     :", (file.size / 1024).toFixed(1), "KB");
-    console.log(
-      "[Upload] lastModified:",
-      new Date(file.lastModified).toISOString(),
-    );
+    console.log("─────────────────────────────────────────────────────────");
+    console.log("[Upload] File selected");
+    console.log(`[Upload]   name    : ${file.name}`);
+    console.log(`[Upload]   type    : "${file.type || "(empty)"}" — ext: ".${ext(file.name)}"`);
+    console.log(`[Upload]   size    : ${fmtBytes(file.size)}`);
+    console.log(`[Upload]   modified: ${new Date(file.lastModified).toISOString()}`);
 
-    // ── Validate ─────────────────────────────────────────────────────────────
-    const check = await isValidImage(file);
-    if (check.ok === false) {
-      console.warn("[Upload] ✗ Validation failed:", check.reason);
+    // ── 1. Validate ──────────────────────────────────────────────────────────
+    const check = await validate(file);
+    if (!check.ok) {
+      console.warn("[Upload] Validation failed:", check.reason);
       setUploadError(check.reason);
       resetInput();
       return;
     }
-    console.log("[Upload] ✓ Validation passed");
+    console.log("[Upload] Validation passed ✓");
 
-    // ── Start processing ──────────────────────────────────────────────────────
     setFileName(file.name);
     setUploadError("");
     setCompressing(true);
     setProofScreenshot("");
 
     try {
-      let dataUrl:   string;
-      let sizeLabel: string;
-      let method:    string;
+      // ── 2. Read file to data URL ──────────────────────────────────────────
+      console.log("[Upload] Reading file …");
+      const rawDataUrl   = await readFileToDataUrl(file);
+      const rawBytes     = base64Bytes(rawDataUrl);
+      console.log(`[Upload] File read OK — ${fmtBytes(rawBytes)} as base64`);
+      console.log(`[Upload] Data URL prefix: "${rawDataUrl.slice(0, 60)}…"`);
 
-      // ── Attempt 1: canvas compression ──────────────────────────────────────
-      try {
-        console.log(
-          `[Upload] Attempt 1 — canvas compression (maxWidth=${MAX_WIDTH}px, quality=${JPEG_QUALITY}, timeout=${CANVAS_TIMEOUT_MS}ms)…`,
-        );
-        dataUrl    = await canvasCompress(file);
-        const bytes = estimateBase64Bytes(dataUrl);
-        sizeLabel  = `${formatBytes(bytes)} (compressed)`;
-        method     = "canvas";
-        console.log("[Upload] ✓ Canvas compression succeeded →", sizeLabel);
-      } catch (compressErr) {
-        // ── Attempt 2: FileReader fallback (original file, no compression) ───
-        const compressErrMsg =
-          compressErr instanceof Error ? compressErr.message : String(compressErr);
-        console.warn(
-          "[Upload] ✗ Canvas compression failed — falling back to FileReader (original file).",
-          "\n         Reason:", compressErrMsg,
-        );
-        try {
-          console.log("[Upload] Attempt 2 — FileReader (original file)…");
-          dataUrl    = await readAsDataUrl(file);
-          const bytes = estimateBase64Bytes(dataUrl);
-          sizeLabel  = `${formatBytes(bytes)} (original, uncompressed)`;
-          method     = "filereader";
-          console.log("[Upload] ✓ FileReader fallback succeeded →", sizeLabel);
-        } catch (readerErr) {
-          const readerErrMsg =
-            readerErr instanceof Error ? readerErr.message : String(readerErr);
-          console.error(
-            "[Upload] ✗ FileReader fallback also failed.",
-            "\n         Reason:", readerErrMsg,
-          );
-          // Re-throw with both error messages so the user sees exactly what went wrong.
-          throw new Error(
-            `Canvas: ${compressErrMsg} | FileReader: ${readerErrMsg}`,
-          );
-        }
+      // ── 3. Optional compression (best-effort, never blocks upload) ────────
+      console.log("[Upload] Attempting optional canvas compression …");
+      const compressed = await compressDataUrl(rawDataUrl, rawBytes);
+
+      let finalDataUrl: string;
+      let sizeLabel:    string;
+
+      if (compressed) {
+        finalDataUrl = compressed;
+        sizeLabel    = `${fmtBytes(base64Bytes(compressed))} (compressed)`;
+        console.log("[Upload] Using compressed version →", sizeLabel);
+      } else {
+        finalDataUrl = rawDataUrl;
+        sizeLabel    = `${fmtBytes(rawBytes)} (original)`;
+        console.log("[Upload] Using original (compression skipped or not beneficial) →", sizeLabel);
       }
 
-      console.log("[Upload] ── Summary ────────────────────────────────────────");
-      console.log("[Upload] method    :", method!);
-      console.log("[Upload] size      :", sizeLabel!);
-      console.log("[Upload] dataUrl[:80]:", dataUrl.slice(0, 80) + "…");
-
-      setFileSize(sizeLabel!);
-      setProofScreenshot(dataUrl);
+      setFileSize(sizeLabel);
+      setProofScreenshot(finalDataUrl);
+      console.log("[Upload] Done ✓");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error("[Upload] ✗ All processing attempts failed:", err);
-      // Show the user the EXACT error so they (or support) can diagnose it —
-      // never use a vague catch-all.
+      console.error("[Upload] Failed:", err);
       setUploadError(
-        `Could not read this image file. Error: ${msg}. Please try a different PNG, JPG, JPEG, or WEBP file.`,
+        `Could not read this image. ${msg}. Please try a different PNG, JPG, JPEG, or WEBP file.`,
       );
     } finally {
       setCompressing(false);
-      // Reset input AFTER processing so the same file can be re-selected
-      // if the user removes the preview and wants to re-attach it.
       resetInput();
     }
   };
