@@ -12,15 +12,12 @@
  *                 not yet materialised), fall back to:
  *                 fetch(URL.createObjectURL(file)) → blob → FileReader.
  *                 Object URL is always revoked in a finally block.
- *  3. COMPRESS  — Optional, best-effort only.  The image element is loaded
- *                 from the data: URL already in memory (never from a blob:
- *                 URL), so this path is fully reliable on Android.  If canvas
- *                 is unavailable, produces empty output, or the compressed
- *                 result is larger than the original, the original is used
- *                 transparently.  The upload is NEVER blocked by compression.
+ *  3. PREPARE   — The original image data URL is made available immediately.
+ *                 Canvas recompression is intentionally not part of the
+ *                 submit path: decoding/drawing a small screenshot can take
+ *                 longer than sending it.
  *
  * Guarantees:
- *  - Never calls canvas.drawImage before img.onload fires.
  *  - Revokes every object URL in a finally block.
  *  - Works on Android Chrome, Samsung Internet, Opera, Firefox, iOS Safari,
  *    Google Photos, Samsung Gallery, Files by Google, Mi File Manager.
@@ -33,10 +30,6 @@ import React from "react";
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const MAX_FILE_SIZE     = 10 * 1024 * 1024; // 10 MB
-const MAX_WIDTH         = 1280;
-const JPEG_QUALITY      = 0.72;
-const COMPRESS_TIMEOUT  = 10_000; // ms – canvas img.onload safety net
-
 const VALID_MIME_TYPES = new Set([
   "image/png",
   "image/jpeg",
@@ -239,108 +232,6 @@ async function readFileToDataUrl(file: File): Promise<string> {
   }
 }
 
-// ── Step 3: Optional canvas compression (post-read) ───────────────────────────
-
-/**
- * Attempt to compress a data URL by drawing it onto a canvas.
- *
- * The image element is loaded from the data: URL that is already in memory —
- * NOT from a blob: URL — so this path never touches the file system or
- * content:// URIs and is fully reliable on Android.
- *
- * Returns the compressed data URL, or null if compression fails for any
- * reason (canvas unavailable, timeout, tainted canvas, output larger than
- * input, etc.).  The caller always falls back to the original data URL.
- */
-function compressDataUrl(
-  dataUrl: string,
-  originalBytes: number,
-): Promise<string | null> {
-  return new Promise<string | null>((resolve) => {
-    const img = new window.Image();
-    let settled = false;
-    let timer: ReturnType<typeof setTimeout>;
-
-    const finish = (result: string | null) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(result);
-    };
-
-    // Safety net — some browsers never fire onload/onerror for large images.
-    timer = setTimeout(() => {
-      console.warn(`[Upload] Canvas compression timed out after ${COMPRESS_TIMEOUT}ms — using original.`);
-      finish(null);
-    }, COMPRESS_TIMEOUT);
-
-    img.onload = () => {
-      try {
-        let { width, height } = img;
-        if (width === 0 || height === 0) {
-          console.warn("[Upload] Canvas: image decoded with zero dimensions.");
-          finish(null);
-          return;
-        }
-        if (width > MAX_WIDTH) {
-          height = Math.round((height * MAX_WIDTH) / width);
-          width  = MAX_WIDTH;
-        }
-
-        const canvas = document.createElement("canvas");
-        canvas.width  = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          console.warn("[Upload] Canvas: 2D context unavailable.");
-          finish(null);
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0, width, height);
-
-        const compressed = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
-        if (!compressed || compressed === "data:," || compressed.length < 100) {
-          console.warn("[Upload] Canvas: produced empty output (tainted canvas?).");
-          finish(null);
-          return;
-        }
-
-        const compressedBytes = base64Bytes(compressed);
-        if (compressedBytes >= originalBytes) {
-          // Compressed is not actually smaller — skip it.
-          console.log(
-            `[Upload] Canvas: compressed (${fmtBytes(compressedBytes)}) ≥ original ` +
-            `(${fmtBytes(originalBytes)}) — keeping original.`,
-          );
-          finish(null);
-          return;
-        }
-
-        console.log(
-          `[Upload] Canvas: ${fmtBytes(originalBytes)} → ${fmtBytes(compressedBytes)} ` +
-          `(saved ${fmtBytes(originalBytes - compressedBytes)}).`,
-        );
-        finish(compressed);
-      } catch (err) {
-        console.warn("[Upload] Canvas: drawImage / toDataURL threw:", err);
-        finish(null);
-      }
-    };
-
-    img.onerror = (e) => {
-      // This can only happen if the data: URL itself is malformed — should
-      // never occur in practice since we just read it with FileReader.
-      console.warn("[Upload] Canvas: img.onerror on data: URL:", e);
-      finish(null);
-    };
-
-    // Load from the in-memory data: URL — never from a blob: URL.
-    img.src = dataUrl;
-  });
-}
-
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export interface UseScreenshotUploadReturn {
@@ -410,26 +301,13 @@ export function useScreenshotUpload(): UseScreenshotUploadReturn {
       console.log(`[Upload] File read OK — ${fmtBytes(rawBytes)} as base64`);
       console.log(`[Upload] Data URL prefix: "${rawDataUrl.slice(0, 60)}…"`);
 
-      // ── 3. Optional compression (best-effort, never blocks upload) ────────
-      console.log("[Upload] Attempting optional canvas compression …");
-      const compressed = await compressDataUrl(rawDataUrl, rawBytes);
-
-      let finalDataUrl: string;
-      let sizeLabel:    string;
-
-      if (compressed) {
-        finalDataUrl = compressed;
-        sizeLabel    = `${fmtBytes(base64Bytes(compressed))} (compressed)`;
-        console.log("[Upload] Using compressed version →", sizeLabel);
-      } else {
-        finalDataUrl = rawDataUrl;
-        sizeLabel    = `${fmtBytes(rawBytes)} (original)`;
-        console.log("[Upload] Using original (compression skipped or not beneficial) →", sizeLabel);
-      }
-
+      // ── 3. Make the original bytes available immediately ──────────────────
+      // Re-encoding through canvas can block the browser event loop and offers
+      // no benefit for the small proof images this endpoint accepts.
+      const sizeLabel = `${fmtBytes(rawBytes)} (original)`;
       setFileSize(sizeLabel);
-      setProofScreenshot(finalDataUrl);
-      console.log("[Upload] Done ✓");
+      setProofScreenshot(rawDataUrl);
+      console.log("[Upload] Ready immediately ✓", sizeLabel);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[Upload] Failed:", err);

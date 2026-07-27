@@ -89,7 +89,7 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!task) return;
+    if (!task || submitting) return;
     if (!proofText && !proofScreenshot) {
       setSubmitError("Please provide verification notes or upload a screenshot.");
       return;
@@ -117,18 +117,18 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
       if (res && res.error) {
         console.error("[Submit] Server returned error:", res.error);
         setSubmitError(res.error);
-        setSubmitting(false);
       } else {
         console.log("[Submit] ✓ Submission accepted by server");
         setSubmitSuccess(true);
         showToast("Task submitted successfully! Redirecting to available tasks…", "success");
         setTimeout(() => navigate("/earner/tasks"), 1500);
-        // Button stays disabled for the redirect window to prevent double-submit
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[Submit] Network or unexpected error:", err);
       setSubmitError(`Failed to submit proof. ${msg ? `Error: ${msg}` : "Please check your connection and try again."}`);
+    } finally {
+      // Navigation/toasts must never keep the upload spinner running.
       setSubmitting(false);
     }
   };

@@ -97,7 +97,7 @@ export default function EarnerRejectedTaskResubmitPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!info) return;
+    if (!info || submitting) return;
     if (!proofText && !proofScreenshot) {
       setSubmitError("Please provide verification notes or upload a screenshot.");
       return;
@@ -130,7 +130,6 @@ export default function EarnerRejectedTaskResubmitPage({
       if (res && res.error) {
         console.error("[Resubmit] Server returned error:", res.error);
         setSubmitError(res.error);
-        setSubmitting(false);
       } else {
         console.log("[Resubmit] ✓ Resubmission accepted by server");
         setSubmitSuccess(true);
@@ -141,6 +140,7 @@ export default function EarnerRejectedTaskResubmitPage({
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[Resubmit] Network or unexpected error:", err);
       setSubmitError(`Failed to submit. ${msg ? `Error: ${msg}` : "Please check your connection and try again."}`);
+    } finally {
       setSubmitting(false);
     }
   };

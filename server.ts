@@ -47,6 +47,8 @@ if (!DB_CONNECTION_STRING) {
 
 const pool = new Pool({
   connectionString: DB_CONNECTION_STRING,
+  connectionTimeoutMillis: 10_000,
+  query_timeout: 25_000,
   ssl: DB_CONNECTION_STRING.includes("localhost") || DB_CONNECTION_STRING.includes("127.0.0.1")
     ? false
     : { rejectUnauthorized: false }
@@ -2010,8 +2012,11 @@ app.post("/api/earner/tasks/:id/hide", async (req, res) => {
 });
 
 app.post("/api/earner/tasks/:id/submit", async (req, res) => {
-  const client = await pool.connect();
+  const requestStartedAt = performance.now();
+  const requestId = `proof-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  let client: any = null;
   try {
+    client = await pool.connect();
     const user = await getAuthenticatedUser(req);
     if (!user || user.role === UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
@@ -2019,24 +2024,21 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
     const { proofText, proofScreenshot } = req.body;
 
     // ── Detailed upload logging (frontend/backend handshake diagnostics) ────
-    console.log(`[Submit] taskId=${taskId} userId=${user.id} (${user.name})`);
-    console.log(`[Submit] proofText  : ${proofText ? `${String(proofText).length} chars` : "(none)"}`);
+    console.log(`[Submit:${requestId}] taskId=${taskId} userId=${user.id} (${user.name}) auth=${Math.round(performance.now() - requestStartedAt)}ms`);
+    console.log(`[Submit:${requestId}] proofText=${proofText ? `${String(proofText).length} chars` : "(none)"}`);
     if (proofScreenshot) {
       const dataUrl = String(proofScreenshot);
-      const prefix  = dataUrl.slice(0, 50);
       const isDataUrl = dataUrl.startsWith("data:");
       const mimeMatch = isDataUrl ? dataUrl.match(/^data:([^;,]+)/) : null;
       const detectedMime = mimeMatch ? mimeMatch[1] : "(not a data URL)";
       // Estimate raw bytes from base64 length
       const base64Part = dataUrl.split(",")[1] ?? "";
       const estimatedBytes = Math.floor((base64Part.length * 3) / 4);
-      console.log(`[Submit] screenshot : ${dataUrl.length} chars total, ~${(estimatedBytes / 1024).toFixed(1)} KB decoded`);
-      console.log(`[Submit] screenshot prefix: "${prefix}…"`);
-      console.log(`[Submit] detected MIME: ${detectedMime}`);
+      console.log(`[Submit:${requestId}] screenshot=${dataUrl.length} chars, ~${(estimatedBytes / 1024).toFixed(1)} KB, mime=${detectedMime}`);
 
       // Validate: must be a proper image data URL
       if (!isDataUrl || !detectedMime.startsWith("image/")) {
-        console.error(`[Submit] ✗ Rejected — screenshot is not a valid image data URL (detected: "${detectedMime}")`);
+        console.error(`[Submit:${requestId}] rejected invalid screenshot format (detected: "${detectedMime}")`);
         return res.status(400).json({
           error: `Invalid screenshot format. Expected an image data URL (data:image/...) but received "${detectedMime}". Please re-select the image and try again.`,
         });
@@ -2045,10 +2047,10 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       // Reject known-unsupported types that browsers sometimes pass through
       const supportedMimes = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
       if (!supportedMimes.has(detectedMime)) {
-        console.warn(`[Submit] ⚠ Unsupported MIME "${detectedMime}" — storing anyway (frontend already compressed to JPEG where possible)`);
+        console.warn(`[Submit:${requestId}] unsupported MIME "${detectedMime}" — storing after frontend validation`);
       }
     } else {
-      console.log(`[Submit] screenshot : (none)`);
+      console.log(`[Submit:${requestId}] screenshot=(none)`);
     }
 
     // Require at least some proof — text, link, or a screenshot
@@ -2057,6 +2059,7 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
     }
 
     await client.query("BEGIN");
+    console.log(`[Submit:${requestId}] transaction started at ${Math.round(performance.now() - requestStartedAt)}ms`);
 
     const screenshot = proofScreenshot || null;
     const finalProofText = proofText || "See uploaded screenshot proof.";
@@ -2067,7 +2070,7 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
     // to be Active — the earner deserves a chance to correct their proof even
     // if the advertiser paused the campaign after the initial rejection.
     const alreadySub = await client.query(
-      "SELECT id, status FROM submissions WHERE task_id = $1 AND earner_id = $2",
+      "SELECT id, status FROM submissions WHERE task_id = $1 AND earner_id = $2 FOR UPDATE",
       [taskId, user.id]
     );
 
@@ -2099,7 +2102,7 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       // Update the existing record in-place (one row per earner-task pair).
       // The old screenshot was already nulled by cleanupRejectedSubmissionProof.
       const resubmittedAt = new Date();
-      await client.query(
+      const updatedSubRes = await client.query(
         `UPDATE submissions
             SET proof_text       = $1,
                 proof_screenshot = $2,
@@ -2107,7 +2110,8 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
                 feedback         = '',
                 rejected_at      = NULL,
                 submitted_at     = $3
-          WHERE id = $4`,
+          WHERE id = $4
+          RETURNING *`,
         [finalProofText, screenshot, resubmittedAt, existing.id]
       );
 
@@ -2120,7 +2124,9 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       ]);
 
       await client.query("COMMIT");
-      await notifyAdmin({
+      const submission = mapSubmission(updatedSubRes.rows[0]);
+      console.log(`[Submit:${requestId}] resubmission committed in ${Math.round(performance.now() - requestStartedAt)}ms`);
+      void notifyAdmin({
         type: "submission",
         message: `${user.name} submitted a task for review.`,
         referenceId: existing.id,
@@ -2129,9 +2135,9 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         taskTitle: task.title,
         submittedAt: resubmittedAt,
         reviewUrl: `/admin/audits?submission=${encodeURIComponent(existing.id)}`
-      });
-      const subRes = await pool.query("SELECT * FROM submissions WHERE id = $1", [existing.id]);
-      return res.status(200).json({ success: true, message: "Task resubmitted successfully", submission: mapSubmission(subRes.rows[0]) });
+      }).catch((err) => console.error(`[Submit:${requestId}] async admin notification failed:`, err));
+      console.log(`[Submit:${requestId}] response sent in ${Math.round(performance.now() - requestStartedAt)}ms`);
+      return res.status(200).json({ success: true, message: "Task resubmitted successfully", submission });
     }
 
     // ── NEW SUBMISSION PATH ──────────────────────────────────────────────────
@@ -2175,14 +2181,17 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
     const subId = "sub-" + Math.random().toString(36).substr(2, 9);
 
     const submittedAt = new Date();
-    await client.query(`
+    const insertedSubRes = await client.query(`
       INSERT INTO submissions (id, task_id, task_title, category, earner_id, earner_name, proof_text, proof_screenshot, status, reward, submitted_at)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Pending',$9,$10)
+      RETURNING *
     `, [subId, taskId, task.title, task.category, user.id, user.name, finalProofText, screenshot, task.earningPerSlot, submittedAt]);
 
     await client.query("COMMIT");
+    const submission = mapSubmission(insertedSubRes.rows[0]);
+    console.log(`[Submit:${requestId}] submission committed in ${Math.round(performance.now() - requestStartedAt)}ms`);
 
-    await notifyAdmin({
+    void notifyAdmin({
       type: "submission",
       message: `${user.name} submitted a task for review.`,
       referenceId: subId,
@@ -2191,20 +2200,20 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       taskTitle: task.title,
       submittedAt,
       reviewUrl: `/admin/audits?submission=${encodeURIComponent(subId)}`
-    });
+    }).catch((err) => console.error(`[Submit:${requestId}] async admin notification failed:`, err));
 
-    const subRes = await pool.query("SELECT * FROM submissions WHERE id = $1", [subId]);
-    res.status(201).json({ success: true, message: "Task submitted successfully", submission: mapSubmission(subRes.rows[0]) });
+    res.status(201).json({ success: true, message: "Task submitted successfully", submission });
+    console.log(`[Submit:${requestId}] response sent in ${Math.round(performance.now() - requestStartedAt)}ms`);
   } catch (err: any) {
-    await client.query("ROLLBACK").catch(() => {});
-    console.error("[Submit task] Error:", err);
+    if (client) await client.query("ROLLBACK").catch(() => {});
+    console.error(`[Submit:${requestId}] Error after ${Math.round(performance.now() - requestStartedAt)}ms:`, err);
     const isDev = process.env.NODE_ENV !== "production";
     res.status(500).json({
       error: isDev ? (err?.message || "Server error") : "Server error",
       ...(isDev && err?.detail ? { detail: err.detail } : {})
     });
   } finally {
-    client.release();
+    client?.release();
   }
 });
 
@@ -3270,22 +3279,23 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
 
     // Delete the proof screenshot once the decision is final.
     if (updatedSubmission?.status === SubmissionStatus.APPROVED) {
-      await cleanupApprovedSubmissionProof(updatedSubmission.id);
+      void cleanupApprovedSubmissionProof(updatedSubmission.id);
       updatedSubmission.proofScreenshot = null;
     }
     if (updatedSubmission?.status === SubmissionStatus.REJECTED) {
-      await cleanupRejectedSubmissionProof(updatedSubmission.id);
+      void cleanupRejectedSubmissionProof(updatedSubmission.id);
       updatedSubmission.proofScreenshot = null;
     }
 
     // Log commission details after commit so the new DB total is accurate
     if (commissionData) {
-      const totalRes = await pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM admin_commissions WHERE type='task_commission'");
-      console.log(
-        `[Commission] Advertiser Approval | Submission ID: ${commissionData.submissionId} | ` +
-        `Advertiser Cost: ₦${commissionData.costPerSlot} | Earner Reward: ₦${commissionData.earnerReward} | ` +
-        `Commission Added: ₦${commissionData.amount} | New Task Commission Balance: ₦${parseFloat(totalRes.rows[0].total).toLocaleString()}`
-      );
+      void pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM admin_commissions WHERE type='task_commission'")
+        .then((totalRes) => console.log(
+          `[Commission] Advertiser Approval | Submission ID: ${commissionData!.submissionId} | ` +
+          `Advertiser Cost: ₦${commissionData!.costPerSlot} | Earner Reward: ₦${commissionData!.earnerReward} | ` +
+          `Commission Added: ₦${commissionData!.amount} | New Task Commission Balance: ₦${parseFloat(totalRes.rows[0].total).toLocaleString()}`
+        ))
+        .catch((err) => console.error("[Commission] Async balance log failed:", err));
     }
 
     // Fire-and-forget browser push to the earner about their submission decision
@@ -4228,22 +4238,23 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
     // Delete the proof screenshot once the decision is final (approved or rejected).
     // Runs after the transaction commits so the decision is durable before we clean up.
     if (updatedSubmission?.status === SubmissionStatus.APPROVED) {
-      await cleanupApprovedSubmissionProof(updatedSubmission.id);
+      void cleanupApprovedSubmissionProof(updatedSubmission.id);
       updatedSubmission.proofScreenshot = null;
     }
     if (updatedSubmission?.status === SubmissionStatus.REJECTED) {
-      await cleanupRejectedSubmissionProof(updatedSubmission.id);
+      void cleanupRejectedSubmissionProof(updatedSubmission.id);
       updatedSubmission.proofScreenshot = null;
     }
 
     // Log commission details after commit so the new DB total is accurate
     if (adminCommData) {
-      const totalRes = await pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM admin_commissions WHERE type='task_commission'");
-      console.log(
-        `[Commission] Admin Approval | Task ID: ${adminCommData.submissionId} | ` +
-        `Advertiser Cost: ₦${adminCommData.costPerSlot} | Earner Reward: ₦${updatedSubmission?.reward ?? adminCommData.costPerSlot - adminCommData.amount} | ` +
-        `Commission Added: ₦${adminCommData.amount} | New Task Commission Balance: ₦${parseFloat(totalRes.rows[0].total).toLocaleString()}`
-      );
+      void pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM admin_commissions WHERE type='task_commission'")
+        .then((totalRes) => console.log(
+          `[Commission] Admin Approval | Task ID: ${adminCommData!.submissionId} | ` +
+          `Advertiser Cost: ₦${adminCommData!.costPerSlot} | Earner Reward: ₦${updatedSubmission?.reward ?? adminCommData!.costPerSlot - adminCommData!.amount} | ` +
+          `Commission Added: ₦${adminCommData!.amount} | New Task Commission Balance: ₦${parseFloat(totalRes.rows[0].total).toLocaleString()}`
+        ))
+        .catch((err) => console.error("[Commission] Async balance log failed:", err));
     }
 
     // Fire-and-forget browser push to the earner about their submission decision (admin review)

@@ -239,16 +239,27 @@ export default function App() {
       "Authorization": `Bearer ${token}`
     };
 
+    const timeoutMs = 30_000;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+    const startedAt = performance.now();
+
     try {
-      const res = await fetch(endpoint, { ...options, headers });
+      const res = await fetch(endpoint, { ...options, headers, signal: controller.signal });
       const contentType = res.headers.get("content-type");
+      const elapsedMs = Math.round(performance.now() - startedAt);
+      console.info(`[API] ${options.method || "GET"} ${endpoint} → ${res.status} in ${elapsedMs}ms`);
       if (contentType && contentType.includes("application/json")) {
         return await res.json();
       }
       return { error: `Server responded with status ${res.status}` };
     } catch (e) {
-      console.warn("Express backend connection failed, falling back to client-side Simulation Database: " + endpoint, e);
-      return simulateApiFetch(endpoint, options, token);
+      const elapsedMs = Math.round(performance.now() - startedAt);
+      const timedOut = controller.signal.aborted;
+      console.error(`[API] ${options.method || "GET"} ${endpoint} failed after ${elapsedMs}ms${timedOut ? " (timeout)" : ""}`, e);
+      return { error: timedOut ? "The request timed out. Please try again." : "Unable to reach the server. Please try again." };
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   };
 
