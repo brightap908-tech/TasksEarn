@@ -2018,6 +2018,39 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
     const taskId = req.params.id;
     const { proofText, proofScreenshot } = req.body;
 
+    // ── Detailed upload logging (frontend/backend handshake diagnostics) ────
+    console.log(`[Submit] taskId=${taskId} userId=${user.id} (${user.name})`);
+    console.log(`[Submit] proofText  : ${proofText ? `${String(proofText).length} chars` : "(none)"}`);
+    if (proofScreenshot) {
+      const dataUrl = String(proofScreenshot);
+      const prefix  = dataUrl.slice(0, 50);
+      const isDataUrl = dataUrl.startsWith("data:");
+      const mimeMatch = isDataUrl ? dataUrl.match(/^data:([^;,]+)/) : null;
+      const detectedMime = mimeMatch ? mimeMatch[1] : "(not a data URL)";
+      // Estimate raw bytes from base64 length
+      const base64Part = dataUrl.split(",")[1] ?? "";
+      const estimatedBytes = Math.floor((base64Part.length * 3) / 4);
+      console.log(`[Submit] screenshot : ${dataUrl.length} chars total, ~${(estimatedBytes / 1024).toFixed(1)} KB decoded`);
+      console.log(`[Submit] screenshot prefix: "${prefix}…"`);
+      console.log(`[Submit] detected MIME: ${detectedMime}`);
+
+      // Validate: must be a proper image data URL
+      if (!isDataUrl || !detectedMime.startsWith("image/")) {
+        console.error(`[Submit] ✗ Rejected — screenshot is not a valid image data URL (detected: "${detectedMime}")`);
+        return res.status(400).json({
+          error: `Invalid screenshot format. Expected an image data URL (data:image/...) but received "${detectedMime}". Please re-select the image and try again.`,
+        });
+      }
+
+      // Reject known-unsupported types that browsers sometimes pass through
+      const supportedMimes = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
+      if (!supportedMimes.has(detectedMime)) {
+        console.warn(`[Submit] ⚠ Unsupported MIME "${detectedMime}" — storing anyway (frontend already compressed to JPEG where possible)`);
+      }
+    } else {
+      console.log(`[Submit] screenshot : (none)`);
+    }
+
     // Require at least some proof — text, link, or a screenshot
     if (!proofText && !proofScreenshot) {
       return res.status(400).json({ error: "Please provide proof details: notes, a link, or a screenshot." });

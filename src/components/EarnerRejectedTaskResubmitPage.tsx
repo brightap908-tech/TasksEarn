@@ -110,6 +110,12 @@ export default function EarnerRejectedTaskResubmitPage({
       : "See uploaded screenshot proof.";
 
     try {
+      const screenshotPayload = proofScreenshot || "";
+      console.log(
+        "[Resubmit] Sending proof —",
+        `screenshot: ${screenshotPayload ? `${screenshotPayload.length} chars, prefix="${screenshotPayload.slice(0, 40)}…"` : "(none)"}`,
+        `proofText: ${finalProofText.length} chars`,
+      );
       // Submit against the task endpoint — it already handles the Rejected → Pending
       // transition and does NOT require the task to be Active for resubmissions.
       const res = await apiFetch(`/api/earner/tasks/${info.taskId}/submit`, {
@@ -117,20 +123,24 @@ export default function EarnerRejectedTaskResubmitPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           proofText: finalProofText,
-          proofScreenshot: proofScreenshot || "",
+          proofScreenshot: screenshotPayload,
         }),
       });
 
       if (res && res.error) {
+        console.error("[Resubmit] Server returned error:", res.error);
         setSubmitError(res.error);
         setSubmitting(false);
       } else {
+        console.log("[Resubmit] ✓ Resubmission accepted by server");
         setSubmitSuccess(true);
         showToast("Resubmission sent! Redirecting to Rejected Tasks…", "success");
         setTimeout(() => navigate("/dashboard/my-tasks/rejected"), 1500);
       }
-    } catch {
-      setSubmitError("Failed to submit. Please check your connection and try again.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[Resubmit] Network or unexpected error:", err);
+      setSubmitError(`Failed to submit. ${msg ? `Error: ${msg}` : "Please check your connection and try again."}`);
       setSubmitting(false);
     }
   };
@@ -433,7 +443,7 @@ export default function EarnerRejectedTaskResubmitPage({
                   or tap here to Browse Files
                 </p>
                 <p className="text-[9px] text-gray-400 mt-1.5">
-                  PNG, JPG or JPEG · up to 10 MB · auto-compressed
+                  PNG, JPG, JPEG or WEBP · up to 10 MB · auto-compressed
                 </p>
               </label>
             </>

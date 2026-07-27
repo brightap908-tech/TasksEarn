@@ -102,23 +102,33 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
       : "See uploaded screenshot proof.";
 
     try {
+      const screenshotPayload = proofScreenshot || "";
+      console.log(
+        "[Submit] Sending proof —",
+        `screenshot: ${screenshotPayload ? `${screenshotPayload.length} chars, prefix="${screenshotPayload.slice(0, 40)}…"` : "(none)"}`,
+        `proofText: ${finalProofText.length} chars`,
+      );
       const res = await apiFetch(`/api/earner/tasks/${task.id}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proofText: finalProofText, proofScreenshot: proofScreenshot || "" })
+        body: JSON.stringify({ proofText: finalProofText, proofScreenshot: screenshotPayload })
       });
 
       if (res && res.error) {
+        console.error("[Submit] Server returned error:", res.error);
         setSubmitError(res.error);
         setSubmitting(false);
       } else {
+        console.log("[Submit] ✓ Submission accepted by server");
         setSubmitSuccess(true);
         showToast("Task submitted successfully! Redirecting to available tasks…", "success");
         setTimeout(() => navigate("/earner/tasks"), 1500);
         // Button stays disabled for the redirect window to prevent double-submit
       }
-    } catch {
-      setSubmitError("Failed to submit proof. Please try again.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[Submit] Network or unexpected error:", err);
+      setSubmitError(`Failed to submit proof. ${msg ? `Error: ${msg}` : "Please check your connection and try again."}`);
       setSubmitting(false);
     }
   };
@@ -371,7 +381,7 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
                 <p className="text-[11px] text-blue-600 font-bold mt-0.5 underline underline-offset-2">
                   or tap here to Browse Files
                 </p>
-                <p className="text-[9px] text-gray-400 mt-1.5">PNG, JPG or JPEG · up to 10 MB · auto-compressed</p>
+                <p className="text-[9px] text-gray-400 mt-1.5">PNG, JPG, JPEG or WEBP · up to 10 MB · auto-compressed</p>
               </label>
             </>
 
