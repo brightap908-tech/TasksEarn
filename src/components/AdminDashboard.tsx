@@ -134,6 +134,49 @@ function ScreenshotLightbox({ src, onClose }: ScreenshotLightboxProps) {
   );
 }
 
+// ── Inline screenshot preview ──────────────────────────────────────────────────
+// Renders the proof screenshot inline inside the submission card.
+// Manages its own error state so a broken data-URL never crashes the parent.
+// Clicking the image opens the full-screen ScreenshotLightbox.
+interface ScreenshotPreviewProps {
+  src: string;
+  onViewFull: () => void;
+}
+function ScreenshotPreview({ src, onViewFull }: ScreenshotPreviewProps) {
+  const [errored, setErrored] = React.useState(false);
+  if (errored) {
+    return (
+      <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50/50 py-10 text-center space-y-1">
+        <p className="text-[11px] font-semibold text-gray-400">Proof image unavailable</p>
+        <p className="text-[10px] text-gray-300">The image could not be displayed.</p>
+      </div>
+    );
+  }
+  return (
+    <div
+      className="relative group rounded-xl border border-gray-100 overflow-hidden bg-slate-50 cursor-pointer"
+      onClick={onViewFull}
+      title="Click to view full-size screenshot"
+    >
+      <img
+        src={src}
+        alt="Task proof screenshot"
+        className="block w-full object-contain"
+        style={{ maxHeight: "400px" }}
+        onError={() => setErrored(true)}
+        referrerPolicy="no-referrer"
+        draggable={false}
+      />
+      {/* Hover overlay */}
+      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+        <span className="bg-white rounded-full px-3 py-1.5 text-[10px] font-bold text-gray-800 flex items-center gap-1 shadow-md">
+          <Eye className="h-3.5 w-3.5" /> View Full Image
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 interface AdminDashboardProps {
@@ -3385,41 +3428,13 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
 
                             <div className="space-y-2">
                               <p className="font-bold text-gray-600 uppercase tracking-wide text-[9px]">Uploaded Screenshot Proof:</p>
-                              {(sub as any).hasScreenshot ? (
-                                loadedScreenshots[sub.id] ? (
-                                  /* Screenshot already fetched — show thumbnail + lightbox trigger */
-                                  <div
-                                    className="relative group rounded-xl border border-gray-100 overflow-hidden bg-slate-50 max-h-48 flex justify-center items-center cursor-pointer"
-                                    onClick={() => handleViewScreenshot(sub.id)}
-                                    title="Click to view full-size screenshot"
-                                  >
-                                    <img
-                                      src={loadedScreenshots[sub.id]}
-                                      alt="Task Proof Screenshot"
-                                      className="max-h-48 max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
-                                      referrerPolicy="no-referrer"
-                                    />
-                                    <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
-                                      <span className="bg-white rounded-full px-3 py-1.5 text-[10px] font-bold text-gray-800 flex items-center gap-1 shadow-md">
-                                        <Eye className="h-3.5 w-3.5" /> View Full Image
-                                      </span>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  /* Screenshot exists on server but not yet loaded — show fetch button */
-                                  <div className="rounded-xl border border-dashed border-blue-200 bg-blue-50/50 py-8 text-center space-y-2">
-                                    <p className="text-[11px] font-semibold text-gray-500">Screenshot attached</p>
-                                    <button
-                                      type="button"
-                                      disabled={loadingScreenshotId === sub.id}
-                                      onClick={() => handleViewScreenshot(sub.id)}
-                                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60 transition-colors"
-                                    >
-                                      <Eye className="h-3.5 w-3.5" />
-                                      {loadingScreenshotId === sub.id ? "Loading…" : "View Screenshot"}
-                                    </button>
-                                  </div>
-                                )
+                              {sub.status === SubmissionStatus.PENDING && sub.proofScreenshot ? (
+                                /* Pending + screenshot present — display inline automatically.
+                                   Clicking the image opens the full-screen lightbox. */
+                                <ScreenshotPreview
+                                  src={sub.proofScreenshot}
+                                  onViewFull={() => setViewingScreenshot(sub.proofScreenshot!)}
+                                />
                               ) : (
                                 <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50/50 py-10 text-center space-y-1">
                                   <p className="text-[11px] font-semibold text-gray-400">Screenshot unavailable</p>

@@ -4193,16 +4193,13 @@ app.get("/api/admin/submissions", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-    // Omit proof_screenshot blob from the list; include has_screenshot so the UI
-    // can show a "View Screenshot" button and fetch the blob only on demand via
-    // GET /api/admin/submissions/:id/screenshot.
+    // Include proof_screenshot so the admin can see inline previews without an
+    // extra round-trip. Approved/rejected submissions already have the column
+    // NULLed by the cleanup functions, so the payload cost is pending-only.
     const result = await pool.query(
-      `SELECT id, task_id, task_title, category, earner_id, earner_name, proof_text,
-              status, feedback, reward, submitted_at, approved_at, rejected_at,
-              (proof_screenshot IS NOT NULL) AS has_screenshot
-       FROM submissions ORDER BY submitted_at DESC`
+      "SELECT * FROM submissions ORDER BY submitted_at DESC"
     );
-    res.json(result.rows.map(mapSubmissionSlim));
+    res.json(result.rows.map(mapSubmission));
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
