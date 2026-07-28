@@ -152,9 +152,8 @@ export default function AdvertiserDashboard({
   const [showDeleteModal, setShowDeleteModal] = React.useState(false);
   const [deleteLoading, setDeleteLoading] = React.useState(false);
 
-  // ── Social Media Protection Notice (shown once per visit to campaign section) ──
+  // ── Social Media Protection Notice (shown before every Follow campaign submission) ──
   const [showSocialProtectionNotice, setShowSocialProtectionNotice] = React.useState(false);
-  const socialProtectionNoticeDismissed = React.useRef(false);
 
   // ── Social Follow Protection modal ────────────────────────────────────────
   const [showFollowProtectionModal, setShowFollowProtectionModal] = React.useState(false);
@@ -259,16 +258,6 @@ export default function AdvertiserDashboard({
     if (activeTab === "audit" || activeTab === "pending-submissions" || activeTab === "approved" || activeTab === "rejected") fetchSubmissions();
     if (activeTab === "transactions" || activeTab === "wallet") fetchTransactions();
     if (activeTab === "price-list") fetchAdvertiserPricing();
-
-    // Show Social Media Protection Notice once per visit to the campaign section
-    if (activeTab === "create" || activeTab === "manage") {
-      if (!socialProtectionNoticeDismissed.current) {
-        setShowSocialProtectionNotice(true);
-      }
-    } else {
-      // User navigated away from campaign section — reset so notice shows again on return
-      socialProtectionNoticeDismissed.current = false;
-    }
   }, [activeTab]);
 
   // ── Campaign Create ───────────────────────────────────────────────────────
@@ -380,11 +369,11 @@ export default function AdvertiserDashboard({
       totalSlots: slotsNum
     };
 
-    // Follow campaigns require the advertiser to acknowledge the protection notice
-    // before the campaign is created.
+    // Follow campaigns require the advertiser to acknowledge the Social Media
+    // Protection Notice before the campaign is created.
     if (isFollowTask(submittedCategory)) {
       setPendingCampaignPayload(payload);
-      setShowFollowProtectionModal(true);
+      setShowSocialProtectionNotice(true);
       return;
     }
 
@@ -2027,10 +2016,10 @@ export default function AdvertiserDashboard({
         </div>
       )}
 
-      {/* ── Social Media Protection Notice ── */}
-      {showSocialProtectionNotice && (
+      {/* ── Social Media Protection Notice (Follow campaigns only, fires on every submission) ── */}
+      {showSocialProtectionNotice && pendingCampaignPayload && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"
           style={{ animation: "fadeIn 0.25s ease-out" }}
         >
           <div className="bg-white rounded-2xl border border-blue-100 shadow-2xl w-full max-w-md mx-auto overflow-hidden">
@@ -2058,6 +2047,19 @@ export default function AdvertiserDashboard({
                 create more natural follower growth and may reduce the risk of your account being{" "}
                 <strong>flagged, restricted, or temporarily suspended</strong> by the platform.
               </p>
+              {/* Batch delivery detail */}
+              <ul className="space-y-1.5">
+                {[
+                  `Your ${pendingCampaignPayload.totalSlots} slots will be released across ${Math.ceil(pendingCampaignPayload.totalSlots / FOLLOW_BATCH_SIZE)} batches of ${FOLLOW_BATCH_SIZE} at a time.`,
+                  "The next batch opens automatically once pending submissions are reviewed.",
+                  "This pacing reduces sudden follower spikes that can flag your account."
+                ].map((line, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
+                    <Check className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
               <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 flex items-start gap-3">
                 <span className="text-base shrink-0">📌</span>
                 <p className="text-xs text-blue-800 leading-relaxed font-medium">
@@ -2070,69 +2072,24 @@ export default function AdvertiserDashboard({
             <div className="px-6 pb-6 flex flex-col sm:flex-row gap-3">
               <button
                 onClick={() => {
-                  socialProtectionNoticeDismissed.current = true;
                   setShowSocialProtectionNotice(false);
+                  setPendingCampaignPayload(null);
                 }}
                 className="order-2 sm:order-1 flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 Close
               </button>
               <button
-                onClick={() => {
-                  socialProtectionNoticeDismissed.current = true;
-                  setShowSocialProtectionNotice(false);
-                }}
-                className="order-1 sm:order-2 flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-sm font-bold text-white transition-all shadow-sm cursor-pointer"
-              >
-                I Understand
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Follow Protection Modal ── */}
-      {showFollowProtectionModal && pendingCampaignPayload && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl border border-blue-100 p-6 w-full max-w-sm mx-4 shadow-xl">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="rounded-xl bg-blue-100 p-2">
-                <Shield className="h-5 w-5 text-blue-600" />
-              </div>
-              <h3 className="font-display text-base font-bold text-gray-900">Social Follow Protection</h3>
-            </div>
-            <p className="text-xs text-gray-600 leading-relaxed mb-3">
-              This is a <strong>Follow campaign</strong>. To protect your account and ensure natural growth, TasksEarn will deliver earners in <strong>batches of {FOLLOW_BATCH_SIZE}</strong> at a time.
-            </p>
-            <ul className="space-y-1.5 mb-4">
-              {[
-                `Your ${pendingCampaignPayload.totalSlots} slots will be distributed across ${Math.ceil(pendingCampaignPayload.totalSlots / FOLLOW_BATCH_SIZE)} batches of ${FOLLOW_BATCH_SIZE}.`,
-                "The next batch opens automatically once pending submissions are reviewed.",
-                "This pacing reduces the risk of sudden follower spikes that can flag your account."
-              ].map((line, i) => (
-                <li key={i} className="flex items-start gap-2 text-[11px] text-gray-600">
-                  <Check className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setShowFollowProtectionModal(false); setPendingCampaignPayload(null); }}
-                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
                 disabled={formSubmitting}
                 onClick={async () => {
-                  setShowFollowProtectionModal(false);
-                  await doCreateCampaign(pendingCampaignPayload);
+                  setShowSocialProtectionNotice(false);
+                  const payload = pendingCampaignPayload;
                   setPendingCampaignPayload(null);
+                  await doCreateCampaign(payload);
                 }}
-                className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white transition-all disabled:opacity-60"
+                className="order-1 sm:order-2 flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-sm font-bold text-white transition-all shadow-sm disabled:opacity-60 cursor-pointer"
               >
-                {formSubmitting ? "Launching…" : "I Understand — Launch"}
+                {formSubmitting ? "Launching…" : "I Understand"}
               </button>
             </div>
           </div>
