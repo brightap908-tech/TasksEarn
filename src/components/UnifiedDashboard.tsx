@@ -171,15 +171,15 @@ export default function UnifiedDashboard({
 
   const navTo = (s: string) => navigate(`/dashboard/${s}`);
 
-  // Gate: always show notice on every visit — no "already seen" state.
+  // Navigate to campaigns — the section effect below shows the notice as an overlay.
   const requestCampaignsNav = React.useCallback(() => {
-    setShowCampaignsNotice(true);
+    navTo("my-campaigns");
   }, []);
 
-  // Intercept direct URL / Navbar navigation to my-campaigns — always show notice.
+  // Every time the section becomes my-campaigns, show the notice on top of the page.
+  // No redirect — navigation is never interrupted.
   React.useEffect(() => {
     if (section === "my-campaigns") {
-      navigate("/dashboard/overview", { replace: true });
       setShowCampaignsNotice(true);
     }
   }, [section]);
@@ -1805,10 +1805,7 @@ export default function UnifiedDashboard({
                 Close
               </button>
               <button
-                onClick={() => {
-                  setShowCampaignsNotice(false);
-                  navTo("my-campaigns");
-                }}
+                onClick={() => setShowCampaignsNotice(false)}
                 className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-sm font-bold text-white transition-colors shadow-sm cursor-pointer"
               >
                 I Understand
