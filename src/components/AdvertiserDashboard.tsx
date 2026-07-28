@@ -152,12 +152,9 @@ export default function AdvertiserDashboard({
   const [showDeleteModal, setShowDeleteModal] = React.useState(false);
   const [deleteLoading, setDeleteLoading] = React.useState(false);
 
-  // ── Social Media Protection Notice (shown before every Follow campaign submission) ──
+  // ── Social Media Protection Notice (gates navigation to Create Campaign page) ──
   const [showSocialProtectionNotice, setShowSocialProtectionNotice] = React.useState(false);
-
-  // ── Social Follow Protection modal ────────────────────────────────────────
-  const [showFollowProtectionModal, setShowFollowProtectionModal] = React.useState(false);
-  const [pendingCampaignPayload, setPendingCampaignPayload] = React.useState<any>(null);
+  const pendingCreateNav = React.useRef<(() => void) | null>(null);
 
   // Photo preview
   const photoInputRef = React.useRef<HTMLInputElement>(null);
@@ -259,6 +256,26 @@ export default function AdvertiserDashboard({
     if (activeTab === "transactions" || activeTab === "wallet") fetchTransactions();
     if (activeTab === "price-list") fetchAdvertiserPricing();
   }, [activeTab]);
+
+  // ── Create Campaign nav gate ──────────────────────────────────────────────
+  // Opens the Social Media Protection Notice instead of navigating immediately.
+  const requestCreateNav = () => {
+    pendingCreateNav.current = () => setActiveTab("create");
+    setShowSocialProtectionNotice(true);
+  };
+
+  // Dismiss the notice (and abort pending nav) when the user presses Escape.
+  React.useEffect(() => {
+    if (!showSocialProtectionNotice) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowSocialProtectionNotice(false);
+        pendingCreateNav.current = null;
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [showSocialProtectionNotice]);
 
   // ── Campaign Create ───────────────────────────────────────────────────────
   // ── Follow Protection helpers ─────────────────────────────────────────────
@@ -368,14 +385,6 @@ export default function AdvertiserDashboard({
       link: trimmedLink,
       totalSlots: slotsNum
     };
-
-    // Follow campaigns require the advertiser to acknowledge the Social Media
-    // Protection Notice before the campaign is created.
-    if (isFollowTask(submittedCategory)) {
-      setPendingCampaignPayload(payload);
-      setShowSocialProtectionNotice(true);
-      return;
-    }
 
     await doCreateCampaign(payload);
   };
@@ -503,7 +512,7 @@ export default function AdvertiserDashboard({
   // ── Sidebar button helper ─────────────────────────────────────────────────
   const navBtn = (tab: Tab, label: string, icon: React.ReactNode, badge?: string | number) => (
     <button
-      onClick={() => setActiveTab(tab)}
+      onClick={() => tab === "create" ? requestCreateNav() : setActiveTab(tab)}
       className={`w-full text-left rounded-xl px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
         activeTab === tab
           ? "bg-blue-50 text-blue-600 border-r-4 border-blue-500"
@@ -1306,7 +1315,7 @@ export default function AdvertiserDashboard({
                 <div className="border-t border-slate-100 bg-slate-50/40 px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
                   <p className="text-[11px] text-slate-400">All prices are in Nigerian Naira (₦) and include platform service fees.</p>
                   <button
-                    onClick={() => setActiveTab("create")}
+                    onClick={() => requestCreateNav()}
                     className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2 text-xs font-bold text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-sm w-full sm:w-auto justify-center"
                   >
                     <PlusCircle className="h-3.5 w-3.5" /> Build a Campaign
@@ -1664,7 +1673,7 @@ export default function AdvertiserDashboard({
                 <button onClick={() => setActiveTab("fund")} className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2.5 text-xs font-bold text-white transition-all shadow-sm cursor-pointer flex items-center gap-1.5">
                   <Coins className="h-3.5 w-3.5" /> Fund Wallet
                 </button>
-                <button onClick={() => setActiveTab("create")} className="rounded-xl border border-blue-100 hover:bg-blue-50 px-5 py-2.5 text-xs font-bold text-blue-600 transition-all cursor-pointer">
+                <button onClick={() => requestCreateNav()} className="rounded-xl border border-blue-100 hover:bg-blue-50 px-5 py-2.5 text-xs font-bold text-blue-600 transition-all cursor-pointer">
                   Create Campaign
                 </button>
               </div>
@@ -2016,8 +2025,8 @@ export default function AdvertiserDashboard({
         </div>
       )}
 
-      {/* ── Social Media Protection Notice (Follow campaigns only, fires on every submission) ── */}
-      {showSocialProtectionNotice && pendingCampaignPayload && (
+      {/* ── Social Media Protection Notice (gates navigation to Create Campaign page) ── */}
+      {showSocialProtectionNotice && (
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"
           style={{ animation: "fadeIn 0.25s ease-out" }}
@@ -2047,19 +2056,6 @@ export default function AdvertiserDashboard({
                 create more natural follower growth and may reduce the risk of your account being{" "}
                 <strong>flagged, restricted, or temporarily suspended</strong> by the platform.
               </p>
-              {/* Batch delivery detail */}
-              <ul className="space-y-1.5">
-                {[
-                  `Your ${pendingCampaignPayload.totalSlots} slots will be released across ${Math.ceil(pendingCampaignPayload.totalSlots / FOLLOW_BATCH_SIZE)} batches of ${FOLLOW_BATCH_SIZE} at a time.`,
-                  "The next batch opens automatically once pending submissions are reviewed.",
-                  "This pacing reduces sudden follower spikes that can flag your account."
-                ].map((line, i) => (
-                  <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
-                    <Check className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
-                    <span>{line}</span>
-                  </li>
-                ))}
-              </ul>
               <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 flex items-start gap-3">
                 <span className="text-base shrink-0">📌</span>
                 <p className="text-xs text-blue-800 leading-relaxed font-medium">
@@ -2073,23 +2069,22 @@ export default function AdvertiserDashboard({
               <button
                 onClick={() => {
                   setShowSocialProtectionNotice(false);
-                  setPendingCampaignPayload(null);
+                  pendingCreateNav.current = null;
                 }}
                 className="order-2 sm:order-1 flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
               >
-                Close
+                Cancel
               </button>
               <button
-                disabled={formSubmitting}
-                onClick={async () => {
+                onClick={() => {
+                  const nav = pendingCreateNav.current;
+                  pendingCreateNav.current = null;
                   setShowSocialProtectionNotice(false);
-                  const payload = pendingCampaignPayload;
-                  setPendingCampaignPayload(null);
-                  await doCreateCampaign(payload);
+                  nav?.();
                 }}
-                className="order-1 sm:order-2 flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-sm font-bold text-white transition-all shadow-sm disabled:opacity-60 cursor-pointer"
+                className="order-1 sm:order-2 flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-sm font-bold text-white transition-all shadow-sm cursor-pointer"
               >
-                {formSubmitting ? "Launching…" : "I Understand"}
+                I Understand
               </button>
             </div>
           </div>
