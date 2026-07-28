@@ -152,6 +152,10 @@ export default function AdvertiserDashboard({
   const [showDeleteModal, setShowDeleteModal] = React.useState(false);
   const [deleteLoading, setDeleteLoading] = React.useState(false);
 
+  // ── Social Follow Protection modal ────────────────────────────────────────
+  const [showFollowProtectionModal, setShowFollowProtectionModal] = React.useState(false);
+  const [pendingCampaignPayload, setPendingCampaignPayload] = React.useState<any>(null);
+
   // Photo preview
   const photoInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -254,6 +258,60 @@ export default function AdvertiserDashboard({
   }, [activeTab]);
 
   // ── Campaign Create ───────────────────────────────────────────────────────
+  // ── Follow Protection helpers ─────────────────────────────────────────────
+  const FOLLOW_BATCH_SIZE = 25;
+  const isFollowTask = (cat: string) => cat.toLowerCase().includes("follow");
+
+  const getFollowBatchInfo = (task: Task) => {
+    const completed  = task.filledSlots;
+    const remaining  = task.totalSlots - task.filledSlots;
+    const currentBatch = Math.floor(completed / FOLLOW_BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(task.totalSlots / FOLLOW_BATCH_SIZE);
+    const batchFloor = Math.floor(completed / FOLLOW_BATCH_SIZE) * FOLLOW_BATCH_SIZE;
+    const batchCap   = Math.min(batchFloor + FOLLOW_BATCH_SIZE, task.totalSlots);
+    const batchDone  = completed - batchFloor;
+    const batchSize  = batchCap - batchFloor;
+    const batchPct   = batchSize > 0 ? Math.round((batchDone  / batchSize)  * 100) : 100;
+    const overallPct = task.totalSlots > 0 ? Math.round((completed / task.totalSlots) * 100) : 0;
+    return { completed, remaining, currentBatch, totalBatches, batchDone, batchSize, batchPct, overallPct };
+  };
+
+  // ── Campaign creation (extracted so the Follow-protection modal can call it) ──
+  const doCreateCampaign = async (payload: any) => {
+    setFormSubmitting(true);
+    setFormError("");
+    setFormSuccess(false);
+    try {
+      console.log("[Campaign Create] Sending payload:", payload);
+      const res = await apiFetch("/api/advertiser/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res?.error) {
+        setFormError(res.error);
+      } else {
+        setFormSuccess(true);
+        setCampaignForm({
+          title: "",
+          description: "",
+          platform: platforms.length > 0 ? platforms[0].name : "",
+          action: TASK_ACTIONS[0] as string,
+          link: "",
+          proofRequirements: "",
+          earningPerSlot: "15",
+          totalSlots: "100"
+        });
+        onRefreshUser();
+        setTimeout(() => { setFormSuccess(false); setActiveTab("manage"); }, 3000);
+      }
+    } catch (e) {
+      setFormError("Failed to create campaign. Please try again.");
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+
   const handleCreateCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -298,56 +356,25 @@ export default function AdvertiserDashboard({
       setFormError(`Insufficient Ad Balance. This campaign costs ₦${totalCost.toLocaleString()} (₦${costPerSlot}/slot × ${slotsVal} slots). Please fund your Ad Wallet.`);
       return;
     }
-    setFormSubmitting(true);
-    setFormError("");
-    setFormSuccess(false);
-    try {
-      const payload = {
-        title: trimmedTitle,
-        description: trimmedDescription,
-        category: submittedCategory,        // e.g. "Instagram - Follow"
-        proofRequirements: trimmedProofRequirements,
-        link: trimmedLink,
-        totalSlots: slotsNum                // number, not string
-      };
-      // Verify full payload before sending — visible in browser DevTools console
-      console.log("[Campaign Create] Sending payload:", {
-        platform: trimmedPlatform,
-        action: trimmedAction,
-        category: submittedCategory,
-        title: trimmedTitle,
-        description: trimmedDescription,
-        targetLink: trimmedLink,
-        proofRequirements: trimmedProofRequirements,
-        slots: slotsNum
-      });
-      const res = await apiFetch("/api/advertiser/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (res?.error) {
-        setFormError(res.error);
-      } else {
-        setFormSuccess(true);
-        setCampaignForm({
-          title: "",
-          description: "",
-          platform: platforms.length > 0 ? platforms[0].name : "",
-          action: TASK_ACTIONS[0] as string,
-          link: "",
-          proofRequirements: "",
-          earningPerSlot: "15",
-          totalSlots: "100"
-        });
-        onRefreshUser();
-        setTimeout(() => { setFormSuccess(false); setActiveTab("manage"); }, 3000);
-      }
-    } catch (e) {
-      setFormError("Failed to create campaign. Please try again.");
-    } finally {
-      setFormSubmitting(false);
+
+    const payload = {
+      title: trimmedTitle,
+      description: trimmedDescription,
+      category: submittedCategory,
+      proofRequirements: trimmedProofRequirements,
+      link: trimmedLink,
+      totalSlots: slotsNum
+    };
+
+    // Follow campaigns require the advertiser to acknowledge the protection notice
+    // before the campaign is created.
+    if (isFollowTask(submittedCategory)) {
+      setPendingCampaignPayload(payload);
+      setShowFollowProtectionModal(true);
+      return;
     }
+
+    await doCreateCampaign(payload);
   };
 
   // ── Campaign Toggle & Delete ──────────────────────────────────────────────
@@ -781,6 +808,19 @@ export default function AdvertiserDashboard({
                       <p className="col-span-2 text-[10px] text-slate-400 -mt-1">
                         Category: <strong className="text-slate-600">{category || "—"}</strong>
                       </p>
+
+                      {/* Follow-protection notice — visible when action = Follow */}
+                      {isFollowTask(category) && (
+                        <div className="col-span-2 flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-2.5">
+                          <Shield className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-[11px] font-bold text-blue-800">Social Follow Protection active</p>
+                            <p className="text-[10px] text-blue-600 leading-relaxed mt-0.5">
+                              TasksEarn delivers Follow campaigns gradually in batches of {FOLLOW_BATCH_SIZE} to protect your account from platform flags. You will be asked to confirm this before the campaign launches.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -898,65 +938,124 @@ export default function AdvertiserDashboard({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {campaigns.map((task, idx) => (
-                    <div key={idx} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:border-blue-100 transition-colors">
-                      <div className="min-w-0">
-                        <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase"
-                          style={{ background: "#DBEAFE", color: "#1D4ED8" }}>
-                          <PlatformIcon category={task.category} size={11} />
-                          {task.category}
-                        </span>
-                        <h4 className="font-display text-xs font-bold text-gray-800 mt-2 line-clamp-1">{task.title}</h4>
-                        <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-400 mt-1 font-mono">
-                          <span>Cost/slot: ₦{task.costPerSlot}</span>
-                          <span>Total budget: ₦{(task.costPerSlot * task.totalSlots).toLocaleString()}</span>
-                          <span>Slots: {task.filledSlots}/{task.totalSlots}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Progress bar */}
-                        <div className="hidden sm:block w-20">
-                          <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-blue-500 transition-all"
-                              style={{ width: `${task.totalSlots > 0 ? Math.min(100, (task.filledSlots / task.totalSlots) * 100) : 0}%` }}
-                            />
+                  {campaigns.map((task, idx) => {
+                    const followBatch = isFollowTask(task.category) ? getFollowBatchInfo(task) : null;
+                    return (
+                    <div key={idx} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm flex flex-col gap-3 hover:border-blue-100 transition-colors">
+                      {/* ── Top row: info + controls ── */}
+                      <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+                        <div className="min-w-0">
+                          <div className="flex items-center flex-wrap gap-1.5">
+                            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase"
+                              style={{ background: "#DBEAFE", color: "#1D4ED8" }}>
+                              <PlatformIcon category={task.category} size={11} />
+                              {task.category}
+                            </span>
+                            {isFollowTask(task.category) && (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-2 py-1 text-[9px] font-bold text-blue-700">
+                                <Shield className="h-3 w-3" /> Protected
+                              </span>
+                            )}
                           </div>
-                          <p className="text-[9px] text-gray-400 text-right mt-0.5">
-                            {task.totalSlots > 0 ? Math.round((task.filledSlots / task.totalSlots) * 100) : 0}%
-                          </p>
+                          <h4 className="font-display text-xs font-bold text-gray-800 mt-2 line-clamp-1">{task.title}</h4>
+                          <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-400 mt-1 font-mono">
+                            <span>Cost/slot: ₦{task.costPerSlot}</span>
+                            <span>Total budget: ₦{(task.costPerSlot * task.totalSlots).toLocaleString()}</span>
+                            <span>Slots: {task.filledSlots}/{task.totalSlots}</span>
+                          </div>
                         </div>
 
-                        <span className={`rounded-full px-2.5 py-0.5 text-[9px] font-bold ${
-                          task.status === TaskStatus.ACTIVE ? "bg-blue-50 text-blue-700" :
-                          task.status === TaskStatus.PAUSED ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"
-                        }`}>
-                          {task.status}
-                        </span>
+                        {/* Right side: progress bar + controls */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="hidden sm:block w-20">
+                            <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-blue-500 transition-all"
+                                style={{ width: `${task.totalSlots > 0 ? Math.min(100, (task.filledSlots / task.totalSlots) * 100) : 0}%` }}
+                              />
+                            </div>
+                            <p className="text-[9px] text-gray-400 text-right mt-0.5">
+                              {task.totalSlots > 0 ? Math.round((task.filledSlots / task.totalSlots) * 100) : 0}%
+                            </p>
+                          </div>
 
-                        {task.status !== TaskStatus.COMPLETED && (
+                          <span className={`rounded-full px-2.5 py-0.5 text-[9px] font-bold ${
+                            task.status === TaskStatus.ACTIVE ? "bg-blue-50 text-blue-700" :
+                            task.status === TaskStatus.PAUSED ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"
+                          }`}>
+                            {task.status}
+                          </span>
+
+                          {task.status !== TaskStatus.COMPLETED && (
+                            <button
+                              onClick={() => handleToggleStatus(task.id)}
+                              className="p-1.5 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors"
+                              title={task.status === TaskStatus.ACTIVE ? "Pause" : "Resume"}
+                            >
+                              {task.status === TaskStatus.ACTIVE
+                                ? <Pause className="h-3.5 w-3.5 text-amber-500" />
+                                : <Play className="h-3.5 w-3.5 text-blue-500" />}
+                            </button>
+                          )}
+
                           <button
-                            onClick={() => handleToggleStatus(task.id)}
-                            className="p-1.5 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors"
-                            title={task.status === TaskStatus.ACTIVE ? "Pause" : "Resume"}
+                            onClick={() => handleDeleteCampaign(task.id)}
+                            className="p-1.5 rounded-lg border border-red-100 hover:bg-red-50 transition-colors"
+                            title="Delete & Refund"
                           >
-                            {task.status === TaskStatus.ACTIVE
-                              ? <Pause className="h-3.5 w-3.5 text-amber-500" />
-                              : <Play className="h-3.5 w-3.5 text-blue-500" />}
+                            <Trash2 className="h-3.5 w-3.5 text-red-500" />
                           </button>
-                        )}
+                        </div>
+                      </div>{/* end top row */}
 
-                        <button
-                          onClick={() => handleDeleteCampaign(task.id)}
-                          className="p-1.5 rounded-lg border border-red-100 hover:bg-red-50 transition-colors"
-                          title="Delete & Refund"
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                        </button>
-                      </div>
+                      {/* ── Follow-protection batch progress ── */}
+                      {followBatch && (
+                        <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-3.5 py-2.5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 text-[10px] font-bold text-blue-800">
+                              <Shield className="h-3 w-3 text-blue-500" />
+                              Follow Protection — Batch {followBatch.currentBatch} of {followBatch.totalBatches}
+                            </span>
+                            <span className="text-[10px] font-mono text-blue-600">
+                              {followBatch.completed}/{task.totalSlots} total
+                            </span>
+                          </div>
+                          {/* current-batch bar */}
+                          <div>
+                            <div className="flex justify-between text-[9px] text-blue-500 mb-1">
+                              <span>Current batch ({followBatch.batchDone}/{followBatch.batchSize} slots filled)</span>
+                              <span>{followBatch.batchPct}%</span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-blue-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-blue-500 transition-all"
+                                style={{ width: `${followBatch.batchPct}%` }}
+                              />
+                            </div>
+                          </div>
+                          {/* overall bar */}
+                          <div>
+                            <div className="flex justify-between text-[9px] text-blue-400 mb-1">
+                              <span>Overall campaign ({followBatch.completed}/{task.totalSlots})</span>
+                              <span>{followBatch.overallPct}%</span>
+                            </div>
+                            <div className="h-1 rounded-full bg-blue-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-blue-300 transition-all"
+                                style={{ width: `${followBatch.overallPct}%` }}
+                              />
+                            </div>
+                          </div>
+                          {followBatch.remaining > 0 && followBatch.batchDone < followBatch.batchSize && (
+                            <p className="text-[9px] text-blue-500 leading-relaxed">
+                              Next batch opens automatically once current pending submissions are reviewed.
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1908,6 +2007,54 @@ export default function AdvertiserDashboard({
                 className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 py-2.5 text-xs font-bold text-white transition-all disabled:opacity-60"
               >
                 {deleteLoading ? "Deleting…" : "Yes, Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Follow Protection Modal ── */}
+      {showFollowProtectionModal && pendingCampaignPayload && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl border border-blue-100 p-6 w-full max-w-sm mx-4 shadow-xl">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="rounded-xl bg-blue-100 p-2">
+                <Shield className="h-5 w-5 text-blue-600" />
+              </div>
+              <h3 className="font-display text-base font-bold text-gray-900">Social Follow Protection</h3>
+            </div>
+            <p className="text-xs text-gray-600 leading-relaxed mb-3">
+              This is a <strong>Follow campaign</strong>. To protect your account and ensure natural growth, TasksEarn will deliver earners in <strong>batches of {FOLLOW_BATCH_SIZE}</strong> at a time.
+            </p>
+            <ul className="space-y-1.5 mb-4">
+              {[
+                `Your ${pendingCampaignPayload.totalSlots} slots will be distributed across ${Math.ceil(pendingCampaignPayload.totalSlots / FOLLOW_BATCH_SIZE)} batches of ${FOLLOW_BATCH_SIZE}.`,
+                "The next batch opens automatically once pending submissions are reviewed.",
+                "This pacing reduces the risk of sudden follower spikes that can flag your account."
+              ].map((line, i) => (
+                <li key={i} className="flex items-start gap-2 text-[11px] text-gray-600">
+                  <Check className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
+                  <span>{line}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowFollowProtectionModal(false); setPendingCampaignPayload(null); }}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={formSubmitting}
+                onClick={async () => {
+                  setShowFollowProtectionModal(false);
+                  await doCreateCampaign(pendingCampaignPayload);
+                  setPendingCampaignPayload(null);
+                }}
+                className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white transition-all disabled:opacity-60"
+              >
+                {formSubmitting ? "Launching…" : "I Understand — Launch"}
               </button>
             </div>
           </div>

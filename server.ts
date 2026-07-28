@@ -2007,6 +2007,16 @@ app.get("/api/earner/dashboard", async (req, res) => {
   }
 });
 
+// ── Social Follow Protection ───────────────────────────────────────────────
+// Follow tasks (any category containing "follow", case-insensitive) are
+// delivered in batches of FOLLOW_PROTECTION_BATCH_SIZE earners at a time.
+// This prevents unnatural follower spikes that can trigger platform flags.
+const FOLLOW_PROTECTION_BATCH_SIZE = 25;
+
+function isFollowProtectedTask(category: string): boolean {
+  return category.toLowerCase().includes("follow");
+}
+
 app.get("/api/earner/tasks", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
@@ -2020,6 +2030,10 @@ app.get("/api/earner/tasks", async (req, res) => {
     //   - Pending / Approved → appear in "My Tasks & History" tab
     //   - Rejected           → appear exclusively in the "Rejected Tasks" tab
     //     where the earner clicks "Fix & Resubmit" to retry
+    //
+    // Follow-protected tasks use a batch-aware capacity check: only
+    // FOLLOW_PROTECTION_BATCH_SIZE (25) slots are open at once per batch.
+    // A new batch opens automatically when the previous one is fully reviewed.
     const tasks = await pool.query(`
       SELECT t.*
       FROM tasks t
@@ -2030,12 +2044,27 @@ app.get("/api/earner/tasks", async (req, res) => {
       WHERE t.status = 'Active'
         AND ht.id IS NULL
         AND s.id IS NULL
-        AND t.filled_slots + (
-          SELECT COUNT(*) FROM submissions s2
-          WHERE s2.task_id = t.id AND s2.status IN ('Pending', 'Rejected')
-        ) < t.total_slots
+        AND (
+          CASE
+            WHEN LOWER(t.category) LIKE '%follow%' THEN
+              -- Follow task: batch-aware cap (max 25 open slots per batch)
+              t.filled_slots + (
+                SELECT COUNT(*) FROM submissions s2
+                WHERE s2.task_id = t.id AND s2.status IN ('Pending', 'Rejected')
+              ) < LEAST(
+                (FLOOR(t.filled_slots::float / $2) * $2 + $2)::int,
+                t.total_slots
+              )
+            ELSE
+              -- All other tasks: standard full-campaign capacity check
+              t.filled_slots + (
+                SELECT COUNT(*) FROM submissions s2
+                WHERE s2.task_id = t.id AND s2.status IN ('Pending', 'Rejected')
+              ) < t.total_slots
+          END
+        )
       ORDER BY t.created_at DESC
-    `, [user.id]);
+    `, [user.id, FOLLOW_PROTECTION_BATCH_SIZE]);
 
     res.json(tasks.rows.map(r => mapTask(r)));
   } catch (err) { res.status(500).json({ error: "Server error" }); }
@@ -2310,9 +2339,28 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       [taskId]
     );
     const occupied = parseInt(occupiedRes.rows[0].count, 10) || 0;
-    if (task.filledSlots + occupied >= task.totalSlots) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "This task has reached its submission limit" });
+
+    if (isFollowProtectedTask(task.category)) {
+      // Follow-protection: cap submissions at the current batch ceiling.
+      // batchCap = first multiple of BATCH_SIZE strictly above filledSlots,
+      // clamped to totalSlots so the last (possibly partial) batch works correctly.
+      const batchCap = Math.min(
+        Math.floor(task.filledSlots / FOLLOW_PROTECTION_BATCH_SIZE) * FOLLOW_PROTECTION_BATCH_SIZE
+          + FOLLOW_PROTECTION_BATCH_SIZE,
+        task.totalSlots
+      );
+      if (task.filledSlots + occupied >= batchCap) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          error: `This follow campaign's current batch is full. The next batch of ${FOLLOW_PROTECTION_BATCH_SIZE} will open automatically once pending submissions are reviewed.`,
+          batchFull: true,
+        });
+      }
+    } else {
+      if (task.filledSlots + occupied >= task.totalSlots) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "This task has reached its submission limit" });
+      }
     }
 
     const subId = "sub-" + Math.random().toString(36).substr(2, 9);
