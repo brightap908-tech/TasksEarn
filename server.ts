@@ -6060,3 +6060,8 @@ async function ensureVapidKeys() {
     process.exit(1);
   }
 })();
+
+// Vercel serverless: export the Express app as the default handler.
+// @vercel/node uses this export to route Lambda invocations through Express.
+// Render/local: this line is a no-op — the IIFE above already called listen().
+export default app;
