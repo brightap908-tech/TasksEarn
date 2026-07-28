@@ -122,6 +122,8 @@ if (!DB_CONNECTION_STRING) {
 }
 var pool = new Pool({
   connectionString: DB_CONNECTION_STRING,
+  connectionTimeoutMillis: 1e4,
+  query_timeout: 25e3,
   ssl: DB_CONNECTION_STRING.includes("localhost") || DB_CONNECTION_STRING.includes("127.0.0.1") ? false : { rejectUnauthorized: false }
 });
 function hashPassword(password) {
@@ -200,6 +202,26 @@ function mapSubmission(row) {
     earnerName: row.earner_name,
     proofText: row.proof_text,
     proofScreenshot: row.proof_screenshot,
+    status: row.status,
+    feedback: row.feedback || void 0,
+    reward: parseFloat(row.reward) || 0,
+    submittedAt: row.submitted_at instanceof Date ? row.submitted_at.toISOString() : row.submitted_at,
+    approvedAt: row.approved_at ? row.approved_at instanceof Date ? row.approved_at.toISOString() : row.approved_at : void 0,
+    rejectedAt: row.rejected_at ? row.rejected_at instanceof Date ? row.rejected_at.toISOString() : row.rejected_at : void 0
+  };
+}
+function mapSubmissionSlim(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    taskId: row.task_id,
+    taskTitle: row.task_title,
+    category: row.category,
+    earnerId: row.earner_id,
+    earnerName: row.earner_name,
+    proofText: row.proof_text,
+    proofScreenshot: void 0,
+    hasScreenshot: row.has_screenshot === true || row.has_screenshot === "t" || row.has_screenshot === "true",
     status: row.status,
     feedback: row.feedback || void 0,
     reward: parseFloat(row.reward) || 0,
@@ -396,6 +418,16 @@ async function sweepOrphanedProofScreenshots() {
     }
   } catch (err) {
     console.error("[ProofCleanup] Startup sweep failed:", err);
+  }
+}
+async function sweepExpiredStagedProofs() {
+  try {
+    const result = await pool.query("DELETE FROM staged_proofs WHERE expires_at < NOW()");
+    if ((result.rowCount ?? 0) > 0) {
+      console.log(`[StagedProof] Startup sweep: cleared ${result.rowCount} expired staged proof(s).`);
+    }
+  } catch (err) {
+    console.error("[StagedProof] Startup sweep failed:", err);
   }
 }
 async function getSettings() {
@@ -803,6 +835,22 @@ async function bootstrapTables() {
     await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS sent_emails JSONB NOT NULL DEFAULT '[]'`);
     await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS viewed BOOLEAN NOT NULL DEFAULT FALSE`);
     await client.query(`ALTER TABLE broadcast_email_logs ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'Completed'`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS staged_proofs (
+        token      TEXT PRIMARY KEY,
+        user_id    TEXT NOT NULL,
+        data_url   TEXT NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_staged_proofs_expires_at ON staged_proofs (expires_at)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_earner_id   ON submissions (earner_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_task_id     ON submissions (task_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_status      ON submissions (status)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_earner_status ON submissions (earner_id, status)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_status            ON tasks (status)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_transactions_user_id   ON transactions (user_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_earner_notif_earner_id ON earner_notifications (earner_id)`);
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
   } catch (err) {
@@ -1705,7 +1753,12 @@ app.get("/api/earner/dashboard", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
-    const subs = await pool.query("SELECT * FROM submissions WHERE earner_id = $1", [user.id]);
+    const subs = await pool.query(
+      `SELECT id, task_id, task_title, category, earner_id, earner_name, proof_text,
+              status, feedback, reward, submitted_at, approved_at, rejected_at
+       FROM submissions WHERE earner_id = $1`,
+      [user.id]
+    );
     const submissions = subs.rows.map(mapSubmission);
     const approved = submissions.filter((s) => s.status === "Approved" /* APPROVED */);
     const pending = submissions.filter((s) => s.status === "Pending" /* PENDING */);
@@ -1744,6 +1797,10 @@ app.get("/api/earner/dashboard", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+var FOLLOW_PROTECTION_BATCH_SIZE = 25;
+function isFollowProtectedTask(category) {
+  return category.toLowerCase().includes("follow");
+}
 app.get("/api/earner/tasks", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
@@ -1758,12 +1815,27 @@ app.get("/api/earner/tasks", async (req, res) => {
       WHERE t.status = 'Active'
         AND ht.id IS NULL
         AND s.id IS NULL
-        AND t.filled_slots + (
-          SELECT COUNT(*) FROM submissions s2
-          WHERE s2.task_id = t.id AND s2.status IN ('Pending', 'Rejected')
-        ) < t.total_slots
+        AND (
+          CASE
+            WHEN LOWER(t.category) LIKE '%follow%' THEN
+              -- Follow task: batch-aware cap (max 25 open slots per batch)
+              t.filled_slots + (
+                SELECT COUNT(*) FROM submissions s2
+                WHERE s2.task_id = t.id AND s2.status IN ('Pending', 'Rejected')
+              ) < LEAST(
+                (FLOOR(t.filled_slots::float / $2) * $2 + $2)::int,
+                t.total_slots
+              )
+            ELSE
+              -- All other tasks: standard full-campaign capacity check
+              t.filled_slots + (
+                SELECT COUNT(*) FROM submissions s2
+                WHERE s2.task_id = t.id AND s2.status IN ('Pending', 'Rejected')
+              ) < t.total_slots
+          END
+        )
       ORDER BY t.created_at DESC
-    `, [user.id]);
+    `, [user.id, FOLLOW_PROTECTION_BATCH_SIZE]);
     res.json(tasks.rows.map((r) => mapTask(r)));
   } catch (err) {
     res.status(500).json({ error: "Server error" });
@@ -1809,21 +1881,94 @@ app.post("/api/earner/tasks/:id/hide", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-app.post("/api/earner/tasks/:id/submit", async (req, res) => {
-  const client = await pool.connect();
+app.post("/api/earner/proof/stage", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const { dataUrl } = req.body;
+    if (!dataUrl || typeof dataUrl !== "string") {
+      return res.status(400).json({ error: "dataUrl is required" });
+    }
+    const mimeMatch = dataUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,/i);
+    if (!mimeMatch) {
+      return res.status(400).json({
+        error: "Invalid image format. Only PNG, JPG, JPEG, WEBP data URLs are accepted."
+      });
+    }
+    const b64 = dataUrl.split(",")[1] ?? "";
+    const estimatedBytes = Math.floor(b64.length * 3 / 4);
+    const MAX_BYTES = 10 * 1024 * 1024;
+    if (estimatedBytes > MAX_BYTES) {
+      return res.status(400).json({
+        error: `Image too large (${(estimatedBytes / 1024 / 1024).toFixed(1)} MB). Maximum is 10 MB.`
+      });
+    }
+    const token = import_crypto.default.randomUUID();
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1e3);
+    await pool.query(
+      "INSERT INTO staged_proofs (token, user_id, data_url, expires_at) VALUES ($1, $2, $3, $4)",
+      [token, user.id, dataUrl, expiresAt]
+    );
+    pool.query("DELETE FROM staged_proofs WHERE expires_at < NOW()").catch(() => {
+    });
+    console.log(`[StagedProof] token=${token} user=${user.id} size=~${(estimatedBytes / 1024).toFixed(1)} KB mime=${mimeMatch[1]}`);
+    res.status(201).json({ token });
+  } catch (err) {
+    console.error("[StagedProof] Error:", err);
+    res.status(500).json({ error: "Failed to stage screenshot. Please try again." });
+  }
+});
+app.post("/api/earner/tasks/:id/submit", async (req, res) => {
+  const requestStartedAt = performance.now();
+  const requestId = `proof-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  let client = null;
+  try {
+    client = await pool.connect();
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
     const taskId = req.params.id;
-    const { proofText, proofScreenshot } = req.body;
-    if (!proofText && !proofScreenshot) {
+    const { proofText, proofScreenshot, stagedToken } = req.body;
+    console.log(`[Submit:${requestId}] taskId=${taskId} userId=${user.id} (${user.name}) auth=${Math.round(performance.now() - requestStartedAt)}ms`);
+    console.log(`[Submit:${requestId}] proofText=${proofText ? `${String(proofText).length} chars` : "(none)"} stagedToken=${stagedToken || "(none)"}`);
+    let screenshot = null;
+    if (stagedToken) {
+      const stagedRow = await pool.query(
+        "SELECT data_url FROM staged_proofs WHERE token = $1 AND user_id = $2 AND expires_at > NOW()",
+        [stagedToken, user.id]
+      );
+      if (stagedRow.rows.length === 0) {
+        return res.status(400).json({
+          error: "Screenshot upload expired or was not found. Please re-upload your screenshot and try again."
+        });
+      }
+      screenshot = stagedRow.rows[0].data_url;
+      console.log(`[Submit:${requestId}] staged token resolved \u2014 ~${((screenshot?.split(",")[1]?.length ?? 0) * 3 / 4 / 1024).toFixed(1)} KB`);
+    } else if (proofScreenshot) {
+      const dataUrl = String(proofScreenshot);
+      const isDataUrl = dataUrl.startsWith("data:");
+      const mimeMatch = isDataUrl ? dataUrl.match(/^data:([^;,]+)/) : null;
+      const detectedMime = mimeMatch ? mimeMatch[1] : "(not a data URL / external URL)";
+      const base64Part = dataUrl.split(",")[1] ?? "";
+      const estimatedBytes = Math.floor(base64Part.length * 3 / 4);
+      console.log(`[Submit:${requestId}] inline screenshot=${dataUrl.length} chars, ~${(estimatedBytes / 1024).toFixed(1)} KB, mime=${detectedMime}`);
+      if (isDataUrl && !detectedMime.startsWith("image/")) {
+        console.error(`[Submit:${requestId}] rejected invalid inline screenshot format (detected: "${detectedMime}")`);
+        return res.status(400).json({
+          error: `Invalid screenshot format. Expected an image data URL (data:image/...) but received "${detectedMime}". Please re-select the image and try again.`
+        });
+      }
+      screenshot = dataUrl;
+    } else {
+      console.log(`[Submit:${requestId}] screenshot=(none)`);
+    }
+    if (!proofText && !screenshot) {
       return res.status(400).json({ error: "Please provide proof details: notes, a link, or a screenshot." });
     }
     await client.query("BEGIN");
-    const screenshot = proofScreenshot || null;
+    console.log(`[Submit:${requestId}] transaction started at ${Math.round(performance.now() - requestStartedAt)}ms`);
     const finalProofText = proofText || "See uploaded screenshot proof.";
     const alreadySub = await client.query(
-      "SELECT id, status FROM submissions WHERE task_id = $1 AND earner_id = $2",
+      "SELECT id, status FROM submissions WHERE task_id = $1 AND earner_id = $2 FOR UPDATE",
       [taskId, user.id]
     );
     if (alreadySub.rows.length > 0) {
@@ -1846,7 +1991,7 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       }
       const task2 = mapTask(taskRes2.rows[0]);
       const resubmittedAt = /* @__PURE__ */ new Date();
-      await client.query(
+      const updatedSubRes = await client.query(
         `UPDATE submissions
             SET proof_text       = $1,
                 proof_screenshot = $2,
@@ -1854,7 +1999,8 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
                 feedback         = '',
                 rejected_at      = NULL,
                 submitted_at     = $3
-          WHERE id = $4`,
+          WHERE id = $4
+          RETURNING *`,
         [finalProofText, screenshot, resubmittedAt, existing.id]
       );
       await client.query(`
@@ -1870,7 +2016,11 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         resubmittedAt
       ]);
       await client.query("COMMIT");
-      await notifyAdmin({
+      const submission2 = mapSubmission(updatedSubRes.rows[0]);
+      if (stagedToken) pool.query("DELETE FROM staged_proofs WHERE token = $1", [stagedToken]).catch(() => {
+      });
+      console.log(`[Submit:${requestId}] resubmission committed in ${Math.round(performance.now() - requestStartedAt)}ms`);
+      void notifyAdmin({
         type: "submission",
         message: `${user.name} submitted a task for review.`,
         referenceId: existing.id,
@@ -1879,9 +2029,9 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         taskTitle: task2.title,
         submittedAt: resubmittedAt,
         reviewUrl: `/admin/audits?submission=${encodeURIComponent(existing.id)}`
-      });
-      const subRes2 = await pool.query("SELECT * FROM submissions WHERE id = $1", [existing.id]);
-      return res.status(200).json({ success: true, message: "Task resubmitted successfully", submission: mapSubmission(subRes2.rows[0]) });
+      }).catch((err) => console.error(`[Submit:${requestId}] async admin notification failed:`, err));
+      console.log(`[Submit:${requestId}] response sent in ${Math.round(performance.now() - requestStartedAt)}ms`);
+      return res.status(200).json({ success: true, message: "Task resubmitted successfully", submission: submission2 });
     }
     const taskRes = await client.query(
       "SELECT * FROM tasks WHERE id = $1 FOR UPDATE",
@@ -1907,18 +2057,37 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       [taskId]
     );
     const occupied = parseInt(occupiedRes.rows[0].count, 10) || 0;
-    if (task.filledSlots + occupied >= task.totalSlots) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "This task has reached its submission limit" });
+    if (isFollowProtectedTask(task.category)) {
+      const batchCap = Math.min(
+        Math.floor(task.filledSlots / FOLLOW_PROTECTION_BATCH_SIZE) * FOLLOW_PROTECTION_BATCH_SIZE + FOLLOW_PROTECTION_BATCH_SIZE,
+        task.totalSlots
+      );
+      if (task.filledSlots + occupied >= batchCap) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          error: `This follow campaign's current batch is full. The next batch of ${FOLLOW_PROTECTION_BATCH_SIZE} will open automatically once pending submissions are reviewed.`,
+          batchFull: true
+        });
+      }
+    } else {
+      if (task.filledSlots + occupied >= task.totalSlots) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "This task has reached its submission limit" });
+      }
     }
     const subId = "sub-" + Math.random().toString(36).substr(2, 9);
     const submittedAt = /* @__PURE__ */ new Date();
-    await client.query(`
+    const insertedSubRes = await client.query(`
       INSERT INTO submissions (id, task_id, task_title, category, earner_id, earner_name, proof_text, proof_screenshot, status, reward, submitted_at)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Pending',$9,$10)
+      RETURNING *
     `, [subId, taskId, task.title, task.category, user.id, user.name, finalProofText, screenshot, task.earningPerSlot, submittedAt]);
     await client.query("COMMIT");
-    await notifyAdmin({
+    const submission = mapSubmission(insertedSubRes.rows[0]);
+    if (stagedToken) pool.query("DELETE FROM staged_proofs WHERE token = $1", [stagedToken]).catch(() => {
+    });
+    console.log(`[Submit:${requestId}] submission committed in ${Math.round(performance.now() - requestStartedAt)}ms`);
+    void notifyAdmin({
       type: "submission",
       message: `${user.name} submitted a task for review.`,
       referenceId: subId,
@@ -1927,27 +2096,32 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       taskTitle: task.title,
       submittedAt,
       reviewUrl: `/admin/audits?submission=${encodeURIComponent(subId)}`
-    });
-    const subRes = await pool.query("SELECT * FROM submissions WHERE id = $1", [subId]);
-    res.status(201).json({ success: true, message: "Task submitted successfully", submission: mapSubmission(subRes.rows[0]) });
+    }).catch((err) => console.error(`[Submit:${requestId}] async admin notification failed:`, err));
+    res.status(201).json({ success: true, message: "Task submitted successfully", submission });
+    console.log(`[Submit:${requestId}] response sent in ${Math.round(performance.now() - requestStartedAt)}ms`);
   } catch (err) {
-    await client.query("ROLLBACK").catch(() => {
+    if (client) await client.query("ROLLBACK").catch(() => {
     });
-    console.error("[Submit task] Error:", err);
+    console.error(`[Submit:${requestId}] Error after ${Math.round(performance.now() - requestStartedAt)}ms:`, err);
     const isDev = process.env.NODE_ENV !== "production";
     res.status(500).json({
       error: isDev ? err?.message || "Server error" : "Server error",
       ...isDev && err?.detail ? { detail: err.detail } : {}
     });
   } finally {
-    client.release();
+    client?.release();
   }
 });
 app.get("/api/earner/submissions", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role === "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
-    const result = await pool.query("SELECT * FROM submissions WHERE earner_id = $1 ORDER BY submitted_at DESC", [user.id]);
+    const result = await pool.query(
+      `SELECT id, task_id, task_title, category, earner_id, earner_name, proof_text,
+              status, feedback, reward, submitted_at, approved_at, rejected_at
+       FROM submissions WHERE earner_id = $1 ORDER BY submitted_at DESC`,
+      [user.id]
+    );
     res.json(result.rows.map(mapSubmission));
   } catch (err) {
     res.status(500).json({ error: "Server error" });
@@ -2732,10 +2906,13 @@ app.get("/api/advertiser/submissions", async (req, res) => {
     const taskIds = taskRes.rows.map((r) => r.id);
     if (taskIds.length === 0) return res.json([]);
     const subsRes = await pool.query(
-      "SELECT * FROM submissions WHERE task_id = ANY($1::varchar[]) ORDER BY submitted_at DESC",
+      `SELECT id, task_id, task_title, category, earner_id, earner_name, proof_text,
+              status, feedback, reward, submitted_at, approved_at, rejected_at,
+              (proof_screenshot IS NOT NULL) AS has_screenshot
+       FROM submissions WHERE task_id = ANY($1::varchar[]) ORDER BY submitted_at DESC`,
       [taskIds]
     );
-    res.json(subsRes.rows.map(mapSubmission));
+    res.json(subsRes.rows.map(mapSubmissionSlim));
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
@@ -2834,18 +3011,17 @@ app.post("/api/advertiser/submissions/:id/review", async (req, res) => {
       client.release();
     }
     if (updatedSubmission?.status === "Approved" /* APPROVED */) {
-      await cleanupApprovedSubmissionProof(updatedSubmission.id);
+      void cleanupApprovedSubmissionProof(updatedSubmission.id);
       updatedSubmission.proofScreenshot = null;
     }
     if (updatedSubmission?.status === "Rejected" /* REJECTED */) {
-      await cleanupRejectedSubmissionProof(updatedSubmission.id);
+      void cleanupRejectedSubmissionProof(updatedSubmission.id);
       updatedSubmission.proofScreenshot = null;
     }
     if (commissionData) {
-      const totalRes = await pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM admin_commissions WHERE type='task_commission'");
-      console.log(
+      void pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM admin_commissions WHERE type='task_commission'").then((totalRes) => console.log(
         `[Commission] Advertiser Approval | Submission ID: ${commissionData.submissionId} | Advertiser Cost: \u20A6${commissionData.costPerSlot} | Earner Reward: \u20A6${commissionData.earnerReward} | Commission Added: \u20A6${commissionData.amount} | New Task Commission Balance: \u20A6${parseFloat(totalRes.rows[0].total).toLocaleString()}`
-      );
+      )).catch((err) => console.error("[Commission] Async balance log failed:", err));
     }
     if (updatedSubmission) {
       const earnerId = updatedSubmission.earnerId;
@@ -3562,8 +3738,26 @@ app.get("/api/admin/submissions", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
-    const result = await pool.query("SELECT * FROM submissions ORDER BY submitted_at DESC");
+    const result = await pool.query(
+      "SELECT * FROM submissions ORDER BY submitted_at DESC"
+    );
     res.json(result.rows.map(mapSubmission));
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+app.get("/api/admin/submissions/:id/screenshot", async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
+    const result = await pool.query(
+      "SELECT proof_screenshot FROM submissions WHERE id = $1",
+      [req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "Submission not found" });
+    const screenshot = result.rows[0].proof_screenshot;
+    if (!screenshot) return res.status(404).json({ error: "No screenshot available for this submission" });
+    res.json({ proofScreenshot: screenshot });
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
@@ -3667,18 +3861,17 @@ app.post("/api/admin/submissions/:id/review", async (req, res) => {
       client.release();
     }
     if (updatedSubmission?.status === "Approved" /* APPROVED */) {
-      await cleanupApprovedSubmissionProof(updatedSubmission.id);
+      void cleanupApprovedSubmissionProof(updatedSubmission.id);
       updatedSubmission.proofScreenshot = null;
     }
     if (updatedSubmission?.status === "Rejected" /* REJECTED */) {
-      await cleanupRejectedSubmissionProof(updatedSubmission.id);
+      void cleanupRejectedSubmissionProof(updatedSubmission.id);
       updatedSubmission.proofScreenshot = null;
     }
     if (adminCommData) {
-      const totalRes = await pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM admin_commissions WHERE type='task_commission'");
-      console.log(
+      void pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM admin_commissions WHERE type='task_commission'").then((totalRes) => console.log(
         `[Commission] Admin Approval | Task ID: ${adminCommData.submissionId} | Advertiser Cost: \u20A6${adminCommData.costPerSlot} | Earner Reward: \u20A6${updatedSubmission?.reward ?? adminCommData.costPerSlot - adminCommData.amount} | Commission Added: \u20A6${adminCommData.amount} | New Task Commission Balance: \u20A6${parseFloat(totalRes.rows[0].total).toLocaleString()}`
-      );
+      )).catch((err) => console.error("[Commission] Async balance log failed:", err));
     }
     if (updatedSubmission) {
       const earnerId = updatedSubmission.earnerId;
@@ -5035,6 +5228,7 @@ async function ensureVapidKeys() {
     await ensurePlatformsSeeded();
     await ensureVapidKeys();
     await sweepOrphanedProofScreenshots();
+    await sweepExpiredStagedProofs();
     await startServer();
   } catch (err) {
     console.error("FATAL: Failed to start server:", err);
