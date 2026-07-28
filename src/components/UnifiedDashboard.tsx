@@ -127,6 +127,10 @@ export default function UnifiedDashboard({
   const [pwLoading, setPwLoading]       = React.useState(false);
   const unreadCount = earnerNotifications.filter(n => !n.read).length;
 
+  // ── Campaigns Protection Notice ───────────────────────────────────────────
+  const CAMPAIGNS_NOTICE_KEY = "tasksearn_campaigns_notice_seen";
+  const [showCampaignsNotice, setShowCampaignsNotice] = React.useState(false);
+
   const loadSection = React.useCallback(async (sec: string) => {
     setLoading(true);
     try {
@@ -167,6 +171,23 @@ export default function UnifiedDashboard({
   }, [section, loadSection]);
 
   const navTo = (s: string) => navigate(`/dashboard/${s}`);
+
+  // Gate: show notice first time per session, then navigate.
+  const requestCampaignsNav = React.useCallback(() => {
+    if (sessionStorage.getItem(CAMPAIGNS_NOTICE_KEY)) {
+      navTo("my-campaigns");
+    } else {
+      setShowCampaignsNotice(true);
+    }
+  }, []);
+
+  // Intercept direct URL / Navbar navigation to my-campaigns
+  React.useEffect(() => {
+    if (section === "my-campaigns" && !sessionStorage.getItem(CAMPAIGNS_NOTICE_KEY)) {
+      navigate("/dashboard/overview", { replace: true });
+      setShowCampaignsNotice(true);
+    }
+  }, [section]);
 
   const closeDrawer = React.useCallback(() => {
     setDrawerClosing(true);
@@ -287,7 +308,7 @@ export default function UnifiedDashboard({
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem" }}>
           {([
             { label: "Tasks",      icon: <ClipboardList className="h-5 w-5"/>, action: () => navTo("tasks"),        color: "#0891B2", bg: "rgba(8,145,178,0.11)" },
-            { label: "Campaigns",  icon: <BarChart2 className="h-5 w-5"/>,     action: () => navTo("my-campaigns"),  color: "#059669", bg: "rgba(5,150,105,0.11)" },
+            { label: "Campaigns",  icon: <BarChart2 className="h-5 w-5"/>,     action: () => requestCampaignsNav(),  color: "#059669", bg: "rgba(5,150,105,0.11)" },
             { label: "Wallet",     icon: <Wallet className="h-5 w-5"/>,        action: () => navTo("wallet"),        color: "#2563EB", bg: "rgba(37,99,235,0.11)" },
             { label: "Referrals",  icon: <Users className="h-5 w-5"/>,         action: () => navTo("referrals"),     color: "#D97706", bg: "rgba(217,119,6,0.11)" },
           ] as const).map(item => (
@@ -1419,7 +1440,7 @@ export default function UnifiedDashboard({
           const active = section === item.id;
           const badge = item.id === "notifications" ? unreadCount : 0;
           return (
-            <button key={item.id} onClick={() => { navTo(item.id); setDrawerOpen(false); }}
+            <button key={item.id} onClick={() => { if (item.id === "my-campaigns") { setDrawerOpen(false); requestCampaignsNav(); } else { navTo(item.id); setDrawerOpen(false); } }}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left cursor-pointer transition-all"
               style={active
                 ? { background: isDarkMode ? "rgba(37,99,235,0.18)" : "#EFF6FF", color: "#2563EB" }
@@ -1593,7 +1614,7 @@ export default function UnifiedDashboard({
                 return (
                   <button
                     key={item.id}
-                    onClick={() => { navTo(item.id); closeDrawer(); }}
+                    onClick={() => { if (item.id === "my-campaigns") { closeDrawer(); requestCampaignsNav(); } else { navTo(item.id); closeDrawer(); } }}
                     style={{
                       width: "100%", display: "flex", alignItems: "center", gap: "14px",
                       padding: "13px 16px",
@@ -1738,6 +1759,70 @@ export default function UnifiedDashboard({
 
         {renderContent()}
       </main>
+
+      {/* ── Campaigns Social Media Protection Notice ─────────────────────── */}
+      {showCampaignsNotice && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0"
+          style={{ background: "rgba(7,13,26,0.72)", backdropFilter: "blur(8px)", animation: "fadeIn 0.22s ease-out" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowCampaignsNotice(false); }}
+        >
+          <div
+            className="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl"
+            style={{ animation: "scaleIn 0.22s cubic-bezier(0.34,1.56,0.64,1)" }}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-5 flex items-center gap-3">
+              <div className="rounded-xl p-2 shrink-0" style={{ background: "rgba(255,255,255,0.20)" }}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <h3 className="text-base font-bold text-white leading-tight">🛡️ Social Media Protection Notice</h3>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 pt-5 pb-4 space-y-3">
+              <p className="text-sm text-gray-700 leading-relaxed">
+                To help protect your social media accounts, TasksEarn delivers Follow campaigns on{" "}
+                <strong>Instagram, Facebook, TikTok, X</strong>, and similar platforms{" "}
+                <strong>gradually instead of all at once</strong>.
+              </p>
+              <p className="text-sm text-gray-700 leading-relaxed">
+                Because of this, your campaign may take longer to complete. However, this approach helps
+                create more natural follower growth and may reduce the risk of your account being{" "}
+                <strong>flagged, restricted, or temporarily suspended</strong> by the platform.
+              </p>
+              <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 flex items-start gap-2.5">
+                <span className="text-base shrink-0 mt-0.5">📌</span>
+                <p className="text-xs text-blue-800 leading-relaxed font-medium">
+                  Thank you for your patience and understanding. Your account's safety is our priority.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="px-6 pb-6 flex flex-col-reverse sm:flex-row gap-2.5">
+              <button
+                onClick={() => setShowCampaignsNotice(false)}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  sessionStorage.setItem(CAMPAIGNS_NOTICE_KEY, "1");
+                  setShowCampaignsNotice(false);
+                  navTo("my-campaigns");
+                }}
+                className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-sm font-bold text-white transition-colors shadow-sm cursor-pointer"
+              >
+                I Understand
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
