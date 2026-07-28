@@ -128,7 +128,6 @@ export default function UnifiedDashboard({
   const unreadCount = earnerNotifications.filter(n => !n.read).length;
 
   // ── Campaigns Protection Notice ───────────────────────────────────────────
-  const CAMPAIGNS_NOTICE_KEY = "tasksearn_campaigns_notice_seen";
   const [showCampaignsNotice, setShowCampaignsNotice] = React.useState(false);
 
   const loadSection = React.useCallback(async (sec: string) => {
@@ -172,18 +171,14 @@ export default function UnifiedDashboard({
 
   const navTo = (s: string) => navigate(`/dashboard/${s}`);
 
-  // Gate: show notice first time per session, then navigate.
+  // Gate: always show notice on every visit — no "already seen" state.
   const requestCampaignsNav = React.useCallback(() => {
-    if (sessionStorage.getItem(CAMPAIGNS_NOTICE_KEY)) {
-      navTo("my-campaigns");
-    } else {
-      setShowCampaignsNotice(true);
-    }
+    setShowCampaignsNotice(true);
   }, []);
 
-  // Intercept direct URL / Navbar navigation to my-campaigns
+  // Intercept direct URL / Navbar navigation to my-campaigns — always show notice.
   React.useEffect(() => {
-    if (section === "my-campaigns" && !sessionStorage.getItem(CAMPAIGNS_NOTICE_KEY)) {
+    if (section === "my-campaigns") {
       navigate("/dashboard/overview", { replace: true });
       setShowCampaignsNotice(true);
     }
@@ -1811,7 +1806,6 @@ export default function UnifiedDashboard({
               </button>
               <button
                 onClick={() => {
-                  sessionStorage.setItem(CAMPAIGNS_NOTICE_KEY, "1");
                   setShowCampaignsNotice(false);
                   navTo("my-campaigns");
                 }}
