@@ -272,6 +272,7 @@ export default function App() {
       const data = await apiFetch("/api/auth/me");
       if (data && data.user) {
         setUser(data.user);
+        maybeShowLoginPopup(data.user);
         // Automatically route to the appropriate dashboard on startup
         if (data.user.role === UserRole.ADMIN) setCurrentView("admin-dashboard");
         else setCurrentView("dashboard-overview");
