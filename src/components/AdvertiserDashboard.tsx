@@ -152,6 +152,10 @@ export default function AdvertiserDashboard({
   const [showDeleteModal, setShowDeleteModal] = React.useState(false);
   const [deleteLoading, setDeleteLoading] = React.useState(false);
 
+  // ── Social Media Protection Notice (shown once per visit to campaign section) ──
+  const [showSocialProtectionNotice, setShowSocialProtectionNotice] = React.useState(false);
+  const socialProtectionNoticeDismissed = React.useRef(false);
+
   // ── Social Follow Protection modal ────────────────────────────────────────
   const [showFollowProtectionModal, setShowFollowProtectionModal] = React.useState(false);
   const [pendingCampaignPayload, setPendingCampaignPayload] = React.useState<any>(null);
@@ -255,6 +259,16 @@ export default function AdvertiserDashboard({
     if (activeTab === "audit" || activeTab === "pending-submissions" || activeTab === "approved" || activeTab === "rejected") fetchSubmissions();
     if (activeTab === "transactions" || activeTab === "wallet") fetchTransactions();
     if (activeTab === "price-list") fetchAdvertiserPricing();
+
+    // Show Social Media Protection Notice once per visit to the campaign section
+    if (activeTab === "create" || activeTab === "manage") {
+      if (!socialProtectionNoticeDismissed.current) {
+        setShowSocialProtectionNotice(true);
+      }
+    } else {
+      // User navigated away from campaign section — reset so notice shows again on return
+      socialProtectionNoticeDismissed.current = false;
+    }
   }, [activeTab]);
 
   // ── Campaign Create ───────────────────────────────────────────────────────
@@ -2007,6 +2021,70 @@ export default function AdvertiserDashboard({
                 className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 py-2.5 text-xs font-bold text-white transition-all disabled:opacity-60"
               >
                 {deleteLoading ? "Deleting…" : "Yes, Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Social Media Protection Notice ── */}
+      {showSocialProtectionNotice && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"
+          style={{ animation: "fadeIn 0.25s ease-out" }}
+        >
+          <div className="bg-white rounded-2xl border border-blue-100 shadow-2xl w-full max-w-md mx-auto overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-5">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-white/20 p-2 shrink-0">
+                  <Shield className="h-5 w-5 text-white" />
+                </div>
+                <h3 className="font-display text-base font-bold text-white leading-tight">
+                  🛡️ Social Media Protection Notice
+                </h3>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-700 leading-relaxed">
+                To help protect your social media accounts, Tasksearn delivers Follow campaigns on{" "}
+                <strong>Instagram, Facebook, TikTok, X</strong>, and similar platforms{" "}
+                <strong>gradually instead of all at once</strong>.
+              </p>
+              <p className="text-sm text-gray-700 leading-relaxed">
+                Because of this, your campaign may take longer to complete. However, this approach helps
+                create more natural follower growth and may reduce the risk of your account being{" "}
+                <strong>flagged, restricted, or temporarily suspended</strong> by the platform.
+              </p>
+              <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 flex items-start gap-3">
+                <span className="text-base shrink-0">📌</span>
+                <p className="text-xs text-blue-800 leading-relaxed font-medium">
+                  Thank you for your patience and understanding. Your account's safety is our priority.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="px-6 pb-6 flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => {
+                  socialProtectionNoticeDismissed.current = true;
+                  setShowSocialProtectionNotice(false);
+                }}
+                className="order-2 sm:order-1 flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  socialProtectionNoticeDismissed.current = true;
+                  setShowSocialProtectionNotice(false);
+                }}
+                className="order-1 sm:order-2 flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-sm font-bold text-white transition-all shadow-sm cursor-pointer"
+              >
+                I Understand
               </button>
             </div>
           </div>
