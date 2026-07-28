@@ -1,3 +1,4 @@
+- [Social Follow Protection](social-follow-protection.md) — batch-capped earner delivery (25/batch) for follow campaigns; batchCap formula must match in SQL, submit handler, and frontend.
 - [TasksEarn dynamic platforms](tasksearn-dynamic-platforms.md) — how social media platforms are DB-driven end-to-end; backend was already built, only the frontend needed wiring.
 - [TasksEarn unified account migration](tasksearn-unified-account.md) — full migration from dual Earner/Advertiser roles to a single User role with two wallets; key decisions and guards.
 - [Admin submission notifications](admin-submission-notifications.md) — persisted, deduplicated submission alerts use WebSockets first and polling fallback.
