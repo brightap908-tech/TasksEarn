@@ -17,6 +17,7 @@
     "test": "tsx tests/commission.test.ts"
   },
   "dependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.62.2",
     "@google/genai": "^2.13.0",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^5.2.0",
@@ -47,8 +48,5 @@
     "autoprefixer": "^10.5.4",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.8.2"
-  },
-  "optionalDependencies": {
-    "@rollup/rollup-linux-x64-gnu": "4.62.2"
   }
 }
