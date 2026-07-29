@@ -5983,6 +5983,14 @@ async function notifyAdmin(notification: {
     .catch(() => {});
 }
 
+// ─── Temporary Backup Download ────────────────────────────────────────────────
+app.get("/tasksearn_backup_20260729_101427.sql", (_req, res) => {
+  const file = path.join(process.cwd(), "tasksearn_backup_20260729_101427.sql");
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Content-Disposition", 'attachment; filename="tasksearn_backup_20260729_101427.sql"');
+  res.sendFile(file);
+});
+
 // ─── Vite / Static Server ─────────────────────────────────────────────────────
 
 async function startServer() {
