@@ -866,11 +866,17 @@ async function bootstrapTables() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_task_id     ON submissions (task_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_status      ON submissions (status)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_earner_status ON submissions (earner_id, status)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_task_earner ON submissions (task_id, earner_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_status            ON tasks (status)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_created_at        ON tasks (created_at DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_users_created_at        ON users (created_at DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_transactions_user_id   ON transactions (user_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions (created_at DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_earner_notif_earner_id ON earner_notifications (earner_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_submitted_at        ON submissions (submitted_at DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_status_submitted_at ON submissions (status, submitted_at DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submission_history_created_at ON submission_history (created_at DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications (created_at DESC)`);
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
   } catch (err) {
@@ -1953,14 +1959,17 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
     const { proofText, proofScreenshot, stagedToken } = req.body;
     console.log(`[Submit:${requestId}] taskId=${taskId} userId=${user.id} (${user.name}) auth=${Math.round(performance.now() - requestStartedAt)}ms`);
     console.log(`[Submit:${requestId}] proofText=${proofText ? `${String(proofText).length} chars` : "(none)"} stagedToken=${stagedToken || "(none)"}`);
+    await client.query("BEGIN");
+    console.log(`[Submit:${requestId}] transaction started at ${Math.round(performance.now() - requestStartedAt)}ms`);
     let screenshot = null;
     let screenshotThumbnail = null;
     if (stagedToken) {
-      const stagedRow = await pool.query(
+      const stagedRow = await client.query(
         "SELECT data_url, thumbnail_data_url FROM staged_proofs WHERE token = $1 AND user_id = $2 AND expires_at > NOW()",
         [stagedToken, user.id]
       );
       if (stagedRow.rows.length === 0) {
+        await client.query("ROLLBACK");
         return res.status(400).json({
           error: "Screenshot upload expired or was not found. Please re-upload your screenshot and try again."
         });
@@ -1978,6 +1987,7 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       console.log(`[Submit:${requestId}] inline screenshot=${dataUrl.length} chars, ~${(estimatedBytes / 1024).toFixed(1)} KB, mime=${detectedMime}`);
       if (isDataUrl && !detectedMime.startsWith("image/")) {
         console.error(`[Submit:${requestId}] rejected invalid inline screenshot format (detected: "${detectedMime}")`);
+        await client.query("ROLLBACK");
         return res.status(400).json({
           error: `Invalid screenshot format. Expected an image data URL (data:image/...) but received "${detectedMime}". Please re-select the image and try again.`
         });
@@ -1987,10 +1997,9 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       console.log(`[Submit:${requestId}] screenshot=(none)`);
     }
     if (!proofText && !screenshot) {
+      await client.query("ROLLBACK");
       return res.status(400).json({ error: "Please provide proof details: notes, a link, or a screenshot." });
     }
-    await client.query("BEGIN");
-    console.log(`[Submit:${requestId}] transaction started at ${Math.round(performance.now() - requestStartedAt)}ms`);
     const finalProofText = proofText || "See uploaded screenshot proof.";
     const alreadySub = await client.query(
       "SELECT id, status FROM submissions WHERE task_id = $1 AND earner_id = $2 FOR UPDATE",
@@ -2041,12 +2050,13 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         user.name,
         resubmittedAt
       ]);
+      if (stagedToken) {
+        await client.query("DELETE FROM staged_proofs WHERE token = $1 AND user_id = $2", [stagedToken, user.id]);
+      }
       await client.query("COMMIT");
       const submission2 = mapSubmission(updatedSubRes.rows[0]);
-      if (stagedToken) pool.query("DELETE FROM staged_proofs WHERE token = $1", [stagedToken]).catch(() => {
-      });
       console.log(`[Submit:${requestId}] resubmission committed in ${Math.round(performance.now() - requestStartedAt)}ms`);
-      void notifyAdmin({
+      setImmediate(() => void notifyAdmin({
         type: "submission",
         message: `${user.name} submitted a task for review.`,
         referenceId: existing.id,
@@ -2055,7 +2065,7 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         taskTitle: task2.title,
         submittedAt: resubmittedAt,
         reviewUrl: `/admin/audits?submission=${encodeURIComponent(existing.id)}`
-      }).catch((err) => console.error(`[Submit:${requestId}] async admin notification failed:`, err));
+      }).catch((err) => console.error(`[Submit:${requestId}] async admin notification failed:`, err)));
       console.log(`[Submit:${requestId}] response sent in ${Math.round(performance.now() - requestStartedAt)}ms`);
       return res.status(200).json({ success: true, message: "Task resubmitted successfully", submission: submission2 });
     }
@@ -2108,12 +2118,13 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'Pending',$10,$11)
       RETURNING *
     `, [subId, taskId, task.title, task.category, user.id, user.name, finalProofText, screenshot, screenshotThumbnail, task.earningPerSlot, submittedAt]);
+    if (stagedToken) {
+      await client.query("DELETE FROM staged_proofs WHERE token = $1 AND user_id = $2", [stagedToken, user.id]);
+    }
     await client.query("COMMIT");
     const submission = mapSubmission(insertedSubRes.rows[0]);
-    if (stagedToken) pool.query("DELETE FROM staged_proofs WHERE token = $1", [stagedToken]).catch(() => {
-    });
     console.log(`[Submit:${requestId}] submission committed in ${Math.round(performance.now() - requestStartedAt)}ms`);
-    void notifyAdmin({
+    setImmediate(() => void notifyAdmin({
       type: "submission",
       message: `${user.name} submitted a task for review.`,
       referenceId: subId,
@@ -2122,7 +2133,7 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       taskTitle: task.title,
       submittedAt,
       reviewUrl: `/admin/audits?submission=${encodeURIComponent(subId)}`
-    }).catch((err) => console.error(`[Submit:${requestId}] async admin notification failed:`, err));
+    }).catch((err) => console.error(`[Submit:${requestId}] async admin notification failed:`, err)));
     res.status(201).json({ success: true, message: "Task submitted successfully", submission });
     console.log(`[Submit:${requestId}] response sent in ${Math.round(performance.now() - requestStartedAt)}ms`);
   } catch (err) {
