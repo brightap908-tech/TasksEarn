@@ -737,6 +737,22 @@ html.dark .photo-upload-ring:hover {
   from { opacity: 0; transform: scale(0.96); }
   to   { opacity: 1; transform: scale(1); }
 }
+@keyframes screenshotBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes screenshotBackdropOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes screenshotContentIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes screenshotContentOut {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.96); }
+}
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position:  200% 0; }
@@ -755,6 +771,19 @@ html.dark .photo-upload-ring:hover {
 .animate-drawer-slide-out { animation: drawerSlideOut 0.28s cubic-bezier(0.55,0,1,0.45) forwards; }
 .animate-backdrop-fade-in  { animation: backdropFadeIn 0.3s ease forwards; }
 .animate-backdrop-fade-out { animation: backdropFadeOut 0.28s ease forwards; }
+.animate-screenshot-backdrop-in  { animation: screenshotBackdropIn 0.2s ease-out both; }
+.animate-screenshot-backdrop-out { animation: screenshotBackdropOut 0.2s ease-in both; }
+.animate-screenshot-content-in  { animation: screenshotContentIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-screenshot-content-out { animation: screenshotContentOut 0.2s ease-in both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-screenshot-backdrop-in,
+  .animate-screenshot-backdrop-out,
+  .animate-screenshot-content-in,
+  .animate-screenshot-content-out {
+    animation-duration: 0.01ms;
+  }
+}
 
 .shimmer {
   background: linear-gradient(90deg, transparent 25%, rgba(37,99,235,0.05) 50%, transparent 75%);

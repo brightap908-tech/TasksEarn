@@ -80,31 +80,43 @@ interface ScreenshotLightboxProps {
 
 function ScreenshotLightbox({ src, isLoadingFull, onClose }: ScreenshotLightboxProps) {
   const [imageLoaded, setImageLoaded] = React.useState(false);
+  const [isClosing, setIsClosing] = React.useState(false);
+  const closeButtonRef = React.useRef<HTMLButtonElement>(null);
 
   React.useEffect(() => {
     setImageLoaded(false);
+    setIsClosing(false);
   }, [src]);
+
+  const handleClose = React.useCallback(() => {
+    if (isClosing) return;
+    setIsClosing(true);
+    window.setTimeout(onClose, 220);
+  }, [isClosing, onClose]);
 
   // Close on Escape key
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") handleClose();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
+  }, [handleClose]);
 
   // Prevent background scroll while the lightbox is open
   React.useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    closeButtonRef.current?.focus();
     return () => { document.body.style.overflow = prev; };
   }, []);
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4 md:p-8"
-      onClick={onClose}
+      className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4 backdrop-blur-[2px] md:p-8 ${
+        isClosing ? "animate-screenshot-backdrop-out" : "animate-screenshot-backdrop-in"
+      }`}
+      onClick={handleClose}
       role="dialog"
       aria-modal="true"
       aria-label="Full-size screenshot viewer"
@@ -112,8 +124,9 @@ function ScreenshotLightbox({ src, isLoadingFull, onClose }: ScreenshotLightboxP
       {/* Close button */}
       <button
         type="button"
-        className="absolute top-4 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
-        onClick={onClose}
+        ref={closeButtonRef}
+        className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/80 md:right-6 md:top-6"
+        onClick={handleClose}
         aria-label="Close screenshot viewer"
       >
         <X className="h-5 w-5" />
@@ -121,13 +134,15 @@ function ScreenshotLightbox({ src, isLoadingFull, onClose }: ScreenshotLightboxP
 
       {/* Image — stopPropagation so clicking the image doesn't close the modal */}
       <div
-        className="relative max-w-full max-h-full overflow-auto rounded-xl"
+        className={`relative flex max-h-[82vh] max-w-[82vw] items-center justify-center overflow-hidden rounded-xl bg-slate-950/40 shadow-2xl ${
+          isClosing ? "animate-screenshot-content-out" : "animate-screenshot-content-in"
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <img
           src={src}
           alt="Full-size task proof screenshot"
-          className="block max-w-[90vw] max-h-[90vh] rounded-xl object-contain shadow-2xl"
+          className="block max-h-[82vh] max-w-[82vw] rounded-xl object-contain sm:max-h-[80vh] sm:max-w-[80vw]"
           referrerPolicy="no-referrer"
           draggable={false}
           onLoad={() => setImageLoaded(true)}
@@ -140,7 +155,7 @@ function ScreenshotLightbox({ src, isLoadingFull, onClose }: ScreenshotLightboxP
       </div>
 
       {/* Tap-to-close hint */}
-      <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[11px] text-white/50 select-none pointer-events-none">
+      <p className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 select-none text-center text-[11px] text-white/50">
         Tap outside or press Esc to close
       </p>
     </div>
@@ -3504,7 +3519,11 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                                 /* Screenshot already fetched this session — show inline */
                                 <ScreenshotPreview
                                   src={loadedScreenshots[sub.id]}
-                                  onViewFull={() => setViewingScreenshot(loadedScreenshots[sub.id])}
+                                  onViewFull={() => setViewingScreenshot({
+                                    submissionId: sub.id,
+                                    src: loadedScreenshots[sub.id],
+                                    isLoadingFull: false,
+                                  })}
                                 />
                               ) : (sub as any).hasScreenshot ? (
                                 /* Screenshot exists on server — load on demand to keep list fast */
