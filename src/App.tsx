@@ -78,8 +78,8 @@ export default function App() {
   const [announcements, setAnnouncements] = React.useState<Announcement[]>([]);
   const [pagesContent, setPagesContent] = React.useState<{ [key: string]: { title: string; content: string } }>({});
   const [publicStats, setPublicStats] = React.useState({
-    earnersCount: 0,
-    advertisersCount: 0,
+    totalUsers: 0,
+    usersWithActiveCampaigns: 0,
     tasksCompleted: 0,
     successfulWithdrawals: 0,
     totalPaidOut: 0,
@@ -318,8 +318,8 @@ export default function App() {
       const s = await apiFetch("/api/public/stats");
       if (s && !s.error) {
         setPublicStats({
-          earnersCount: s.earnersCount ?? 0,
-          advertisersCount: s.advertisersCount ?? 0,
+          totalUsers: s.totalUsers ?? 0,
+          usersWithActiveCampaigns: s.usersWithActiveCampaigns ?? 0,
           tasksCompleted: s.tasksCompleted ?? 0,
           successfulWithdrawals: s.successfulWithdrawals ?? 0,
           totalPaidOut: s.totalPaidOut ?? 0,

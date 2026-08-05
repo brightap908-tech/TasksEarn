@@ -262,8 +262,8 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
 
   // Admin states
   const [stats, setStats] = React.useState({
-    earnersCount: 0,
-    advertisersCount: 0,
+    totalUsers: 0,
+    usersWithActiveCampaigns: 0,
     tasksCount: 0,
     totalEarned: 0,
     pendingWithdrawals: 0,
@@ -645,8 +645,8 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
       const data = await apiFetch("/api/admin/dashboard");
       if (data && !data.error) {
         setStats({
-          earnersCount: data.earnersCount,
-          advertisersCount: data.advertisersCount,
+          totalUsers: data.totalUsers ?? 0,
+          usersWithActiveCampaigns: data.usersWithActiveCampaigns ?? 0,
           tasksCount: data.tasksCount,
           totalEarned: data.totalEarned,
           pendingWithdrawals: data.pendingWithdrawals,
@@ -2152,8 +2152,8 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {([
                     { label: "Platform Earnings", value: `₦${platformStats.availableBalance.toLocaleString()}`, icon: <Coins className="h-5 w-5" />, sub: "Available balance", color: "border-emerald-400/30 from-emerald-400/20 to-emerald-500/10" },
-                    { label: "Total Earners", value: stats.earnersCount.toLocaleString(), icon: <Users className="h-5 w-5" />, sub: "Registered earners", color: "border-sky-400/30 from-sky-400/20 to-sky-500/10" },
-                    { label: "Total Advertisers", value: stats.advertisersCount.toLocaleString(), icon: <Megaphone className="h-5 w-5" />, sub: "Active advertisers", color: "border-violet-400/30 from-violet-400/20 to-violet-500/10" },
+                    { label: "Total Users", value: stats.totalUsers.toLocaleString(), icon: <Users className="h-5 w-5" />, sub: "All registered accounts", color: "border-sky-400/30 from-sky-400/20 to-sky-500/10" },
+                    { label: "Users with Active Campaigns", value: stats.usersWithActiveCampaigns.toLocaleString(), icon: <Megaphone className="h-5 w-5" />, sub: "Currently advertising", color: "border-violet-400/30 from-violet-400/20 to-violet-500/10" },
                     { label: "Active Campaigns", value: stats.tasksCount.toLocaleString(), icon: <Briefcase className="h-5 w-5" />, sub: "Live campaigns", color: "border-amber-400/30 from-amber-400/20 to-amber-500/10" },
                     { label: "Pending Withdrawals", value: `₦${stats.pendingWithdrawals.toLocaleString()}`, icon: <CreditCard className="h-5 w-5" />, sub: "Awaiting approval", color: "border-rose-400/30 from-rose-400/20 to-rose-500/10" },
                     { label: "System Status", value: wsConnected ? "Live ✓" : "Online ✓", icon: <CheckCircle className="h-5 w-5" />, sub: wsConnected ? "WebSocket active" : "All systems go", color: "border-teal-400/30 from-teal-400/20 to-teal-500/10" },
@@ -2174,9 +2174,9 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
             {/* ── 2. Business Analytics Cards ──────────────────────────────── */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                { label: "Total Earners", value: stats.earnersCount.toLocaleString(), icon: <Users className="h-4 w-4" />, bg: "bg-gradient-to-br from-emerald-50 to-teal-50", border: "border-emerald-100", iconBg: "bg-emerald-100", iconColor: "text-emerald-600", valueColor: "text-emerald-700", sub: "Registered earners" },
-                { label: "Total Advertisers", value: stats.advertisersCount.toLocaleString(), icon: <Megaphone className="h-4 w-4" />, bg: "bg-gradient-to-br from-violet-50 to-purple-50", border: "border-violet-100", iconBg: "bg-violet-100", iconColor: "text-violet-600", valueColor: "text-violet-700", sub: "Active advertisers" },
-                { label: "Total Tasks", value: stats.tasksCount.toLocaleString(), icon: <Briefcase className="h-4 w-4" />, bg: "bg-gradient-to-br from-amber-50 to-orange-50", border: "border-amber-100", iconBg: "bg-amber-100", iconColor: "text-amber-600", valueColor: "text-amber-700", sub: "All campaigns" },
+                { label: "Total Users", value: stats.totalUsers.toLocaleString(), icon: <Users className="h-4 w-4" />, bg: "bg-gradient-to-br from-emerald-50 to-teal-50", border: "border-emerald-100", iconBg: "bg-emerald-100", iconColor: "text-emerald-600", valueColor: "text-emerald-700", sub: "All registered accounts" },
+                { label: "Users with Active Campaigns", value: stats.usersWithActiveCampaigns.toLocaleString(), icon: <Megaphone className="h-4 w-4" />, bg: "bg-gradient-to-br from-violet-50 to-purple-50", border: "border-violet-100", iconBg: "bg-violet-100", iconColor: "text-violet-600", valueColor: "text-violet-700", sub: "Currently advertising" },
+                { label: "Active Campaigns", value: stats.tasksCount.toLocaleString(), icon: <Briefcase className="h-4 w-4" />, bg: "bg-gradient-to-br from-amber-50 to-orange-50", border: "border-amber-100", iconBg: "bg-amber-100", iconColor: "text-amber-600", valueColor: "text-amber-700", sub: "Live campaigns" },
                 { label: "Today's New Users", value: stats.todayNewUsers.toLocaleString(), icon: <UserCircle2 className="h-4 w-4" />, bg: "bg-gradient-to-br from-sky-50 to-cyan-50", border: "border-sky-100", iconBg: "bg-sky-100", iconColor: "text-sky-600", valueColor: "text-sky-700", sub: "Joined today" },
               ].map((card: any, i: number) => (
                 <div key={i} className={`group relative rounded-2xl border ${card.border} ${card.bg} p-3.5 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5`}>
@@ -2196,7 +2196,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                 { label: "Pending Withdrawals", value: `₦${stats.pendingWithdrawals.toLocaleString()}`, icon: <Clock className="h-4 w-4" />, bg: "bg-gradient-to-br from-rose-50 to-pink-50", border: "border-rose-100", iconBg: "bg-rose-100", iconColor: "text-rose-500", valueColor: "text-rose-600", sub: "Awaiting approval", action: () => setActiveTab("withdrawals") },
                 { label: "Completed Withdrawals", value: `₦${stats.completedWithdrawals.toLocaleString()}`, icon: <CheckCheck className="h-4 w-4" />, bg: "bg-gradient-to-br from-teal-50 to-emerald-50", border: "border-teal-100", iconBg: "bg-teal-100", iconColor: "text-teal-600", valueColor: "text-teal-700", sub: "All-time approved", action: null },
                 { label: "Total Deposits", value: `₦${stats.totalDeposited.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: <ArrowDownCircle className="h-4 w-4" />, bg: "bg-gradient-to-br from-blue-50 to-indigo-50", border: "border-blue-100", iconBg: "bg-blue-100", iconColor: "text-blue-600", valueColor: "text-blue-700", sub: "Advertiser deposits", isDeposit: true, action: null },
-                { label: "Total Earners Earnings", value: `₦${(stats.totalEarned ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: <BadgeDollarSign className="h-4 w-4" />, bg: "bg-gradient-to-br from-amber-50 to-orange-50", border: "border-amber-100", iconBg: "bg-amber-100", iconColor: "text-amber-600", valueColor: "text-amber-700", sub: "Paid out from approved tasks", action: () => setActiveTab("audits") },
+                { label: "Total User Earnings", value: `₦${(stats.totalEarned ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: <BadgeDollarSign className="h-4 w-4" />, bg: "bg-gradient-to-br from-amber-50 to-orange-50", border: "border-amber-100", iconBg: "bg-amber-100", iconColor: "text-amber-600", valueColor: "text-amber-700", sub: "Paid out from approved tasks", action: () => setActiveTab("audits") },
                 { label: "Earners Commission", value: `₦${(stats.earnersCommission ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: <Percent className="h-4 w-4" />, bg: "bg-gradient-to-br from-green-50 to-emerald-50", border: "border-green-100", iconBg: "bg-green-100", iconColor: "text-green-600", valueColor: "text-green-700", sub: "Task commission earned", action: () => setActiveTab("platform-earnings") },
                 { label: "Total Revenue", value: `₦${platformStats.totalPlatformRevenue.toLocaleString()}`, icon: <TrendingUp className="h-4 w-4" />, bg: "bg-gradient-to-br from-violet-50 to-purple-50", border: "border-violet-100", iconBg: "bg-violet-100", iconColor: "text-violet-600", valueColor: "text-violet-700", sub: "Commission & fees", action: () => setActiveTab("platform-earnings") },
               ].map((card: any, i: number) => (
@@ -4697,8 +4697,8 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
           <div className="space-y-6 animate-fadeIn">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                { label: "Total Earners", value: stats.earnersCount, color: "text-slate-800" },
-                { label: "Total Advertisers", value: stats.advertisersCount, color: "text-slate-800" },
+                { label: "Total Users", value: stats.totalUsers, color: "text-slate-800" },
+                { label: "Users with Active Campaigns", value: stats.usersWithActiveCampaigns, color: "text-violet-600" },
                 { label: "Active Campaigns", value: stats.tasksCount, color: "text-blue-600" },
                 { label: "Pending Withdrawals", value: `₦${stats.pendingWithdrawals.toLocaleString()}`, color: "text-amber-600" },
                 { label: "Total Earner Payouts", value: `₦${stats.totalEarned.toLocaleString()}`, color: "text-blue-600" },
@@ -5341,8 +5341,8 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {[
-                  { label: "Total Earners", value: stats.earnersCount },
-                  { label: "Total Advertisers", value: stats.advertisersCount },
+                  { label: "Total Users", value: stats.totalUsers },
+                  { label: "Users with Active Campaigns", value: stats.usersWithActiveCampaigns },
                   { label: "Active Campaigns", value: stats.tasksCount },
                   { label: "Platform Revenue", value: `₦${platformStats.totalPlatformRevenue.toLocaleString()}` },
                   { label: "Available Balance", value: `₦${platformStats.availableBalance.toLocaleString()}` },

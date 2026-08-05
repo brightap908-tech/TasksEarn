@@ -582,8 +582,11 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
       }
 
       if (endpoint === "/api/public/stats") {
-        const earnersCount = db.users.filter(u => u.role !== UserRole.ADMIN).length;
-        const advertisersCount = db.tasks.filter(t => Boolean(t.advertiserId)).map(t => t.advertiserId).filter((id, index, all) => all.indexOf(id) === index).length;
+        const totalUsers = db.users.filter(u => u.role !== UserRole.ADMIN).length;
+        const usersWithActiveCampaigns = db.tasks
+          .filter(t => t.status === TaskStatus.ACTIVE && Boolean(t.advertiserId))
+          .map(t => t.advertiserId)
+          .filter((id, index, all) => all.indexOf(id) === index).length;
         const tasksCompleted = db.submissions.filter(s => s.status === SubmissionStatus.APPROVED).length;
         const successfulWithdrawals = db.transactions.filter(t => t.type === TransactionType.WITHDRAWAL && [TransactionStatus.SUCCESS, TransactionStatus.PAID].includes(t.status)).length;
         const totalPaidOut = db.transactions
@@ -599,12 +602,12 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
           .slice(-1)[0] || null;
 
         resolve({
-          earnersCount,
-          advertisersCount,
+          totalUsers,
+          usersWithActiveCampaigns,
           tasksCompleted,
           successfulWithdrawals,
           totalPaidOut,
-          tasksCount: db.tasks.length,
+          tasksCount: db.tasks.filter(t => t.status === TaskStatus.ACTIVE).length,
           launchDate: "1st July, 2024",
           latestWithdrawal: latestWithdrawalTx ? {
             userName: latestWithdrawalTx.userName,
@@ -1121,8 +1124,11 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
 
       // --- ADMIN ENDPOINTS ---
       if (endpoint === "/api/admin/dashboard") {
-        const earnersCount = db.users.filter(u => u.role === UserRole.EARNER).length;
-        const advertisersCount = db.users.filter(u => u.role === UserRole.ADVERTISER).length;
+        const totalUsers = db.users.filter(u => u.role !== UserRole.ADMIN).length;
+        const usersWithActiveCampaigns = db.tasks
+          .filter(t => t.status === TaskStatus.ACTIVE && Boolean(t.advertiserId))
+          .map(t => t.advertiserId)
+          .filter((id, index, all) => all.indexOf(id) === index).length;
 
         const approvedSubs = db.submissions.filter(s => s.status === SubmissionStatus.APPROVED);
         // markup per slot earned by admin = costPerSlot - earningPerSlot
@@ -1144,9 +1150,9 @@ export function simulateApiFetch(endpoint: string, options: any = {}, token: str
           .reduce((sum, t) => sum + t.amount, 0);
 
         resolve({
-          earnersCount,
-          advertisersCount,
-          tasksCount: db.tasks.length,
+          totalUsers,
+          usersWithActiveCampaigns,
+          tasksCount: db.tasks.filter(t => t.status === TaskStatus.ACTIVE).length,
           totalEarned,
           pendingWithdrawals,
           totalDeposited,

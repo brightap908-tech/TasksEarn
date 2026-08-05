@@ -44,7 +44,7 @@ function useCountUp(target: number, duration: number, enabled: boolean) {
 
 /* ─── Stat definition type ───────────────────────────────────── */
 // rawTarget: swap this value with the matching publicStats field to go live.
-// e.g. rawTarget: publicStats.earnersCount
+// e.g. rawTarget: publicStats.totalUsers
 type StatDef = {
   icon: React.ReactNode;
   iconBg: string;
@@ -156,8 +156,8 @@ function AnimatedStatCard({ stat }: { stat: StatDef }) {
 }
 
 export interface AboutPageStats {
-  earnersCount: number;
-  advertisersCount: number;
+  totalUsers: number;
+  usersWithActiveCampaigns: number;
   tasksCompleted: number;
   successfulWithdrawals: number;
   totalPaidOut: number;
@@ -223,26 +223,26 @@ export default function AboutPage({ onNavigate, publicStats }: AboutPageProps) {
   /*
    * PLATFORM_STATS — static display values.
    * To switch to live data, replace each `rawTarget` with the matching
-   * publicStats field (e.g. rawTarget: publicStats.earnersCount).
+   * publicStats field (e.g. rawTarget: publicStats.totalUsers).
    */
   const PLATFORM_STATS: StatDef[] = [
     {
-      rawTarget: 80000,       // live swap → publicStats.earnersCount
+      rawTarget: publicStats.totalUsers,
       prefix: "",
       suffix: "+",
-      label: "Registered Earners",
-      sublabel: "Growing every day",
+      label: "Total Users",
+      sublabel: "Registered accounts",
       icon: <Users className="h-5 w-5" />,
       iconBg: "rgba(59,130,246,0.18)",
       iconColor: "#93C5FD",
       accentColor: "linear-gradient(90deg,#3B82F6,#6366F1)",
     },
     {
-      rawTarget: 1000,        // live swap → publicStats.advertisersCount
+      rawTarget: publicStats.usersWithActiveCampaigns,
       prefix: "",
       suffix: "+",
-      label: "Registered Advertisers",
-      sublabel: "Trusted by businesses",
+      label: "Users with Active Campaigns",
+      sublabel: "Currently advertising",
       icon: <Megaphone className="h-5 w-5" />,
       iconBg: "rgba(139,92,246,0.18)",
       iconColor: "#C4B5FD",
