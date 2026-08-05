@@ -74,10 +74,17 @@ import { ADMIN_NAV_ITEMS, ADMIN_NAV_TABS, AdminTab } from "../lib/adminNavigatio
 
 interface ScreenshotLightboxProps {
   src: string;
+  isLoadingFull: boolean;
   onClose: () => void;
 }
 
-function ScreenshotLightbox({ src, onClose }: ScreenshotLightboxProps) {
+function ScreenshotLightbox({ src, isLoadingFull, onClose }: ScreenshotLightboxProps) {
+  const [imageLoaded, setImageLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    setImageLoaded(false);
+  }, [src]);
+
   // Close on Escape key
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -123,7 +130,13 @@ function ScreenshotLightbox({ src, onClose }: ScreenshotLightboxProps) {
           className="block max-w-[90vw] max-h-[90vh] rounded-xl object-contain shadow-2xl"
           referrerPolicy="no-referrer"
           draggable={false}
+          onLoad={() => setImageLoaded(true)}
         />
+        {(!imageLoaded || isLoadingFull) && (
+          <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/25 pointer-events-none">
+            <div className="h-8 w-8 rounded-full border-2 border-white/80 border-t-transparent animate-spin" aria-label="Loading full screenshot" />
+          </div>
+        )}
       </div>
 
       {/* Tap-to-close hint */}
@@ -163,6 +176,7 @@ function ScreenshotPreview({ src, onViewFull }: ScreenshotPreviewProps) {
         alt="Task proof screenshot"
         className="block w-full object-contain"
         style={{ maxHeight: "400px" }}
+        loading="lazy"
         onError={() => setErrored(true)}
         referrerPolicy="no-referrer"
         draggable={false}
@@ -317,9 +331,10 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
   const [auditTotal,        setAuditTotal]         = React.useState(0);
   const [auditTotalPending, setAuditTotalPending] = React.useState(0);
   const [auditLoading,      setAuditLoading]       = React.useState(false);
-  // On-demand screenshot cache: loaded blobs are stored here keyed by submission id
-  // so they are only fetched once per session and never re-fetched.
+  // On-demand screenshot caches: thumbnails render first, while full proofs are
+  // fetched only after an admin opens the viewer and retained for this session.
   const [loadedScreenshots, setLoadedScreenshots] = React.useState<Record<string, string>>({});
+  const [loadedScreenshotThumbnails, setLoadedScreenshotThumbnails] = React.useState<Record<string, string>>({});
   const [loadingScreenshotId, setLoadingScreenshotId] = React.useState<string | null>(null);
   const [depositsList, setDepositsList] = React.useState<Transaction[]>([]);
   const [referralsList, setReferralsList] = React.useState<Referral[]>([]);
@@ -402,9 +417,13 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
   const [auditSearch, setAuditSearch] = React.useState<string>("");
   const [rejectingSubId, setRejectingSubId] = React.useState<string | null>(null);
   const [rejectionFeedback, setRejectionFeedback] = React.useState<string>("");
-  // Screenshot lightbox — holds the data URL of the screenshot being viewed fullscreen.
-  // Null means the lightbox is closed.
-  const [viewingScreenshot, setViewingScreenshot] = React.useState<string | null>(null);
+  // Null means the lightbox is closed. The submission id prevents a slower
+  // background request from replacing a newly opened screenshot.
+  const [viewingScreenshot, setViewingScreenshot] = React.useState<{
+    submissionId: string;
+    src: string;
+    isLoadingFull: boolean;
+  } | null>(null);
 
   // Commission ledger state
   const [commissionsList, setCommissionsList] = React.useState<any[]>([]);
@@ -1397,25 +1416,42 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
     } catch (e) {}
   };
 
-  // Fetch the screenshot blob on demand and open the lightbox.
-  // The submissions list no longer ships blobs; they are loaded only when
-  // the admin explicitly clicks "View Screenshot".
+  // Fetch a small preview first, open immediately, then fetch the full proof
+  // without blocking the rest of the admin dashboard. Both results are cached
+  // in component state so reopening an image is instant.
   const handleViewScreenshot = async (subId: string) => {
-    if (loadedScreenshots[subId]) {
-      setViewingScreenshot(loadedScreenshots[subId]);
-      return;
+    const cachedFull = loadedScreenshots[subId];
+    const cachedThumbnail = loadedScreenshotThumbnails[subId] || cachedFull;
+    if (cachedThumbnail) {
+      setViewingScreenshot({ submissionId: subId, src: cachedFull || cachedThumbnail, isLoadingFull: !cachedFull });
+    } else {
+      setLoadingScreenshotId(subId);
+      try {
+        const data = await apiFetch(`/api/admin/submissions/${subId}/screenshot?variant=thumbnail`);
+        if (data?.proofScreenshot) {
+          setLoadedScreenshotThumbnails(prev => ({ ...prev, [subId]: data.proofScreenshot }));
+          setViewingScreenshot({ submissionId: subId, src: data.proofScreenshot, isLoadingFull: true });
+        }
+      } catch (e) {
+        return;
+      } finally {
+        setLoadingScreenshotId(null);
+      }
     }
-    setLoadingScreenshotId(subId);
+
+    if (cachedFull) return;
+    // Deliberately fire this after the thumbnail is shown. It does not update
+    // any audit/list state and therefore cannot delay other dashboard work.
     try {
-      const data = await apiFetch(`/api/admin/submissions/${subId}/screenshot`);
+      const data = await apiFetch(`/api/admin/submissions/${subId}/screenshot?variant=full`);
       if (data && data.proofScreenshot) {
         setLoadedScreenshots(prev => ({ ...prev, [subId]: data.proofScreenshot }));
-        setViewingScreenshot(data.proofScreenshot);
+        setViewingScreenshot(prev => prev?.submissionId === subId
+          ? { ...prev, src: data.proofScreenshot, isLoadingFull: false }
+          : prev);
       }
     } catch (e) {
       // screenshot unavailable — nothing to show
-    } finally {
-      setLoadingScreenshotId(null);
     }
   };
 
@@ -5315,7 +5351,8 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
          Closes on backdrop click, the × button, or the Escape key.       */}
     {viewingScreenshot && (
       <ScreenshotLightbox
-        src={viewingScreenshot}
+        src={viewingScreenshot.src}
+        isLoadingFull={viewingScreenshot.isLoadingFull}
         onClose={() => setViewingScreenshot(null)}
       />
     )}

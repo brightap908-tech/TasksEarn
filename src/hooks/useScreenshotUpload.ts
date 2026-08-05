@@ -128,6 +128,38 @@ function base64Bytes(dataUrl: string): number {
   return Math.floor((b64.length * 3) / 4) - padding;
 }
 
+/**
+ * Re-encode screenshots before they leave the browser. WebP keeps UI text
+ * readable at a much smaller size than the original camera PNG while the
+ * dimension cap prevents very large phone screenshots from becoming costly
+ * data URLs. The JPEG fallback is for browsers without WebP canvas support.
+ */
+function compressImageDataUrl(
+  dataUrl: string,
+  maxDimension: number,
+  quality: number,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("Image compression is not supported in this browser."));
+        return;
+      }
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const webp = canvas.toDataURL("image/webp", quality);
+      resolve(webp.startsWith("data:image/webp") ? webp : canvas.toDataURL("image/jpeg", quality));
+    };
+    image.onerror = () => reject(new Error("The selected image could not be decoded."));
+    image.src = dataUrl;
+  });
+}
+
 // ── Step 2: Read the file reliably ────────────────────────────────────────────
 
 /**
@@ -328,6 +360,8 @@ export function useScreenshotUpload(apiFetch: ApiFetch): UseScreenshotUploadRetu
     setCompressing(true);
 
     let rawDataUrl = "";
+    let compressedDataUrl = "";
+    let thumbnailDataUrl = "";
     try {
       // ── 2. Read file to data URL ──────────────────────────────────────────
       console.log("[Upload] Reading file …");
@@ -338,12 +372,19 @@ export function useScreenshotUpload(apiFetch: ApiFetch): UseScreenshotUploadRetu
       console.log(`[Upload] File read OK — ${fmtBytes(rawBytes)} as base64`);
       console.log(`[Upload] Data URL prefix: "${rawDataUrl.slice(0, 60)}…"`);
 
-      // Show preview immediately from the local data URL.
-      const sizeLabel = `${fmtBytes(rawBytes)} (original)`;
+      // Compress the stored proof and create a much smaller preview for the
+      // admin review screen. Both operations happen in the browser, before
+      // the staging request, so the server never has to process image data.
+      compressedDataUrl = await compressImageDataUrl(rawDataUrl, 2400, 0.82);
+      thumbnailDataUrl = await compressImageDataUrl(rawDataUrl, 480, 0.80);
+      if (uploadGenRef.current !== gen) return; // superseded
+
+      const compressedBytes = base64Bytes(compressedDataUrl);
+      const sizeLabel = `${fmtBytes(compressedBytes)} (compressed)`;
       setFileSize(sizeLabel);
-      setProofScreenshot(rawDataUrl);
+      setProofScreenshot(compressedDataUrl);
       setCompressing(false);
-      console.log("[Upload] Local preview ready ✓", sizeLabel);
+      console.log(`[Upload] Local preview ready ✓ ${sizeLabel}; thumbnail=${fmtBytes(base64Bytes(thumbnailDataUrl))}`);
     } catch (err) {
       if (uploadGenRef.current !== gen) return; // superseded
       const msg = err instanceof Error ? err.message : String(err);
@@ -371,7 +412,7 @@ export function useScreenshotUpload(apiFetch: ApiFetch): UseScreenshotUploadRetu
       const res = await apiFetch("/api/earner/proof/stage", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ dataUrl: rawDataUrl }),
+        body:    JSON.stringify({ dataUrl: compressedDataUrl, thumbnailDataUrl }),
       });
 
       if (uploadGenRef.current !== gen) return; // superseded

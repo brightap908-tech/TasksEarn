@@ -338,7 +338,7 @@ async function creditAdminCommission(opts: {
 async function cleanupApprovedSubmissionProof(submissionId: string) {
   try {
     await pool.query(
-      "UPDATE submissions SET proof_screenshot = NULL WHERE id = $1 AND status = $2 AND proof_screenshot IS NOT NULL",
+      "UPDATE submissions SET proof_screenshot = NULL, proof_screenshot_thumbnail = NULL WHERE id = $1 AND status = $2 AND proof_screenshot IS NOT NULL",
       [submissionId, SubmissionStatus.APPROVED]
     );
   } catch (err) {
@@ -351,7 +351,7 @@ async function cleanupApprovedSubmissionProof(submissionId: string) {
 async function cleanupRejectedSubmissionProof(submissionId: string) {
   try {
     await pool.query(
-      "UPDATE submissions SET proof_screenshot = NULL WHERE id = $1 AND status = $2 AND proof_screenshot IS NOT NULL",
+      "UPDATE submissions SET proof_screenshot = NULL, proof_screenshot_thumbnail = NULL WHERE id = $1 AND status = $2 AND proof_screenshot IS NOT NULL",
       [submissionId, SubmissionStatus.REJECTED]
     );
   } catch (err) {
@@ -366,7 +366,7 @@ async function cleanupRejectedSubmissionProof(submissionId: string) {
 async function cleanupTaskSubmissionProofs(taskId: string) {
   try {
     const result = await pool.query(
-      "UPDATE submissions SET proof_screenshot = NULL WHERE task_id = $1 AND proof_screenshot IS NOT NULL",
+      "UPDATE submissions SET proof_screenshot = NULL, proof_screenshot_thumbnail = NULL WHERE task_id = $1 AND proof_screenshot IS NOT NULL",
       [taskId]
     );
     if ((result.rowCount ?? 0) > 0) {
@@ -383,7 +383,7 @@ async function cleanupTaskSubmissionProofs(taskId: string) {
 async function sweepOrphanedProofScreenshots() {
   try {
     const result = await pool.query(
-      "UPDATE submissions SET proof_screenshot = NULL WHERE proof_screenshot IS NOT NULL AND status IN ($1, $2)",
+      "UPDATE submissions SET proof_screenshot = NULL, proof_screenshot_thumbnail = NULL WHERE proof_screenshot IS NOT NULL AND status IN ($1, $2)",
       [SubmissionStatus.APPROVED, SubmissionStatus.REJECTED]
     );
     if ((result.rowCount ?? 0) > 0) {
@@ -492,6 +492,7 @@ async function bootstrapTables() {
         earner_name VARCHAR(150) NOT NULL,
         proof_text TEXT NOT NULL,
         proof_screenshot TEXT NULL,
+        proof_screenshot_thumbnail TEXT NULL,
         status VARCHAR(50) NOT NULL DEFAULT 'Pending',
         feedback TEXT NULL,
         reward DECIMAL(10, 2) NOT NULL,
@@ -732,6 +733,9 @@ async function bootstrapTables() {
     await client.query(
       "ALTER TABLE submissions ALTER COLUMN proof_screenshot TYPE TEXT"
     );
+    await client.query(`
+      ALTER TABLE submissions ADD COLUMN IF NOT EXISTS proof_screenshot_thumbnail TEXT NULL
+    `);
 
     // 20. Migrate: admin-controlled login popup fields on announcements.
     //     `enabled` toggles whether the announcement is currently shown; `dismissible`
@@ -935,8 +939,12 @@ async function bootstrapTables() {
         token      TEXT PRIMARY KEY,
         user_id    TEXT NOT NULL,
         data_url   TEXT NOT NULL,
+        thumbnail_data_url TEXT NULL,
         expires_at TIMESTAMPTZ NOT NULL
       )
+    `);
+    await client.query(`
+      ALTER TABLE staged_proofs ADD COLUMN IF NOT EXISTS thumbnail_data_url TEXT NULL
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_staged_proofs_expires_at ON staged_proofs (expires_at)`);
 
@@ -2128,7 +2136,7 @@ app.post("/api/earner/proof/stage", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role === UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-    const { dataUrl } = req.body;
+    const { dataUrl, thumbnailDataUrl } = req.body;
     if (!dataUrl || typeof dataUrl !== "string") {
       return res.status(400).json({ error: "dataUrl is required" });
     }
@@ -2139,6 +2147,12 @@ app.post("/api/earner/proof/stage", async (req, res) => {
       return res.status(400).json({
         error: "Invalid image format. Only PNG, JPG, JPEG, WEBP data URLs are accepted.",
       });
+    }
+    if (thumbnailDataUrl != null && (
+      typeof thumbnailDataUrl !== "string" ||
+      !/^data:image\/(?:jpeg|jpg|webp);base64,/i.test(thumbnailDataUrl)
+    )) {
+      return res.status(400).json({ error: "Invalid screenshot thumbnail format." });
     }
 
     // Estimate raw byte size from base64 payload length (~33% overhead).
@@ -2155,8 +2169,8 @@ app.post("/api/earner/proof/stage", async (req, res) => {
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
 
     await pool.query(
-      "INSERT INTO staged_proofs (token, user_id, data_url, expires_at) VALUES ($1, $2, $3, $4)",
-      [token, user.id, dataUrl, expiresAt]
+      "INSERT INTO staged_proofs (token, user_id, data_url, thumbnail_data_url, expires_at) VALUES ($1, $2, $3, $4, $5)",
+      [token, user.id, dataUrl, thumbnailDataUrl || null, expiresAt]
     );
 
     // Opportunistically purge expired rows (non-blocking).
@@ -2188,11 +2202,12 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
 
     // ── Resolve screenshot from staged token or inline payload ──────────────
     let screenshot: string | null = null;
+    let screenshotThumbnail: string | null = null;
 
     if (stagedToken) {
       // Primary path: resolve a pre-uploaded staged proof by token.
       const stagedRow = await pool.query(
-        "SELECT data_url FROM staged_proofs WHERE token = $1 AND user_id = $2 AND expires_at > NOW()",
+        "SELECT data_url, thumbnail_data_url FROM staged_proofs WHERE token = $1 AND user_id = $2 AND expires_at > NOW()",
         [stagedToken, user.id]
       );
       if (stagedRow.rows.length === 0) {
@@ -2201,6 +2216,7 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         });
       }
       screenshot = stagedRow.rows[0].data_url;
+      screenshotThumbnail = stagedRow.rows[0].thumbnail_data_url || null;
       console.log(`[Submit:${requestId}] staged token resolved — ~${(((screenshot?.split(",")[1]?.length ?? 0) * 3) / 4 / 1024).toFixed(1)} KB`);
     } else if (proofScreenshot) {
       // Legacy / external-URL path: inline payload (used for pasted http:// URLs).
@@ -2274,13 +2290,14 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         `UPDATE submissions
             SET proof_text       = $1,
                 proof_screenshot = $2,
+                proof_screenshot_thumbnail = $3,
                 status           = 'Pending',
                 feedback         = '',
                 rejected_at      = NULL,
-                submitted_at     = $3
-          WHERE id = $4
+                submitted_at     = $4
+          WHERE id = $5
           RETURNING *`,
-        [finalProofText, screenshot, resubmittedAt, existing.id]
+        [finalProofText, screenshot, screenshotThumbnail, resubmittedAt, existing.id]
       );
 
       await client.query(`
@@ -2371,10 +2388,10 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
 
     const submittedAt = new Date();
     const insertedSubRes = await client.query(`
-      INSERT INTO submissions (id, task_id, task_title, category, earner_id, earner_name, proof_text, proof_screenshot, status, reward, submitted_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Pending',$9,$10)
+      INSERT INTO submissions (id, task_id, task_title, category, earner_id, earner_name, proof_text, proof_screenshot, proof_screenshot_thumbnail, status, reward, submitted_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'Pending',$10,$11)
       RETURNING *
-    `, [subId, taskId, task.title, task.category, user.id, user.name, finalProofText, screenshot, task.earningPerSlot, submittedAt]);
+    `, [subId, taskId, task.title, task.category, user.id, user.name, finalProofText, screenshot, screenshotThumbnail, task.earningPerSlot, submittedAt]);
 
     await client.query("COMMIT");
     const submission = mapSubmission(insertedSubRes.rows[0]);
@@ -4399,13 +4416,19 @@ app.get("/api/admin/submissions/:id/screenshot", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
+    const thumbnail = req.query.variant === "thumbnail";
     const result = await pool.query(
-      "SELECT proof_screenshot FROM submissions WHERE id = $1",
+      "SELECT proof_screenshot, proof_screenshot_thumbnail FROM submissions WHERE id = $1",
       [req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: "Submission not found" });
-    const screenshot = result.rows[0].proof_screenshot;
+    // New submissions have a dedicated low-resolution image. Falling back to
+    // the full proof keeps older submissions fully compatible.
+    const screenshot = thumbnail
+      ? (result.rows[0].proof_screenshot_thumbnail || result.rows[0].proof_screenshot)
+      : result.rows[0].proof_screenshot;
     if (!screenshot) return res.status(404).json({ error: "No screenshot available for this submission" });
+    res.setHeader("Cache-Control", "private, max-age=3600, stale-while-revalidate=86400");
     res.json({ proofScreenshot: screenshot });
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
