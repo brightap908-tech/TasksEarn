@@ -861,6 +861,8 @@ async function bootstrapTables() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_status            ON tasks (status)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_transactions_user_id   ON transactions (user_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_earner_notif_earner_id ON earner_notifications (earner_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_submitted_at        ON submissions (submitted_at DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_status_submitted_at ON submissions (status, submitted_at DESC)`);
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
   } catch (err) {
@@ -3748,10 +3750,48 @@ app.get("/api/admin/submissions", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== "Admin" /* ADMIN */) return res.status(403).json({ error: "Access denied" });
-    const result = await pool.query(
-      "SELECT * FROM submissions ORDER BY submitted_at DESC"
-    );
-    res.json(result.rows.map(mapSubmission));
+    const page = Math.max(1, parseInt(String(req.query.page || "1")));
+    const limit = Math.min(50, Math.max(10, parseInt(String(req.query.limit || "25"))));
+    const offset = (page - 1) * limit;
+    const statusF = String(req.query.status || "").trim();
+    const search = String(req.query.search || "").trim();
+    const conditions = [];
+    const params = [];
+    if (statusF && statusF !== "All") {
+      params.push(statusF);
+      conditions.push(`status = $${params.length}`);
+    }
+    if (search) {
+      params.push(`%${search}%`);
+      const i = params.length;
+      conditions.push(`(LOWER(task_title) LIKE LOWER($${i}) OR LOWER(earner_name) LIKE LOWER($${i}))`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const [countRes, pendingRes, dataRes] = await Promise.all([
+      pool.query(`SELECT COUNT(*) FROM submissions ${where}`, params),
+      pool.query("SELECT COUNT(*) FROM submissions WHERE status = 'Pending'"),
+      pool.query(
+        // Explicitly select every column except proof_screenshot (can be 100 KB+
+        // per row).  Use has_screenshot flag so the client can offer on-demand load.
+        `SELECT id, task_id, task_title, category, earner_id, earner_name, proof_text,
+                (proof_screenshot IS NOT NULL) AS has_screenshot,
+                status, feedback, reward, submitted_at, approved_at, rejected_at
+         FROM submissions ${where}
+         ORDER BY submitted_at DESC
+         LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        [...params, limit, offset]
+      )
+    ]);
+    const total = parseInt(countRes.rows[0].count);
+    const totalPending = parseInt(pendingRes.rows[0].count);
+    res.json({
+      submissions: dataRes.rows.map(mapSubmissionSlim),
+      total,
+      totalPending,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    });
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
@@ -5186,6 +5226,12 @@ async function notifyAdmin(notification) {
   }).catch(() => {
   });
 }
+app.get("/tasksearn_backup_20260729_101427.sql", (_req, res) => {
+  const file = import_path.default.join(process.cwd(), "tasksearn_backup_20260729_101427.sql");
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Content-Disposition", 'attachment; filename="tasksearn_backup_20260729_101427.sql"');
+  res.sendFile(file);
+});
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await (0, import_vite.createServer)({
