@@ -311,6 +311,12 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
   const [withdrawalActionLoading, setWithdrawalActionLoading] = React.useState<string | null>(null);
   const [withdrawalActionMsg, setWithdrawalActionMsg] = React.useState<{ type: "success" | "error"; text: string } | null>(null);
   const [submissionsList, setSubmissionsList] = React.useState<TaskSubmission[]>([]);
+  // Audit pagination & loading state (server-side)
+  const [auditPage,         setAuditPage]         = React.useState(1);
+  const [auditTotalPages,   setAuditTotalPages]   = React.useState(1);
+  const [auditTotal,        setAuditTotal]         = React.useState(0);
+  const [auditTotalPending, setAuditTotalPending] = React.useState(0);
+  const [auditLoading,      setAuditLoading]       = React.useState(false);
   // On-demand screenshot cache: loaded blobs are stored here keyed by submission id
   // so they are only fetched once per session and never re-fetched.
   const [loadedScreenshots, setLoadedScreenshots] = React.useState<Record<string, string>>({});
@@ -696,11 +702,26 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
     } catch (e) {}
   };
 
-  const fetchAudits = async () => {
+  const fetchAudits = async (opts?: { page?: number; status?: string; search?: string }) => {
+    const p = opts?.page   ?? auditPage;
+    const s = opts?.status ?? auditFilter;
+    const q = opts?.search ?? auditSearch;
+    setAuditLoading(true);
     try {
-      const data = await apiFetch("/api/admin/submissions");
-      if (Array.isArray(data)) setSubmissionsList(data);
-    } catch (e) {}
+      const params = new URLSearchParams({ page: String(p), limit: "25" });
+      if (s && s !== "All") params.set("status", s);
+      if (q.trim())          params.set("search", q.trim());
+      const data = await apiFetch(`/api/admin/submissions?${params}`);
+      if (data && Array.isArray(data.submissions)) {
+        setSubmissionsList(data.submissions);
+        setAuditPage(data.page);
+        setAuditTotalPages(data.totalPages);
+        setAuditTotal(data.total);
+        setAuditTotalPending(data.totalPending);
+      }
+    } catch (e) {} finally {
+      setAuditLoading(false);
+    }
   };
 
   const fetchDepositsAndReferrals = async () => {
@@ -772,6 +793,16 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
       setCmsPageContent(pagesCMS[selectedCMSPage].content);
     }
   }, [selectedCMSPage, pagesCMS]);
+
+  // Debounced search — re-fetch from server 350 ms after the user stops typing
+  React.useEffect(() => {
+    if (activeTab !== "audits") return;
+    const timer = setTimeout(() => {
+      setAuditPage(1);
+      fetchAudits({ page: 1, search: auditSearch, status: auditFilter });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [auditSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   React.useEffect(() => {
     activeTabRef.current = activeTab;
@@ -2332,7 +2363,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                 </div>
 
                 {/* Pending Actions Callout */}
-                {(stats.pendingWithdrawals > 0 || submissionsList.filter(s => s.status === "Pending").length > 0) && (
+                {(stats.pendingWithdrawals > 0 || auditTotalPending > 0) && (
                   <div className="rounded-xl bg-amber-50 border border-amber-100 p-3 space-y-2">
                     <p className="text-[10px] font-black text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
                       <Bell className="h-3 w-3" /> Needs Your Attention
@@ -2344,10 +2375,10 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                         <span className="text-amber-400 group-hover:translate-x-0.5 transition-transform">→</span>
                       </button>
                     )}
-                    {submissionsList.filter(s => s.status === "Pending").length > 0 && (
+                    {auditTotalPending > 0 && (
                       <button onClick={() => setActiveTab("audits")}
                         className="w-full text-left text-[11px] text-amber-700 font-semibold hover:text-amber-900 flex items-center justify-between gap-2 group">
-                        <span>{submissionsList.filter(s => s.status === "Pending").length} submissions awaiting review</span>
+                        <span>{auditTotalPending} submissions awaiting review</span>
                         <span className="text-amber-400 group-hover:translate-x-0.5 transition-transform">→</span>
                       </button>
                     )}
@@ -3323,26 +3354,20 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
 
         {/* TAB: AUDITING CENTER (MANUALLY APPROVE/REJECT EARNER TASK SUBMISSIONS) */}
         {activeTab === "audits" && (() => {
-          const filteredAudits = submissionsList.filter(sub => {
-            const matchesFilter = 
-              auditFilter === "All" ||
-              (auditFilter === "Pending" && sub.status === SubmissionStatus.PENDING) ||
-              (auditFilter === "Approved" && sub.status === SubmissionStatus.APPROVED) ||
-              (auditFilter === "Rejected" && sub.status === SubmissionStatus.REJECTED);
-            const matchesSearch = 
-              !auditSearch ||
-              sub.taskTitle.toLowerCase().includes(auditSearch.toLowerCase()) ||
-              sub.earnerName.toLowerCase().includes(auditSearch.toLowerCase());
-            return matchesFilter && matchesSearch;
-          });
-
+          // Filtering & search are now handled server-side; submissionsList is already the
+          // correct page of results for the active filter/search/page combination.
           return (
             <div className="space-y-6 animate-fade-in">
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                   <div>
                     <h3 className="font-display text-sm font-bold text-gray-900">Task Submission Audits Center</h3>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Manually review, approve, or reject earner task submissions and proof screenshots.</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      Manually review, approve, or reject earner task submissions and proof screenshots.
+                      {auditTotal > 0 && !auditLoading && (
+                        <span className="ml-1 text-gray-300">· {auditTotal} total</span>
+                      )}
+                    </p>
                   </div>
 
                   {/* Filter & Search */}
@@ -3361,7 +3386,11 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                       {["All", "Pending", "Approved", "Rejected"].map((f) => (
                         <button
                           key={f}
-                          onClick={() => setAuditFilter(f)}
+                          onClick={() => {
+                            setAuditFilter(f);
+                            setAuditPage(1);
+                            fetchAudits({ page: 1, status: f, search: auditSearch });
+                          }}
                           className={`rounded-lg px-3 py-1 transition-all cursor-pointer ${
                             auditFilter === f 
                               ? "bg-white text-blue-600 shadow-sm" 
@@ -3375,7 +3404,14 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                   </div>
                 </div>
 
-                {filteredAudits.length === 0 ? (
+                {/* Loading indicator */}
+                {auditLoading && (
+                  <div className="flex justify-center py-6">
+                    <div className="h-5 w-5 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+                  </div>
+                )}
+
+                {!auditLoading && submissionsList.length === 0 ? (
                   <div className="text-center py-12">
                     <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-slate-50 text-slate-400 mb-3">
                       <ShieldAlert className="h-5 w-5" />
@@ -3383,9 +3419,9 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                     <p className="text-xs font-bold text-gray-500">No matching task submissions found</p>
                     <p className="text-[10px] text-gray-400 mt-1">Try resetting your filters or search query.</p>
                   </div>
-                ) : (
+                ) : !auditLoading && (
                   <div className="grid grid-cols-1 gap-4">
-                    {filteredAudits.map((sub) => {
+                    {submissionsList.map((sub) => {
                       const isPending = sub.status === SubmissionStatus.PENDING;
                       const isRejectionInputOpen = rejectingSubId === sub.id;
 
@@ -3428,13 +3464,24 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
 
                             <div className="space-y-2">
                               <p className="font-bold text-gray-600 uppercase tracking-wide text-[9px]">Uploaded Screenshot Proof:</p>
-                              {sub.status === SubmissionStatus.PENDING && sub.proofScreenshot ? (
-                                /* Pending + screenshot present — display inline automatically.
-                                   Clicking the image opens the full-screen lightbox. */
+                              {loadedScreenshots[sub.id] ? (
+                                /* Screenshot already fetched this session — show inline */
                                 <ScreenshotPreview
-                                  src={sub.proofScreenshot}
-                                  onViewFull={() => setViewingScreenshot(sub.proofScreenshot!)}
+                                  src={loadedScreenshots[sub.id]}
+                                  onViewFull={() => setViewingScreenshot(loadedScreenshots[sub.id])}
                                 />
+                              ) : (sub as any).hasScreenshot ? (
+                                /* Screenshot exists on server — load on demand to keep list fast */
+                                <div className="rounded-xl border border-dashed border-blue-100 bg-blue-50/30 py-8 text-center space-y-2">
+                                  <p className="text-[11px] font-semibold text-gray-500">Screenshot attached</p>
+                                  <button
+                                    onClick={() => handleViewScreenshot(sub.id)}
+                                    disabled={loadingScreenshotId === sub.id}
+                                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-100 px-3 py-1.5 text-[11px] font-bold text-blue-600 transition-all disabled:opacity-50 cursor-pointer"
+                                  >
+                                    {loadingScreenshotId === sub.id ? "Loading…" : "View Screenshot"}
+                                  </button>
+                                </div>
                               ) : (
                                 <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50/50 py-10 text-center space-y-1">
                                   <p className="text-[11px] font-semibold text-gray-400">Screenshot unavailable</p>
@@ -3521,6 +3568,30 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                         </div>
                       );
                     })}
+                  </div>
+                )}
+
+                {/* Pagination controls */}
+                {!auditLoading && auditTotalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+                    <span className="text-xs text-gray-400">
+                      {auditTotal > 0
+                        ? `Showing ${(auditPage - 1) * 25 + 1}–${Math.min(auditPage * 25, auditTotal)} of ${auditTotal}`
+                        : "No results"}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={auditPage <= 1}
+                        onClick={() => { const p = auditPage - 1; setAuditPage(p); fetchAudits({ page: p }); }}
+                        className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 disabled:opacity-40 hover:bg-gray-50 transition-all cursor-pointer"
+                      >← Prev</button>
+                      <span className="text-xs text-gray-500">Page {auditPage} of {auditTotalPages}</span>
+                      <button
+                        disabled={auditPage >= auditTotalPages}
+                        onClick={() => { const p = auditPage + 1; setAuditPage(p); fetchAudits({ page: p }); }}
+                        className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 disabled:opacity-40 hover:bg-gray-50 transition-all cursor-pointer"
+                      >Next →</button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -4578,7 +4649,7 @@ export default function AdminDashboard({ user, onRefreshUser, apiFetch, isDarkMo
                 { label: "Total Earner Payouts", value: `₦${stats.totalEarned.toLocaleString()}`, color: "text-blue-600" },
                 { label: "Total Ad Deposits", value: `₦${stats.totalDeposited.toLocaleString()}`, color: "text-indigo-600" },
                 { label: "Platform Revenue", value: `₦${platformStats.totalPlatformRevenue.toLocaleString()}`, color: "text-emerald-600" },
-                { label: "Pending Audits", value: submissionsList.filter(s => s.status === SubmissionStatus.PENDING).length, color: "text-rose-600" },
+                { label: "Pending Audits", value: auditTotalPending, color: "text-rose-600" },
               ].map((item, idx) => (
                 <div key={idx} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                   <span className="block text-[10px] font-bold text-gray-400 uppercase">{item.label}</span>

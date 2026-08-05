@@ -953,6 +953,10 @@ async function bootstrapTables() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_transactions_user_id   ON transactions (user_id)`);
     // earner_notifications: per-earner reads always filter on earner_id
     await client.query(`CREATE INDEX IF NOT EXISTS idx_earner_notif_earner_id ON earner_notifications (earner_id)`);
+    // submissions: admin list is sorted by submitted_at DESC — needs its own index
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_submitted_at        ON submissions (submitted_at DESC)`);
+    // submissions: paginated admin list filtered by status AND sorted — composite covering index
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_status_submitted_at ON submissions (status, submitted_at DESC)`);
 
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
@@ -4333,13 +4337,58 @@ app.get("/api/admin/submissions", async (req, res) => {
     const user = await getAuthenticatedUser(req);
     if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: "Access denied" });
 
-    // Include proof_screenshot so the admin can see inline previews without an
-    // extra round-trip. Approved/rejected submissions already have the column
-    // NULLed by the cleanup functions, so the payload cost is pending-only.
-    const result = await pool.query(
-      "SELECT * FROM submissions ORDER BY submitted_at DESC"
-    );
-    res.json(result.rows.map(mapSubmission));
+    // Pagination params
+    const page   = Math.max(1, parseInt(String(req.query.page  || "1")));
+    const limit  = Math.min(50, Math.max(10, parseInt(String(req.query.limit || "25"))));
+    const offset = (page - 1) * limit;
+
+    // Optional server-side filters
+    const statusF = String(req.query.status || "").trim();
+    const search  = String(req.query.search  || "").trim();
+
+    const conditions: string[] = [];
+    const params: any[] = [];
+
+    if (statusF && statusF !== "All") {
+      params.push(statusF);
+      conditions.push(`status = $${params.length}`);
+    }
+    if (search) {
+      params.push(`%${search}%`);
+      const i = params.length;
+      conditions.push(`(LOWER(task_title) LIKE LOWER($${i}) OR LOWER(earner_name) LIKE LOWER($${i}))`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    // Run count + pending-count + data page in parallel — single round-trip set
+    const [countRes, pendingRes, dataRes] = await Promise.all([
+      pool.query(`SELECT COUNT(*) FROM submissions ${where}`, params),
+      pool.query("SELECT COUNT(*) FROM submissions WHERE status = 'Pending'"),
+      pool.query(
+        // Explicitly select every column except proof_screenshot (can be 100 KB+
+        // per row).  Use has_screenshot flag so the client can offer on-demand load.
+        `SELECT id, task_id, task_title, category, earner_id, earner_name, proof_text,
+                (proof_screenshot IS NOT NULL) AS has_screenshot,
+                status, feedback, reward, submitted_at, approved_at, rejected_at
+         FROM submissions ${where}
+         ORDER BY submitted_at DESC
+         LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        [...params, limit, offset]
+      ),
+    ]);
+
+    const total        = parseInt(countRes.rows[0].count);
+    const totalPending = parseInt(pendingRes.rows[0].count);
+
+    res.json({
+      submissions: dataRes.rows.map(mapSubmissionSlim),
+      total,
+      totalPending,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (err) { res.status(500).json({ error: "Server error" }); }
 });
 
