@@ -955,16 +955,26 @@ async function bootstrapTables() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_status      ON submissions (status)`);
     // Composite covers earner dashboard counts (WHERE earner_id=? AND status=?)
     await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_earner_status ON submissions (earner_id, status)`);
+    // The submit path checks one earner/task pair while holding the transaction.
+    // This avoids scanning the submissions table and preserves the existing
+    // one-submission-per-task business rule without changing its behavior.
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_task_earner ON submissions (task_id, earner_id)`);
     // tasks: status='Active' scan is the dominant filter for the available-tasks list
     await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_status            ON tasks (status)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_created_at        ON tasks (created_at DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_users_created_at        ON users (created_at DESC)`);
     // transactions: every wallet/history page filters by user_id
     await client.query(`CREATE INDEX IF NOT EXISTS idx_transactions_user_id   ON transactions (user_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions (created_at DESC)`);
     // earner_notifications: per-earner reads always filter on earner_id
     await client.query(`CREATE INDEX IF NOT EXISTS idx_earner_notif_earner_id ON earner_notifications (earner_id)`);
     // submissions: admin list is sorted by submitted_at DESC — needs its own index
     await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_submitted_at        ON submissions (submitted_at DESC)`);
     // submissions: paginated admin list filtered by status AND sorted — composite covering index
     await client.query(`CREATE INDEX IF NOT EXISTS idx_submissions_status_submitted_at ON submissions (status, submitted_at DESC)`);
+    // History and notification timelines are also sorted by creation time.
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_submission_history_created_at ON submission_history (created_at DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications (created_at DESC)`);
 
     await client.query("COMMIT");
     console.log("[DB] Tables bootstrapped successfully.");
@@ -2200,17 +2210,24 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
     console.log(`[Submit:${requestId}] taskId=${taskId} userId=${user.id} (${user.name}) auth=${Math.round(performance.now() - requestStartedAt)}ms`);
     console.log(`[Submit:${requestId}] proofText=${proofText ? `${String(proofText).length} chars` : "(none)"} stagedToken=${stagedToken || "(none)"}`);
 
+    // Start the transaction before resolving a staged proof. This keeps the
+    // proof lookup and submission write in one database unit and lets the
+    // staged token be consumed only after the submission commits.
+    await client.query("BEGIN");
+    console.log(`[Submit:${requestId}] transaction started at ${Math.round(performance.now() - requestStartedAt)}ms`);
+
     // ── Resolve screenshot from staged token or inline payload ──────────────
     let screenshot: string | null = null;
     let screenshotThumbnail: string | null = null;
 
     if (stagedToken) {
       // Primary path: resolve a pre-uploaded staged proof by token.
-      const stagedRow = await pool.query(
+      const stagedRow = await client.query(
         "SELECT data_url, thumbnail_data_url FROM staged_proofs WHERE token = $1 AND user_id = $2 AND expires_at > NOW()",
         [stagedToken, user.id]
       );
       if (stagedRow.rows.length === 0) {
+        await client.query("ROLLBACK");
         return res.status(400).json({
           error: "Screenshot upload expired or was not found. Please re-upload your screenshot and try again.",
         });
@@ -2230,6 +2247,7 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
 
       if (isDataUrl && !detectedMime.startsWith("image/")) {
         console.error(`[Submit:${requestId}] rejected invalid inline screenshot format (detected: "${detectedMime}")`);
+        await client.query("ROLLBACK");
         return res.status(400).json({
           error: `Invalid screenshot format. Expected an image data URL (data:image/...) but received "${detectedMime}". Please re-select the image and try again.`,
         });
@@ -2241,11 +2259,10 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
 
     // Require at least some proof — text, link, or a screenshot
     if (!proofText && !screenshot) {
+      await client.query("ROLLBACK");
       return res.status(400).json({ error: "Please provide proof details: notes, a link, or a screenshot." });
     }
 
-    await client.query("BEGIN");
-    console.log(`[Submit:${requestId}] transaction started at ${Math.round(performance.now() - requestStartedAt)}ms`);
     const finalProofText = proofText || "See uploaded screenshot proof.";
 
     // ── Check for an existing submission FIRST ──────────────────────────────
@@ -2308,12 +2325,15 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         existing.id, taskId, task.title, user.id, user.name, resubmittedAt
       ]);
 
+      // Consume the temporary proof in the same transaction as the
+      // resubmission. If the commit fails, the token remains retryable.
+      if (stagedToken) {
+        await client.query("DELETE FROM staged_proofs WHERE token = $1 AND user_id = $2", [stagedToken, user.id]);
+      }
       await client.query("COMMIT");
       const submission = mapSubmission(updatedSubRes.rows[0]);
-      // Consume the staged proof token now that it is committed to the DB.
-      if (stagedToken) pool.query("DELETE FROM staged_proofs WHERE token = $1", [stagedToken]).catch(() => {});
       console.log(`[Submit:${requestId}] resubmission committed in ${Math.round(performance.now() - requestStartedAt)}ms`);
-      void notifyAdmin({
+      setImmediate(() => void notifyAdmin({
         type: "submission",
         message: `${user.name} submitted a task for review.`,
         referenceId: existing.id,
@@ -2322,7 +2342,7 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
         taskTitle: task.title,
         submittedAt: resubmittedAt,
         reviewUrl: `/admin/audits?submission=${encodeURIComponent(existing.id)}`
-      }).catch((err) => console.error(`[Submit:${requestId}] async admin notification failed:`, err));
+      }).catch((err) => console.error(`[Submit:${requestId}] async admin notification failed:`, err)));
       console.log(`[Submit:${requestId}] response sent in ${Math.round(performance.now() - requestStartedAt)}ms`);
       return res.status(200).json({ success: true, message: "Task resubmitted successfully", submission });
     }
@@ -2393,13 +2413,15 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       RETURNING *
     `, [subId, taskId, task.title, task.category, user.id, user.name, finalProofText, screenshot, screenshotThumbnail, task.earningPerSlot, submittedAt]);
 
+    // Consume the temporary proof in the same transaction as the insert.
+    if (stagedToken) {
+      await client.query("DELETE FROM staged_proofs WHERE token = $1 AND user_id = $2", [stagedToken, user.id]);
+    }
     await client.query("COMMIT");
     const submission = mapSubmission(insertedSubRes.rows[0]);
-    // Consume the staged proof token now that it is committed to the DB.
-    if (stagedToken) pool.query("DELETE FROM staged_proofs WHERE token = $1", [stagedToken]).catch(() => {});
     console.log(`[Submit:${requestId}] submission committed in ${Math.round(performance.now() - requestStartedAt)}ms`);
 
-    void notifyAdmin({
+    setImmediate(() => void notifyAdmin({
       type: "submission",
       message: `${user.name} submitted a task for review.`,
       referenceId: subId,
@@ -2408,7 +2430,7 @@ app.post("/api/earner/tasks/:id/submit", async (req, res) => {
       taskTitle: task.title,
       submittedAt,
       reviewUrl: `/admin/audits?submission=${encodeURIComponent(subId)}`
-    }).catch((err) => console.error(`[Submit:${requestId}] async admin notification failed:`, err));
+    }).catch((err) => console.error(`[Submit:${requestId}] async admin notification failed:`, err)));
 
     res.status(201).json({ success: true, message: "Task submitted successfully", submission });
     console.log(`[Submit:${requestId}] response sent in ${Math.round(performance.now() - requestStartedAt)}ms`);

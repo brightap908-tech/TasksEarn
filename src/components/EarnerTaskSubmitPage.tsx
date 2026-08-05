@@ -8,6 +8,7 @@ import {
   Eye,
   UploadCloud,
   Send,
+  LoaderCircle,
   CheckCircle2,
   XCircle,
   ArrowRight,
@@ -35,6 +36,8 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
   const [submitting, setSubmitting] = React.useState(false);
   const [submitError, setSubmitError] = React.useState("");
   const [submitSuccess, setSubmitSuccess] = React.useState(false);
+  const submittingRef = React.useRef(false);
+  const [previewOpen, setPreviewOpen] = React.useState(false);
 
   // Screenshot upload (hardened cross-browser hook)
   const {
@@ -91,7 +94,7 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!task || submitting) return;
+    if (!task || submitting || submittingRef.current) return;
     if (!proofText && !proofScreenshot) {
       setSubmitError("Please provide verification notes or upload a screenshot.");
       return;
@@ -108,6 +111,7 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
       setSubmitError("Screenshot upload failed. Please remove the image and re-upload it.");
       return;
     }
+    submittingRef.current = true;
     setSubmitting(true);
     setSubmitError("");
 
@@ -141,8 +145,7 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
       } else {
         console.log("[Submit] ✓ Submission accepted by server");
         setSubmitSuccess(true);
-        showToast("Task submitted successfully! Redirecting to available tasks…", "success");
-        setTimeout(() => navigate("/earner/tasks"), 1500);
+         showToast("Task submitted successfully!", "success");
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -150,7 +153,8 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
       setSubmitError(`Failed to submit proof. ${msg ? `Error: ${msg}` : "Please check your connection and try again."}`);
     } finally {
       // Navigation/toasts must never keep the upload spinner running.
-      setSubmitting(false);
+       submittingRef.current = false;
+       setSubmitting(false);
     }
   };
 
@@ -197,9 +201,15 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
           </div>
           <h2 className="font-bold text-gray-900">Task Submitted Successfully!</h2>
           <p className="text-xs text-gray-500 leading-relaxed">
-            Your proof has been sent for review. Redirecting you to <strong>available tasks</strong>…
+             Your proof has been stored and sent for review. You can stay on this page or return to <strong>available tasks</strong>.
           </p>
-          <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
+           <button
+             type="button"
+             onClick={() => navigate("/earner/tasks")}
+             className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-700 transition-colors"
+           >
+             Browse Available Tasks
+           </button>
         </div>
       </div>
     );
@@ -445,7 +455,7 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
                 <div className="text-center">
                   <button
                     type="button"
-                    onClick={() => window.open(proofScreenshot, "_blank")}
+                     onClick={() => setPreviewOpen(true)}
                     className="text-[10px] font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
                   >
                     <Eye className="h-3.5 w-3.5" /> View Large Preview
@@ -488,12 +498,34 @@ export default function EarnerTaskSubmitPage({ apiFetch, showToast }: EarnerTask
             disabled={submitting || compressing || uploading}
             className="flex-1 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 py-3 text-xs font-bold text-white shadow hover:shadow-md transition-all flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Send className="h-3.5 w-3.5" />
-            {submitting ? "Submitting…" : uploading ? "Uploading screenshot…" : "Upload & Submit Verification"}
+             {submitting ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+             {submitting ? "Submitting…" : uploading ? "Uploading screenshot…" : "Upload & Submit Verification"}
           </button>
         </div>
 
       </form>
+
+      {previewOpen && proofScreenshot && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Screenshot preview"
+          onClick={() => setPreviewOpen(false)}
+        >
+          <div className="relative max-h-[90vh] max-w-4xl" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setPreviewOpen(false)}
+              className="absolute -right-2 -top-2 z-10 rounded-full bg-white px-3 py-1 text-lg font-bold text-gray-700 shadow"
+              aria-label="Close screenshot preview"
+            >
+              ×
+            </button>
+            <img src={proofScreenshot} alt="Full screenshot preview" className="max-h-[88vh] max-w-full rounded-xl object-contain shadow-2xl" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

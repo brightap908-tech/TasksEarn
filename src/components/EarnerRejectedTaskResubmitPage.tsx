@@ -9,6 +9,7 @@ import {
   Eye,
   UploadCloud,
   Send,
+  LoaderCircle,
   CheckCircle2,
   XCircle,
   RefreshCw,
@@ -42,6 +43,8 @@ export default function EarnerRejectedTaskResubmitPage({
   const [submitting, setSubmitting] = React.useState(false);
   const [submitError, setSubmitError] = React.useState("");
   const [submitSuccess, setSubmitSuccess] = React.useState(false);
+  const submittingRef = React.useRef(false);
+  const [previewOpen, setPreviewOpen] = React.useState(false);
 
   // Screenshot upload (hardened cross-browser hook)
   const {
@@ -99,7 +102,7 @@ export default function EarnerRejectedTaskResubmitPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!info || submitting) return;
+    if (!info || submitting || submittingRef.current) return;
     if (!proofText && !proofScreenshot) {
       setSubmitError("Please provide verification notes or upload a screenshot.");
       return;
@@ -112,6 +115,7 @@ export default function EarnerRejectedTaskResubmitPage({
       setSubmitError("Screenshot upload failed. Please remove the image and re-upload it.");
       return;
     }
+    submittingRef.current = true;
     setSubmitting(true);
     setSubmitError("");
 
@@ -145,15 +149,15 @@ export default function EarnerRejectedTaskResubmitPage({
       } else {
         console.log("[Resubmit] ✓ Resubmission accepted by server");
         setSubmitSuccess(true);
-        showToast("Resubmission sent! Redirecting to Rejected Tasks…", "success");
-        setTimeout(() => navigate("/dashboard/my-tasks/rejected"), 1500);
+         showToast("Resubmission sent!", "success");
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[Resubmit] Network or unexpected error:", err);
       setSubmitError(`Failed to submit. ${msg ? `Error: ${msg}` : "Please check your connection and try again."}`);
     } finally {
-      setSubmitting(false);
+       submittingRef.current = false;
+       setSubmitting(false);
     }
   };
 
@@ -202,10 +206,16 @@ export default function EarnerRejectedTaskResubmitPage({
           </div>
           <h2 className="font-bold text-gray-900">Resubmission Sent!</h2>
           <p className="text-xs text-gray-500 leading-relaxed">
-            Your corrected proof has been sent for review. Redirecting you to{" "}
-            <strong>Rejected Tasks</strong>…
+            Your corrected proof has been stored and sent for review. You can stay on this page or return to{" "}
+            <strong>Rejected Tasks</strong>.
           </p>
-          <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-green-200 border-t-green-500" />
+          <button
+            type="button"
+            onClick={() => navigate("/dashboard/my-tasks/rejected")}
+            className="inline-flex items-center justify-center rounded-xl bg-green-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-green-700 transition-colors"
+          >
+            View Rejected Tasks
+          </button>
         </div>
       </div>
     );
@@ -508,7 +518,7 @@ export default function EarnerRejectedTaskResubmitPage({
                 <div className="text-center">
                   <button
                     type="button"
-                    onClick={() => window.open(proofScreenshot, "_blank")}
+                    onClick={() => setPreviewOpen(true)}
                     className="text-[10px] font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
                   >
                     <Eye className="h-3.5 w-3.5" /> View Large Preview
@@ -554,11 +564,33 @@ export default function EarnerRejectedTaskResubmitPage({
             disabled={submitting || compressing || uploading}
             className="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 py-3 text-xs font-bold text-white shadow hover:shadow-md transition-all flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Send className="h-3.5 w-3.5" />
+            {submitting ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
             {submitting ? "Submitting…" : uploading ? "Uploading screenshot…" : "Submit Corrected Proof"}
           </button>
         </div>
       </form>
+
+      {previewOpen && proofScreenshot && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Screenshot preview"
+          onClick={() => setPreviewOpen(false)}
+        >
+          <div className="relative max-h-[90vh] max-w-4xl" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setPreviewOpen(false)}
+              className="absolute -right-2 -top-2 z-10 rounded-full bg-white px-3 py-1 text-lg font-bold text-gray-700 shadow"
+              aria-label="Close screenshot preview"
+            >
+              ×
+            </button>
+            <img src={proofScreenshot} alt="Full screenshot preview" className="max-h-[88vh] max-w-full rounded-xl object-contain shadow-2xl" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
