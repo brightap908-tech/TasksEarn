@@ -1381,18 +1381,16 @@ app.get("/api/public/settings", async (_req, res) => {
 app.get("/api/public/stats", async (_req, res) => {
   try {
     const [
-      earnersCount,
-      advertisersCount,
+      totalUsers,
+      usersWithActiveCampaigns,
       tasksCount,
       tasksCompleted,
       successfulWithdrawals,
       totalPaidOut
     ] = await Promise.all([
       pool.query("SELECT COUNT(*) FROM users WHERE role != 'Admin'"),
-      // Unified accounts can earn and advertise. Count accounts that have
-      // launched at least one campaign as registered advertisers.
-      pool.query("SELECT COUNT(DISTINCT advertiser_id) FROM tasks WHERE advertiser_id IS NOT NULL"),
-      pool.query("SELECT COUNT(*) FROM tasks"),
+      pool.query("SELECT COUNT(DISTINCT advertiser_id) FROM tasks WHERE advertiser_id IS NOT NULL AND status = 'Active'"),
+      pool.query("SELECT COUNT(*) FROM tasks WHERE status = 'Active'"),
       pool.query("SELECT COUNT(*) FROM submissions WHERE status = 'Approved'"),
       pool.query("SELECT COUNT(*) FROM transactions WHERE type = 'Withdrawal' AND status IN ('Success', 'Paid')"),
       pool.query(
@@ -1408,8 +1406,8 @@ app.get("/api/public/stats", async (_req, res) => {
     const lw = latestWithdrawalTx.rows[0] ? mapTransaction(latestWithdrawalTx.rows[0]) : null;
     const lc = latestCampaign.rows[0] ? mapTask(latestCampaign.rows[0]) : null;
     res.json({
-      earnersCount: parseInt(earnersCount.rows[0].count),
-      advertisersCount: parseInt(advertisersCount.rows[0].count),
+      totalUsers: parseInt(totalUsers.rows[0].count),
+      usersWithActiveCampaigns: parseInt(usersWithActiveCampaigns.rows[0].count),
       tasksCount: parseInt(tasksCount.rows[0].count),
       tasksCompleted: parseInt(tasksCompleted.rows[0].count),
       successfulWithdrawals: parseInt(successfulWithdrawals.rows[0].count),
@@ -3372,8 +3370,8 @@ app.get("/api/admin/dashboard", async (req, res) => {
     todayStart.setHours(0, 0, 0, 0);
     const todayIso = todayStart.toISOString();
     const [
-      earners,
-      advertisers,
+      totalUsers,
+      usersWithActiveCampaigns,
       tasks,
       totalEarned,
       pendingWd,
@@ -3391,9 +3389,9 @@ app.get("/api/admin/dashboard", async (req, res) => {
       trendWds,
       earnersCommissionRes
     ] = await Promise.all([
-      pool.query("SELECT COUNT(*) FROM users WHERE role = 'User'"),
-      pool.query("SELECT COUNT(DISTINCT advertiser_id) FROM tasks WHERE advertiser_id IS NOT NULL"),
-      pool.query("SELECT COUNT(*) FROM tasks"),
+      pool.query("SELECT COUNT(*) FROM users WHERE role != 'Admin'"),
+      pool.query("SELECT COUNT(DISTINCT advertiser_id) FROM tasks WHERE advertiser_id IS NOT NULL AND status = 'Active'"),
+      pool.query("SELECT COUNT(*) FROM tasks WHERE status = 'Active'"),
       pool.query("SELECT COALESCE(SUM(reward),0) AS total FROM submissions WHERE status='Approved'"),
       pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE type='Withdrawal' AND status='Pending'"),
       pool.query("SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE type='Withdrawal' AND status='Approved'"),
@@ -3453,8 +3451,8 @@ app.get("/api/admin/dashboard", async (req, res) => {
     };
     const emailServiceConfigured = !!(process.env.RESEND_API_KEY || process.env.SMTP_HOST && process.env.SMTP_USER);
     res.json({
-      earnersCount: parseInt(earners.rows[0].count),
-      advertisersCount: parseInt(advertisers.rows[0].count),
+      totalUsers: parseInt(totalUsers.rows[0].count),
+      usersWithActiveCampaigns: parseInt(usersWithActiveCampaigns.rows[0].count),
       tasksCount: parseInt(tasks.rows[0].count),
       totalEarned: parseFloat(totalEarned.rows[0].total),
       pendingWithdrawals: parseFloat(pendingWd.rows[0].total),
